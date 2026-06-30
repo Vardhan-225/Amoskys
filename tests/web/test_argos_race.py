@@ -9,21 +9,25 @@ import textwrap
 import pytest
 
 from amoskys.agents.Web.argos.race import (
-    SinglePacketProbe, SinglePacketReport,
-    build_coupon_race, build_registration_race, build_parallel_purchase_race,
-    execute_single_packet,
-    TOCTOUCandidate, TOCTOUReport,
-    scan_for_toctou_candidates,
+    SinglePacketProbe,
+    SinglePacketReport,
+    TOCTOUCandidate,
+    TOCTOUReport,
     analyze_endpoint_pair,
+    build_coupon_race,
+    build_parallel_purchase_race,
+    build_registration_race,
+    execute_single_packet,
+    scan_for_toctou_candidates,
 )
-
 
 # ── Probe builders ──────────────────────────────────────────────
 
 
 def test_build_coupon_race_has_session_cookie_and_coupon():
-    p = build_coupon_race("https://shop.test/", "SAVE20",
-                           session_cookie="PHPSESSID=abc", n_parallel=15)
+    p = build_coupon_race(
+        "https://shop.test/", "SAVE20", session_cookie="PHPSESSID=abc", n_parallel=15
+    )
     assert p.n_parallel == 15
     assert p.mode == "h1_lastbyte"
     assert p.headers["Cookie"] == "PHPSESSID=abc"
@@ -31,16 +35,16 @@ def test_build_coupon_race_has_session_cookie_and_coupon():
 
 
 def test_build_registration_race_generates_unique_usernames():
-    p = build_registration_race("https://reg.test/", "race@test.io",
-                                 n_parallel=5)
+    p = build_registration_race("https://reg.test/", "race@test.io", n_parallel=5)
     assert len(p.varying_field_values) == 5
     assert len(set(p.varying_field_values)) == 5
-    assert "race%40test.io" in p.body_template   # URL-encoded email
+    assert "race%40test.io" in p.body_template  # URL-encoded email
 
 
 def test_build_parallel_purchase_race_includes_quantity():
-    p = build_parallel_purchase_race("https://shop.test/", "prod-42",
-                                      session_cookie="sid=1", n_parallel=8)
+    p = build_parallel_purchase_race(
+        "https://shop.test/", "prod-42", session_cookie="sid=1", n_parallel=8
+    )
     assert p.n_parallel == 8
     assert "prod-42" in p.body_template
     assert "quantity=1" in p.body_template
@@ -48,6 +52,7 @@ def test_build_parallel_purchase_race_includes_quantity():
 
 def test_single_packet_probe_to_dict_serializable():
     import json
+
     p = build_coupon_race("https://t/", "X")
     json.dumps(p.to_dict())
 
@@ -59,9 +64,11 @@ def _fake_sender(results):
     """Return a callable with signature matching execute_single_packet's
     raw_sender: (host, port, tls, heads, finals, timeout) -> list[(status, body_shape, elapsed_ms)]
     """
+
     def _send(host, port, tls, heads, finals, timeout):
         assert len(heads) == len(finals)
         return list(results)
+
     return _send
 
 
@@ -85,10 +92,14 @@ def test_execute_single_packet_detects_atomic_server():
 
 def test_execute_single_packet_captures_response_buckets():
     probe = build_registration_race("https://r/", "x@y.com", n_parallel=4)
-    sender = _fake_sender([
-        (200, "A", 10), (200, "A", 11),
-        (500, "B", 12), (500, "B", 13),
-    ])
+    sender = _fake_sender(
+        [
+            (200, "A", 10),
+            (200, "A", 11),
+            (500, "B", 12),
+            (500, "B", 13),
+        ]
+    )
     rep = execute_single_packet(probe, raw_sender=sender)
     assert rep.unique_response_buckets == 2
     assert rep.bucket_details.get("200:A") == 2
@@ -97,7 +108,10 @@ def test_execute_single_packet_captures_response_buckets():
 
 def test_execute_single_packet_handles_sender_error():
     probe = build_coupon_race("https://t/", "X", n_parallel=2)
-    def bad(*a, **k): raise RuntimeError("kaboom")
+
+    def bad(*a, **k):
+        raise RuntimeError("kaboom")
+
     rep = execute_single_packet(probe, raw_sender=bad)
     assert any("kaboom" in e for e in rep.errors)
 
@@ -167,14 +181,17 @@ def test_scan_for_toctou_max_files_cap(tmp_path):
 
 def test_analyze_endpoint_pair_flags_duplicate_success():
     sender_calls = []
+
     def sender(url, method, headers, body, timeout):
         sender_calls.append((url, method))
         # Both calls succeed regardless → race signature
         return (200, {}, "ok", 10)
+
     c = analyze_endpoint_pair(
         check_url="https://t/check?id=1",
         use_url="https://t/use?id=1",
-        sender=sender, n_probes=5,
+        sender=sender,
+        n_probes=5,
     )
     assert c.severity == "high"
     assert c.metadata["successes"] == 5
@@ -182,25 +199,33 @@ def test_analyze_endpoint_pair_flags_duplicate_success():
 
 def test_analyze_endpoint_pair_ok_on_atomic_server():
     idx = [0]
+
     def sender(url, method, headers, body, timeout):
         # use endpoint only succeeds once; subsequent returns 409
         if "use" in url:
             idx[0] += 1
             return (200 if idx[0] == 1 else 409, {}, "", 10)
         return (200, {}, "", 10)
+
     c = analyze_endpoint_pair(
-        check_url="https://t/check", use_url="https://t/use",
-        sender=sender, n_probes=3,
+        check_url="https://t/check",
+        use_url="https://t/use",
+        sender=sender,
+        n_probes=3,
     )
     assert c.severity == "info"
     assert c.metadata["successes"] == 1
 
 
 def test_analyze_endpoint_pair_handles_sender_error():
-    def sender(*a, **k): raise RuntimeError("network down")
+    def sender(*a, **k):
+        raise RuntimeError("network down")
+
     c = analyze_endpoint_pair(
-        check_url="https://t/a", use_url="https://t/b",
-        sender=sender, n_probes=5,
+        check_url="https://t/a",
+        use_url="https://t/b",
+        sender=sender,
+        n_probes=5,
     )
     assert c.severity == "info"
     assert "raised" in c.evidence

@@ -69,6 +69,7 @@ class ConsentMethod(str, Enum):
     Bug-bounty hunting is NOT a customer consent method — it's internal
     AMOSKYS tooling gated by operator identity. See argos/operators.py.
     """
+
     DNS_TXT = "dns_txt"
     EMAIL = "email"
     SIGNED_CONTRACT = "signed_contract"
@@ -82,21 +83,22 @@ class OperatorRole(str, Enum):
     ANALYST : hunt mode + customer recon + customer scan; cannot manage operators
     VIEWER  : read-only (list customers, view findings); no active commands
     """
+
     ADMIN = "admin"
     ANALYST = "analyst"
     VIEWER = "viewer"
 
 
 class AssetKind(str, Enum):
-    DOMAIN = "domain"          # apex, e.g. example.com
-    SUBDOMAIN = "subdomain"    # www.example.com, api.example.com
+    DOMAIN = "domain"  # apex, e.g. example.com
+    SUBDOMAIN = "subdomain"  # www.example.com, api.example.com
     IPV4 = "ipv4"
     IPV6 = "ipv6"
-    NETBLOCK = "netblock"      # 203.0.113.0/24
-    ASN = "asn"                # AS15169
-    SERVICE = "service"        # host:port/proto discovered as listening
-    URL = "url"                # fully-qualified HTTP resource
-    CERT = "cert"              # a specific TLS certificate (SHA-256)
+    NETBLOCK = "netblock"  # 203.0.113.0/24
+    ASN = "asn"  # AS15169
+    SERVICE = "service"  # host:port/proto discovered as listening
+    URL = "url"  # fully-qualified HTTP resource
+    CERT = "cert"  # a specific TLS certificate (SHA-256)
 
 
 # ── DTOs ───────────────────────────────────────────────────────────
@@ -201,10 +203,10 @@ class AuditEntry:
     customer_id: Optional[str]
     run_id: Optional[str]
     timestamp_ns: int
-    actor: str       # e.g. "ct_logs.crtsh", "cli.recon", "engine.consent"
-    action: str      # e.g. "http_get", "dns_query", "consent_verify"
+    actor: str  # e.g. "ct_logs.crtsh", "cli.recon", "engine.consent"
+    action: str  # e.g. "http_get", "dns_query", "consent_verify"
     target: Optional[str]
-    result: str      # e.g. "ok", "403", "timeout"
+    result: str  # e.g. "ok", "403", "timeout"
     details: Dict[str, Any] = field(default_factory=dict)
     operator_id: Optional[str] = None  # AMOSKYS user who initiated the action
 
@@ -212,6 +214,7 @@ class AuditEntry:
 @dataclass
 class Operator:
     """An AMOSKYS employee with authorization to run active tooling."""
+
     operator_id: str
     email: str
     name: str
@@ -243,6 +246,7 @@ class OperatorAgreement:
     We store a SHA-256 of the agreement text at acceptance time so the
     operator can't later claim they saw a different version.
     """
+
     operator_id: str
     version: str
     accepted_at_ns: int
@@ -258,6 +262,7 @@ class ScanQueue:
     asset becomes its own Engagement, the customer thinks of them as a
     single run. The consolidated report covers the whole queue.
     """
+
     queue_id: str
     customer_id: str
     operator_id: str
@@ -291,14 +296,15 @@ class StoredFinding:
     re-hydrates them into this table so the whole set is queryable
     across scans / customers / time without parsing files.
     """
+
     finding_id: str
     customer_id: str
     queue_id: str
     job_id: str
     engagement_id: Optional[str]
-    asset_value: str       # denormalized — which target this was found on
+    asset_value: str  # denormalized — which target this was found on
     template_id: Optional[str]
-    severity: str          # info | low | medium | high | critical
+    severity: str  # info | low | medium | high | critical
     title: str
     description: str
     tool: Optional[str]
@@ -318,13 +324,14 @@ class ScanJob:
     Findings count and engagement_id are set when the job transitions
     out of `running`.
     """
+
     job_id: str
     queue_id: str
     customer_id: str
     asset_id: str
-    asset_value: str   # denormalized (e.g. "api.acme.com")
-    asset_kind: str    # denormalized
-    status: str        # pending | running | complete | failed | skipped
+    asset_value: str  # denormalized (e.g. "api.acme.com")
+    asset_kind: str  # denormalized
+    status: str  # pending | running | complete | failed | skipped
     engagement_id: Optional[str] = None
     started_at_ns: Optional[int] = None
     completed_at_ns: Optional[int] = None
@@ -418,16 +425,21 @@ class AssetsDB:
     def _run_migrations(self, conn: sqlite3.Connection) -> None:
         """Additive-only migrations. Never drops or renames; only adds."""
         # operator_id on audit_log (added when operator model was introduced)
-        cols = {row["name"] for row in conn.execute("PRAGMA table_info(audit_log)").fetchall()}
+        cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(audit_log)").fetchall()
+        }
         if "operator_id" not in cols:
             conn.execute("ALTER TABLE audit_log ADD COLUMN operator_id TEXT")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_operator ON audit_log(operator_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_operator ON audit_log(operator_id)"
+            )
 
     def _open(self) -> sqlite3.Connection:
         conn = sqlite3.connect(
             self.path,
-            isolation_level=None,    # autocommit + explicit BEGIN
-            check_same_thread=False, # we guard with self._lock
+            isolation_level=None,  # autocommit + explicit BEGIN
+            check_same_thread=False,  # we guard with self._lock
             timeout=30.0,
         )
         conn.row_factory = sqlite3.Row
@@ -440,8 +452,14 @@ class AssetsDB:
         """Refuse to run if the DB file is accessible beyond the owner."""
         st = self.path.stat()
         # Guard the world+group perm bits. Owner bits can be rw-.
-        bad = st.st_mode & (stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP |
-                            stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH)
+        bad = st.st_mode & (
+            stat.S_IRGRP
+            | stat.S_IWGRP
+            | stat.S_IXGRP
+            | stat.S_IROTH
+            | stat.S_IWOTH
+            | stat.S_IXOTH
+        )
         if bad:
             raise PermissionError(
                 f"refusing to open {self.path}: permissive mode "
@@ -838,8 +856,7 @@ class AssetsDB:
             with self._lock:
                 now_ns = int(time.time() * 1e9)
                 conn.execute(
-                    "UPDATE operators SET disabled_at_ns = ? "
-                    "WHERE operator_id = ?",
+                    "UPDATE operators SET disabled_at_ns = ? " "WHERE operator_id = ?",
                     (now_ns, operator_id),
                 )
                 self._audit_unsafe(

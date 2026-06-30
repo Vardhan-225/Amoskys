@@ -183,8 +183,15 @@ class EngagementResult:
                 "summary_counts": self.summary_counts,
                 "errors": self.errors,
                 "tool_outputs": {
-                    name: asdict(result) if hasattr(result, "__dataclass_fields__")
-                    else result.__dict__ if hasattr(result, "__dict__") else str(result)
+                    name: (
+                        asdict(result)
+                        if hasattr(result, "__dataclass_fields__")
+                        else (
+                            result.__dict__
+                            if hasattr(result, "__dict__")
+                            else str(result)
+                        )
+                    )
                     for name, result in self.tool_outputs.items()
                 },
             },
@@ -282,7 +289,8 @@ class Engagement:
 
         if self.scope.skip_dns_verify:
             self._emit_phase(
-                Phase.CONSENT, "ok",
+                Phase.CONSENT,
+                "ok",
                 {
                     "target": self.scope.target,
                     "dns_verify_skipped": True,
@@ -342,7 +350,8 @@ class Engagement:
             )
 
         self._emit_phase(
-            Phase.CONSENT, "ok",
+            Phase.CONSENT,
+            "ok",
             {
                 "target": self.scope.target,
                 "dns_record": record_name,
@@ -397,7 +406,9 @@ class Engagement:
         """
         self._link_plugin_ast_tools()
         ran = self._run_tools_of_class("probe")
-        self._emit_phase(Phase.PROBE, "ok", {"tools_run": ran, "findings": len(self.findings)})
+        self._emit_phase(
+            Phase.PROBE, "ok", {"tools_run": ran, "findings": len(self.findings)}
+        )
         self.phases_complete.append(Phase.PROBE)
 
     def _link_plugin_ast_tools(self) -> None:

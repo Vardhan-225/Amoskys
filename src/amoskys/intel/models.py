@@ -292,10 +292,17 @@ class TelemetryEventView:
 
             # Persistence categories → audit_event
             _PERSIST_CATS = (
-                "macos_launchagent", "macos_launchdaemon", "macos_cron",
-                "macos_ssh_key", "macos_shell_profile", "macos_login_item",
-                "macos_auth_plugin", "macos_folder_action", "macos_periodic",
-                "macos_system_extension", "persistence_creation",
+                "macos_launchagent",
+                "macos_launchdaemon",
+                "macos_cron",
+                "macos_ssh_key",
+                "macos_shell_profile",
+                "macos_login_item",
+                "macos_auth_plugin",
+                "macos_folder_action",
+                "macos_periodic",
+                "macos_system_extension",
+                "persistence_creation",
                 "macos_config_backdoor",
             )
             if any(cat.startswith(p) for p in _PERSIST_CATS):
@@ -336,8 +343,12 @@ class TelemetryEventView:
 
             # Process categories → process_event
             _PROC_CATS = (
-                "process_spawned", "binary_from_temp", "suspicious_script",
-                "lolbin_execution", "process_exit", "high_cpu",
+                "process_spawned",
+                "binary_from_temp",
+                "suspicious_script",
+                "lolbin_execution",
+                "process_exit",
+                "high_cpu",
             )
             if any(cat.startswith(p) for p in _PROC_CATS):
                 process_event = {
@@ -351,11 +362,20 @@ class TelemetryEventView:
 
             # Network categories → flow_event
             _FLOW_CATS = (
-                "exfil_spike", "c2_beacon", "cloud_sync", "cloud_exfil",
-                "lateral_ssh", "cleartext_protocol", "tunnel_detect",
-                "non_standard_port", "new_external_connection",
-                "port_scan", "unexpected_listener", "connection_burst",
-                "long_lived_connection", "dns_beaconing",
+                "exfil_spike",
+                "c2_beacon",
+                "cloud_sync",
+                "cloud_exfil",
+                "lateral_ssh",
+                "cleartext_protocol",
+                "tunnel_detect",
+                "non_standard_port",
+                "new_external_connection",
+                "port_scan",
+                "unexpected_listener",
+                "connection_burst",
+                "long_lived_connection",
+                "dns_beaconing",
             )
             if any(cat.startswith(p) for p in _FLOW_CATS):
                 flow_event = {
@@ -370,9 +390,14 @@ class TelemetryEventView:
 
             # Auth categories → enrich security_event for auth matching
             _AUTH_CATS = (
-                "ssh_brute", "sudo_escalation", "account_lockout",
-                "off_hours_login", "impossible_travel", "credential_access",
-                "valid_account", "ssh_agent_forwarding",
+                "ssh_brute",
+                "sudo_escalation",
+                "account_lockout",
+                "off_hours_login",
+                "impossible_travel",
+                "credential_access",
+                "valid_account",
+                "ssh_agent_forwarding",
             )
             if any(cat.startswith(p) for p in _AUTH_CATS):
                 # Fusion rules check event_action for "SSH" or "SUDO"

@@ -53,28 +53,30 @@ class TargetTimezone:
     obviously elsewhere (country-specific TLD, language detection,
     CDN POP).
     """
+
     tz_name: str = "America/New_York"
-    biz_start_hour: int = 8       # inclusive local time
-    biz_end_hour:   int = 18      # exclusive local time
+    biz_start_hour: int = 8  # inclusive local time
+    biz_end_hour: int = 18  # exclusive local time
     biz_days: Tuple[int, ...] = (0, 1, 2, 3, 4)  # Mon-Fri (Python: Mon=0)
 
 
 @dataclass
 class SchedulePlan:
     """The schedule the operator should execute."""
-    probe_count:    int
-    total_hours:    float
-    probe_times:    List[datetime.datetime] = field(default_factory=list)
-    seed:           int = 0
-    notes:          List[str] = field(default_factory=list)
+
+    probe_count: int
+    total_hours: float
+    probe_times: List[datetime.datetime] = field(default_factory=list)
+    seed: int = 0
+    notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "probe_count": self.probe_count,
             "total_hours": self.total_hours,
             "probe_times": [t.isoformat() for t in self.probe_times],
-            "seed":        self.seed,
-            "notes":       self.notes,
+            "seed": self.seed,
+            "notes": self.notes,
         }
 
 
@@ -107,13 +109,13 @@ def _next_biz_instant(dt: datetime.datetime, tz: TargetTimezone) -> datetime.dat
 
 
 def low_slow_schedule(
-    probe_count:    int,
-    tz:             Optional[TargetTimezone] = None,
-    start_at:       Optional[datetime.datetime] = None,
-    min_gap_hours:  float = 3.0,
-    gap_stddev_hr:  float = 1.0,
-    max_span_days:  int = 14,
-    seed:           Optional[int] = None,
+    probe_count: int,
+    tz: Optional[TargetTimezone] = None,
+    start_at: Optional[datetime.datetime] = None,
+    min_gap_hours: float = 3.0,
+    gap_stddev_hr: float = 1.0,
+    max_span_days: int = 14,
+    seed: Optional[int] = None,
 ) -> SchedulePlan:
     """Generate a low-and-slow probe schedule.
 

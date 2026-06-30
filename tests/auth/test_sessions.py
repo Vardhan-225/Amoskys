@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import sessionmaker
 
 from amoskys.auth.models import AuditEventType, AuthAuditLog, Session, User, UserRole
+from amoskys.auth.organization import Organization  # noqa: F401 — registers FK target
 from amoskys.auth.password import hash_password
 from amoskys.auth.sessions import (
     SessionConfig,
@@ -42,7 +43,6 @@ from amoskys.auth.sessions import (
     revoke_session,
     validate_session,
 )
-from amoskys.auth.organization import Organization  # noqa: F401 — registers FK target
 from amoskys.auth.tokens import hash_token
 from amoskys.db import Base
 

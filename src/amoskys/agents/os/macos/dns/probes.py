@@ -111,7 +111,9 @@ def _infer_pid_from_connections(resolved_ips: list) -> int:
         try:
             result = subprocess.run(
                 ["lsof", "-i", f"@{ip}", "-nP", "-F", "p", "-sTCP:ESTABLISHED"],
-                capture_output=True, text=True, timeout=2,
+                capture_output=True,
+                text=True,
+                timeout=2,
             )
             for line in result.stdout.splitlines():
                 if line.startswith("p"):
@@ -506,58 +508,75 @@ class BeaconingPatternProbe(MicroProbe):
 
     # Apple system daemons that beacon by design — DNS polling at regular
     # intervals is their normal operating behavior, not C2 communication.
-    _APPLE_BEACON_PROCESSES: frozenset = frozenset({
-        "mDNSResponder",
-        "networkserviceproxy",
-        "rtcreportingd",
-        "homed",
-        "apsd",              # Apple Push Service
-        "trustd",            # Certificate trust daemon
-        "cloudd",            # CloudKit daemon
-        "nsurlsessiond",     # URL session daemon
-        "captiveagent",      # Captive portal detection
-        "com.apple.geod",    # Location services
-        "parsecd",           # Siri/ML suggestions
-        "timed",             # NTP time sync
-        "symptomsd",         # Network diagnostics
-        "airportd",          # Wi-Fi daemon
-        "identityservicesd", # iMessage/FaceTime
-        "remindd",           # Reminders sync
-        "CalendarAgent",     # Calendar sync
-        "AddressBookSourceSync",
-        "exchangesyncd",     # Exchange mail sync
-        "IMTransferAgent",   # iMessage file transfer
-        "akd",               # AuthKit daemon
-        "amsengagementd",    # App Store engagement
-        "biomesyncd",        # Biometric sync
-        "duetexpertd",       # Siri knowledge
-    })
+    _APPLE_BEACON_PROCESSES: frozenset = frozenset(
+        {
+            "mDNSResponder",
+            "networkserviceproxy",
+            "rtcreportingd",
+            "homed",
+            "apsd",  # Apple Push Service
+            "trustd",  # Certificate trust daemon
+            "cloudd",  # CloudKit daemon
+            "nsurlsessiond",  # URL session daemon
+            "captiveagent",  # Captive portal detection
+            "com.apple.geod",  # Location services
+            "parsecd",  # Siri/ML suggestions
+            "timed",  # NTP time sync
+            "symptomsd",  # Network diagnostics
+            "airportd",  # Wi-Fi daemon
+            "identityservicesd",  # iMessage/FaceTime
+            "remindd",  # Reminders sync
+            "CalendarAgent",  # Calendar sync
+            "AddressBookSourceSync",
+            "exchangesyncd",  # Exchange mail sync
+            "IMTransferAgent",  # iMessage file transfer
+            "akd",  # AuthKit daemon
+            "amsengagementd",  # App Store engagement
+            "biomesyncd",  # Biometric sync
+            "duetexpertd",  # Siri knowledge
+        }
+    )
 
     # Third-party apps with known periodic polling behavior.
     # These beacon by design (update checks, sync, push connections).
-    _KNOWN_POLLING_APPS: frozenset = frozenset({
-        "ChatGPT", "ChatGPTHelper",
-        "Microsoft Update Assistant", "MAU",
-        "Dropbox", "DropboxUpdater", "dbfseventsd",
-        "Slack", "Slack Helper",
-        "zoom.us", "zoom.us.ZoomAudioDevice",
-        "Spotify", "SpotifyHelper",
-        "Google Chrome", "Google Chrome Helper",
-        "com.docker.backend", "Docker",
-        "WhatsApp", "WhatsAppHelper",
-        "Teams", "MSTeams",
-        "OneDrive", "OneDriveUpdater",
-        "Firefox", "firefox",
-        "Safari",
-        "Mail",
-        "Notes",
-        "Reminders",
-        "Messages",
-        "replicatord",           # iCloud replication
-        "NewsToday2",            # Apple News
-        "amsaccountsd",          # App Store accounts
-        "com.apple.WebKit.Networking",
-    })
+    _KNOWN_POLLING_APPS: frozenset = frozenset(
+        {
+            "ChatGPT",
+            "ChatGPTHelper",
+            "Microsoft Update Assistant",
+            "MAU",
+            "Dropbox",
+            "DropboxUpdater",
+            "dbfseventsd",
+            "Slack",
+            "Slack Helper",
+            "zoom.us",
+            "zoom.us.ZoomAudioDevice",
+            "Spotify",
+            "SpotifyHelper",
+            "Google Chrome",
+            "Google Chrome Helper",
+            "com.docker.backend",
+            "Docker",
+            "WhatsApp",
+            "WhatsAppHelper",
+            "Teams",
+            "MSTeams",
+            "OneDrive",
+            "OneDriveUpdater",
+            "Firefox",
+            "firefox",
+            "Safari",
+            "Mail",
+            "Notes",
+            "Reminders",
+            "Messages",
+            "replicatord",  # iCloud replication
+            "NewsToday2",  # Apple News
+            "amsaccountsd",  # App Store accounts
+            "com.apple.WebKit.Networking",
+        }
+    )
 
     def __init__(self) -> None:
         super().__init__()

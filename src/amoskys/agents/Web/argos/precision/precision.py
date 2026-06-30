@@ -43,10 +43,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-from amoskys.agents.Web.argos.precision.chain import (
-    PrecisionPlan,
-    build_precision_plan,
-)
+from amoskys.agents.Web.argos.precision.chain import PrecisionPlan, build_precision_plan
 from amoskys.agents.Web.argos.precision.payload_synth import (
     PayloadProbe,
     synthesize_probe,
@@ -61,36 +58,37 @@ from amoskys.agents.Web.argos.precision.temporal import (
 @dataclass
 class PrecisionEngagement:
     """Everything needed to execute a precision engagement."""
-    target_url:     str
-    target_host:    str
-    consent_token:  str = ""     # operator-supplied for audit
-    created_at:     float = 0.0
-    plan:           Optional[PrecisionPlan] = None
-    schedule:       Optional[SchedulePlan] = None
+
+    target_url: str
+    target_host: str
+    consent_token: str = ""  # operator-supplied for audit
+    created_at: float = 0.0
+    plan: Optional[PrecisionPlan] = None
+    schedule: Optional[SchedulePlan] = None
     findings_scanned: int = 0
-    plugins_scanned:  int = 0
-    blind_reasons:  List[str] = field(default_factory=list)
+    plugins_scanned: int = 0
+    blind_reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "target_url":       self.target_url,
-            "target_host":      self.target_host,
-            "consent_token":    self.consent_token,
-            "created_at":       self.created_at,
-            "plan":             self.plan.to_dict() if self.plan else None,
-            "schedule":         self.schedule.to_dict() if self.schedule else None,
+            "target_url": self.target_url,
+            "target_host": self.target_host,
+            "consent_token": self.consent_token,
+            "created_at": self.created_at,
+            "plan": self.plan.to_dict() if self.plan else None,
+            "schedule": self.schedule.to_dict() if self.schedule else None,
             "findings_scanned": self.findings_scanned,
-            "plugins_scanned":  self.plugins_scanned,
-            "blind_reasons":    self.blind_reasons,
+            "plugins_scanned": self.plugins_scanned,
+            "blind_reasons": self.blind_reasons,
         }
 
 
 def run_precision(
-    target_url:   str,
+    target_url: str,
     consent_token: str,
     plugin_inventory: Optional[List[Dict[str, str]]] = None,
     include_escalate: bool = False,
-    timezone:     Optional[TargetTimezone] = None,
+    timezone: Optional[TargetTimezone] = None,
     max_span_days: int = 14,
     corpus=None,
     scanner_registry=None,
@@ -132,19 +130,25 @@ def run_precision(
     # Load scanners (either injected for tests or lazy-imported).
     if scanner_registry is None:
         from amoskys.agents.Web.argos.ast import (
-            CsrfScanner, FileUploadScanner, PoiScanner,
-            RestAuthzScanner, SqlInjectionScanner, SsrfScanner,
+            CsrfScanner,
+            FileUploadScanner,
+            PoiScanner,
+            RestAuthzScanner,
+            SqlInjectionScanner,
+            SsrfScanner,
         )
+
         scanner_registry = {
-            "rest_authz":    RestAuthzScanner,
+            "rest_authz": RestAuthzScanner,
             "sql_injection": SqlInjectionScanner,
-            "file_upload":   FileUploadScanner,
-            "poi":           PoiScanner,
-            "csrf":          CsrfScanner,
-            "ssrf":          SsrfScanner,
+            "file_upload": FileUploadScanner,
+            "poi": PoiScanner,
+            "csrf": CsrfScanner,
+            "ssrf": SsrfScanner,
         }
     if corpus is None:
         from amoskys.agents.Web.argos.corpus import WPOrgCorpus
+
         corpus = WPOrgCorpus()
 
     findings: List[dict] = []
@@ -157,25 +161,26 @@ def run_precision(
             plugin = corpus.fetch(slug, version)
         except Exception as e:  # noqa: BLE001
             engagement.blind_reasons.append(
-                f"corpus fetch failed for {slug}@{version}: "
-                f"{type(e).__name__}: {e}"
+                f"corpus fetch failed for {slug}@{version}: " f"{type(e).__name__}: {e}"
             )
             continue
         engagement.plugins_scanned += 1
         for scanner_id, klass in scanner_registry.items():
             try:
                 for f in klass().scan(plugin):
-                    findings.append({
-                        "scanner":        f.scanner,
-                        "rule_id":        f.rule_id,
-                        "severity":       f.severity,
-                        "plugin_slug":    f.plugin_slug,
-                        "plugin_version": f.plugin_version,
-                        "file_path":      f.file_path,
-                        "line":           f.line,
-                        "title":          f.title,
-                        "cwe":            f.cwe,
-                    })
+                    findings.append(
+                        {
+                            "scanner": f.scanner,
+                            "rule_id": f.rule_id,
+                            "severity": f.severity,
+                            "plugin_slug": f.plugin_slug,
+                            "plugin_version": f.plugin_version,
+                            "file_path": f.file_path,
+                            "line": f.line,
+                            "title": f.title,
+                            "cwe": f.cwe,
+                        }
+                    )
             except Exception as e:  # noqa: BLE001
                 engagement.blind_reasons.append(
                     f"scanner {scanner_id} crashed on {slug}@{version}: "
@@ -196,7 +201,9 @@ def run_precision(
 
     # Plan + schedule.
     engagement.plan = build_precision_plan(
-        target_url, probes, include_escalate=include_escalate,
+        target_url,
+        probes,
+        include_escalate=include_escalate,
     )
     engagement.schedule = low_slow_schedule(
         probe_count=len(engagement.plan.probes),
@@ -211,5 +218,6 @@ def run_precision(
 
 def _host_of(url: str) -> str:
     import urllib.parse
+
     p = urllib.parse.urlparse(url if "://" in url else "https://" + url)
     return p.netloc or url

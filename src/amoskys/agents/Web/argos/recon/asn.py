@@ -49,7 +49,7 @@ class ASNEnrichmentSource(ReconSource):
     def __init__(
         self,
         timeout_s: float = 10.0,
-        connect_fn=None,   # injection point for tests
+        connect_fn=None,  # injection point for tests
     ) -> None:
         self.timeout_s = timeout_s
         self._connect = connect_fn or _cymru_bulk_query
@@ -137,15 +137,17 @@ def _cymru_bulk_query(ips: List[str], timeout_s: float) -> List[dict]:
         asn_raw, ip, prefix, cc, registry, allocated, as_name = parts[:7]
         if asn_raw.upper() == "NA" or not asn_raw:
             continue
-        rows.append({
-            "asn": asn_raw,
-            "ip": ip,
-            "prefix": prefix,
-            "cc": cc,
-            "registry": registry,
-            "allocated": allocated,
-            "as_name": as_name,
-        })
+        rows.append(
+            {
+                "asn": asn_raw,
+                "ip": ip,
+                "prefix": prefix,
+                "cc": cc,
+                "registry": registry,
+                "allocated": allocated,
+                "as_name": as_name,
+            }
+        )
 
     return rows
 

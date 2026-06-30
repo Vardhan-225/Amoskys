@@ -115,9 +115,7 @@ _TCC_SERVICE_RE = re.compile(r"service=(kTCCService\w+)")
 
 # TCC: identifier + pid + binary_path tuple — appears in BOTH AUTHREQ_ATTRIBUTION
 # and Granting lines. Used as the canonical client extractor.
-_TCC_ATTRIB_RE = re.compile(
-    r"identifier=([^,]+),\s+pid=(\d+).*?binary_path=([^\s,}]+)"
-)
+_TCC_ATTRIB_RE = re.compile(r"identifier=([^,]+),\s+pid=(\d+).*?binary_path=([^\s,}]+)")
 # Fallback: identifier + pid only (when binary_path is private/redacted)
 _TCC_IDENT_PID_RE = re.compile(r"identifier=([^,]+),\s+pid=(\d+)")
 
@@ -163,8 +161,14 @@ class MacOSAuthCollector:
         ('process == "SecurityAgent"', "password_prompt"),
         ('process == "sshd"', "ssh"),
         ('process == "sudo"', "sudo"),
-        ('process == "loginwindow" AND (eventMessage CONTAINS "login" OR eventMessage CONTAINS "logout" OR eventMessage CONTAINS "unlock" OR eventMessage CONTAINS "authenticated" OR eventMessage CONTAINS "denied")', "login"),
-        ('process == "screensaverengine" AND (eventMessage CONTAINS "unlock" OR eventMessage CONTAINS "lock" OR eventMessage CONTAINS "authenticated")', "screensaver"),
+        (
+            'process == "loginwindow" AND (eventMessage CONTAINS "login" OR eventMessage CONTAINS "logout" OR eventMessage CONTAINS "unlock" OR eventMessage CONTAINS "authenticated" OR eventMessage CONTAINS "denied")',
+            "login",
+        ),
+        (
+            'process == "screensaverengine" AND (eventMessage CONTAINS "unlock" OR eventMessage CONTAINS "lock" OR eventMessage CONTAINS "authenticated")',
+            "screensaver",
+        ),
     ]
 
     # Internal macOS directory services noise from sudo — NOT actual auth events.
@@ -619,7 +623,9 @@ def _parse_timestamp(ts_str: str) -> Optional[datetime]:
                 continue
         return datetime.fromisoformat(ts_str.replace(" ", "T"))
     except Exception:
-        logger.warning("auth: unparseable timestamp %r — event will use ingest time", ts_str)
+        logger.warning(
+            "auth: unparseable timestamp %r — event will use ingest time", ts_str
+        )
         return None
 
 
@@ -706,7 +712,9 @@ class StreamingAuthCollector(MacOSAuthCollector):
                 self._stream_proc.pid,
             )
         except Exception as e:
-            logger.warning("StreamingAuthCollector: log stream failed, using polling: %s", e)
+            logger.warning(
+                "StreamingAuthCollector: log stream failed, using polling: %s", e
+            )
             self._stream_alive = False
 
     def _read_loop(self) -> None:
@@ -749,7 +757,9 @@ class StreamingAuthCollector(MacOSAuthCollector):
             self._stream_proc and self._stream_proc.poll() is not None
         ):
             if self._stream_alive:
-                logger.warning("StreamingAuthCollector: stream died, falling back to polling")
+                logger.warning(
+                    "StreamingAuthCollector: stream died, falling back to polling"
+                )
                 self._stream_alive = False
             return super().collect()
 

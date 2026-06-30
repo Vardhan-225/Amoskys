@@ -164,9 +164,17 @@ class BrowserCredentialTheftProbe(MicroProbe):
 
         # Apple system processes that legitimately access browser stores
         _APPLE_BROWSER_PROCESSES = {
-            "Passwords", "Safari", "SafariServices", "WebKit",
-            "com.apple.Safari", "com.apple.WebKit", "nsurlsessiond",
-            "SafariBookmarksSyncAgent", "cloudd", "bird", "Knowledge",
+            "Passwords",
+            "Safari",
+            "SafariServices",
+            "WebKit",
+            "com.apple.Safari",
+            "com.apple.WebKit",
+            "nsurlsessiond",
+            "SafariBookmarksSyncAgent",
+            "cloudd",
+            "bird",
+            "Knowledge",
         }
 
         for access in accesses:

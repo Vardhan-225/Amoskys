@@ -27,7 +27,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -72,13 +72,17 @@ class NucleiTool(Tool):
         # Build command
         cmd: List[str] = [
             "nuclei",
-            "-u", f"https://{target}" if not target.startswith("http") else target,
+            "-u",
+            f"https://{target}" if not target.startswith("http") else target,
             "-jsonl",
             "-silent",
             "-nc",  # no color codes
-            "-rate-limit", str(scope.max_rps),
-            "-timeout", "10",
-            "-o", str(out_path),
+            "-rate-limit",
+            str(scope.max_rps),
+            "-timeout",
+            "10",
+            "-o",
+            str(out_path),
         ]
 
         # Category selection
@@ -135,7 +139,9 @@ class NucleiTool(Tool):
             try:
                 stderr_bytes = os.path.getsize(stderr_path)
                 if stderr_bytes > 0:
-                    tail = stderr_path.read_bytes()[-500:].decode("utf-8", errors="replace")
+                    tail = stderr_path.read_bytes()[-500:].decode(
+                        "utf-8", errors="replace"
+                    )
                     errors.append(f"stderr (tail): {tail}")
             except Exception:  # noqa: BLE001
                 pass

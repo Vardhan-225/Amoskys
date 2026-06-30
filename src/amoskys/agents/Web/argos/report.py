@@ -27,16 +27,18 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
+
     JINJA_AVAILABLE = True
 except ImportError:
     JINJA_AVAILABLE = False
 
 try:
     from weasyprint import HTML
+
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False
@@ -53,9 +55,7 @@ class ReportRenderer:
 
     def __init__(self, template_dir: Optional[Path] = None) -> None:
         if not JINJA_AVAILABLE:
-            raise RuntimeError(
-                "jinja2 not installed. pip install jinja2 weasyprint"
-            )
+            raise RuntimeError("jinja2 not installed. pip install jinja2 weasyprint")
         self.template_dir = template_dir or TEMPLATE_DIR
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
@@ -84,9 +84,7 @@ class ReportRenderer:
     ) -> bytes:
         """Render an engagement result as a PDF (bytes)."""
         if not WEASYPRINT_AVAILABLE:
-            raise RuntimeError(
-                "weasyprint not installed. pip install weasyprint"
-            )
+            raise RuntimeError("weasyprint not installed. pip install weasyprint")
         html_str = self.render_html(result, customer_info)
         return HTML(string=html_str, base_url=str(self.template_dir)).write_pdf()
 
@@ -120,46 +118,61 @@ class ReportRenderer:
         else:
             risk_rating = "BASELINE"
 
-        started_dt = datetime.fromtimestamp(
-            result.started_at_ns / 1e9, tz=timezone.utc
-        )
+        started_dt = datetime.fromtimestamp(result.started_at_ns / 1e9, tz=timezone.utc)
         completed_dt = (
             datetime.fromtimestamp(result.completed_at_ns / 1e9, tz=timezone.utc)
-            if result.completed_at_ns else None
+            if result.completed_at_ns
+            else None
         )
 
         # Tool summary — derived from tool_outputs
         tool_summary = []
         for name, tr in result.tool_outputs.items():
-            tr_d = tr if isinstance(tr, dict) else asdict(tr) if hasattr(tr, "__dataclass_fields__") else tr.__dict__
-            duration_s = (tr_d.get("completed_at_ns", 0) - tr_d.get("started_at_ns", 0)) / 1e9 if tr_d.get("started_at_ns") else None
-            tool_summary.append({
-                "name": name,
-                "exit_code": tr_d.get("exit_code"),
-                "duration_s": duration_s,
-                "findings": len(tr_d.get("findings", [])),
-                "command": " ".join(tr_d.get("command", [])[:10]),
-                "errors": len(tr_d.get("errors", [])),
-            })
+            tr_d = (
+                tr
+                if isinstance(tr, dict)
+                else asdict(tr) if hasattr(tr, "__dataclass_fields__") else tr.__dict__
+            )
+            duration_s = (
+                (tr_d.get("completed_at_ns", 0) - tr_d.get("started_at_ns", 0)) / 1e9
+                if tr_d.get("started_at_ns")
+                else None
+            )
+            tool_summary.append(
+                {
+                    "name": name,
+                    "exit_code": tr_d.get("exit_code"),
+                    "duration_s": duration_s,
+                    "findings": len(tr_d.get("findings", [])),
+                    "command": " ".join(tr_d.get("command", [])[:10]),
+                    "errors": len(tr_d.get("errors", [])),
+                }
+            )
 
         # Map finding fields for template
         view_findings = []
         for idx, f in enumerate(findings, 1):
-            view_findings.append({
-                "num": idx,
-                "finding_id": f.finding_id,
-                "template_id": f.template_id or "unknown",
-                "tool": f.tool,
-                "target": f.target,
-                "severity": f.severity.value if hasattr(f.severity, "value") else str(f.severity),
-                "title": f.title,
-                "description": f.description,
-                "cwe": f.cwe,
-                "cvss": f.cvss,
-                "references": f.references or [],
-                "mitre_techniques": f.mitre_techniques or [],
-                "evidence": f.evidence or {},
-            })
+            view_findings.append(
+                {
+                    "num": idx,
+                    "finding_id": f.finding_id,
+                    "template_id": f.template_id or "unknown",
+                    "tool": f.tool,
+                    "target": f.target,
+                    "severity": (
+                        f.severity.value
+                        if hasattr(f.severity, "value")
+                        else str(f.severity)
+                    ),
+                    "title": f.title,
+                    "description": f.description,
+                    "cwe": f.cwe,
+                    "cvss": f.cvss,
+                    "references": f.references or [],
+                    "mitre_techniques": f.mitre_techniques or [],
+                    "evidence": f.evidence or {},
+                }
+            )
 
         return {
             "engagement_id": result.engagement_id,
@@ -170,14 +183,19 @@ class ReportRenderer:
             "started": started_dt,
             "completed": completed_dt,
             "duration_s": result.duration_s,
-            "phases": [p.value if hasattr(p, "value") else str(p) for p in result.phases_complete],
+            "phases": [
+                p.value if hasattr(p, "value") else str(p)
+                for p in result.phases_complete
+            ],
             "findings": view_findings,
             "counts": counts,
             "total_findings": total,
             "risk_rating": risk_rating,
             "by_severity": {
-                s: [{"num": idx + 1, "title": f.title, "severity": s}
-                    for idx, f in enumerate(by_severity.get(s, []))]
+                s: [
+                    {"num": idx + 1, "title": f.title, "severity": s}
+                    for idx, f in enumerate(by_severity.get(s, []))
+                ]
                 for s in severity_order
             },
             "tool_summary": tool_summary,
@@ -196,11 +214,11 @@ class ReportRenderer:
 
 _SEVERITY_CLASSES = {
     "critical": "sev-critical",
-    "high":     "sev-high",
-    "medium":   "sev-medium",
-    "warn":     "sev-warn",
-    "low":      "sev-low",
-    "info":     "sev-info",
+    "high": "sev-high",
+    "medium": "sev-medium",
+    "warn": "sev-warn",
+    "low": "sev-low",
+    "info": "sev-info",
 }
 
 

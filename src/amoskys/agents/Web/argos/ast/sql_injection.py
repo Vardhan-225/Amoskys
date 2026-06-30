@@ -73,7 +73,6 @@ from amoskys.agents.Web.argos.ast.base import (
     strip_comments_and_strings,
 )
 
-
 # ── Query-executing methods we watch ───────────────────────────────
 #
 # Matched as `->NAME(` on the masked text so we catch
@@ -94,13 +93,11 @@ _WPDB_QUERY_METHODS = (
 _RAW_DB_FUNCTIONS = {
     "mysqli_query": 1,
     "mysql_query": 0,
-    "pg_query":    1,   # conservatively pick arg1; arg0 form is one-arg
+    "pg_query": 1,  # conservatively pick arg1; arg0 form is one-arg
 }
 
 # Request-source globals a tainted argument might come from.
-_TAINT_GLOBALS_RE = re.compile(
-    r"\$_(GET|POST|REQUEST|COOKIE|SERVER|FILES)\b"
-)
+_TAINT_GLOBALS_RE = re.compile(r"\$_(GET|POST|REQUEST|COOKIE|SERVER|FILES)\b")
 
 # PHP string interpolation patterns.  Applies only to DOUBLE-quoted
 # strings and heredocs (single-quoted PHP strings don't interpolate).
@@ -226,24 +223,29 @@ class SqlInjectionScanner(ASTScanner):
 
                 # Rule: direct_request_query — primary arg is a request global.
                 if _looks_tainted(arg0):
-                    findings.append(self._finding(
-                        plugin, source, line, arg0,
-                        rule_id="sql.direct_request_query",
-                        severity="critical",
-                        title=f"$wpdb->{method}() called with request-sourced global",
-                        description=(
-                            f"The first argument to $wpdb->{method}() contains "
-                            f"a PHP request super-global. This is textbook SQL "
-                            f"injection — the request value reaches the query "
-                            f"verbatim. Use $wpdb->prepare() with %s / %d / %f "
-                            f"placeholders."
-                        ),
-                        recommendation=(
-                            "Wrap in $wpdb->prepare() and bind the request "
-                            "value through a %s/%d/%f placeholder."
-                        ),
-                        evidence_extra={"method": method},
-                    ))
+                    findings.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            line,
+                            arg0,
+                            rule_id="sql.direct_request_query",
+                            severity="critical",
+                            title=f"$wpdb->{method}() called with request-sourced global",
+                            description=(
+                                f"The first argument to $wpdb->{method}() contains "
+                                f"a PHP request super-global. This is textbook SQL "
+                                f"injection — the request value reaches the query "
+                                f"verbatim. Use $wpdb->prepare() with %s / %d / %f "
+                                f"placeholders."
+                            ),
+                            recommendation=(
+                                "Wrap in $wpdb->prepare() and bind the request "
+                                "value through a %s/%d/%f placeholder."
+                            ),
+                            evidence_extra={"method": method},
+                        )
+                    )
                     continue
 
                 # Classify by quote form.
@@ -251,13 +253,28 @@ class SqlInjectionScanner(ASTScanner):
                 inner = _unwrap_string(arg0, form) if form else ""
 
                 if method == "prepare":
-                    findings.extend(self._classify_prepare(
-                        plugin, source, line, arg0, form, inner,
-                    ))
+                    findings.extend(
+                        self._classify_prepare(
+                            plugin,
+                            source,
+                            line,
+                            arg0,
+                            form,
+                            inner,
+                        )
+                    )
                 else:
-                    findings.extend(self._classify_query_like(
-                        plugin, source, line, arg0, form, inner, method,
-                    ))
+                    findings.extend(
+                        self._classify_query_like(
+                            plugin,
+                            source,
+                            line,
+                            arg0,
+                            form,
+                            inner,
+                            method,
+                        )
+                    )
 
         return findings
 
@@ -266,47 +283,57 @@ class SqlInjectionScanner(ASTScanner):
         # prepare() with interpolation in its format string is SQLi,
         # because PHP interpolates BEFORE prepare sees the string.
         if form in ("double", "heredoc") and _INTERP_RE.search(inner):
-            out.append(self._finding(
-                plugin, source, line, arg0,
-                rule_id="sql.prepare_with_interpolation",
-                severity="critical",
-                title="$wpdb->prepare() format string contains PHP interpolation",
-                description=(
-                    "PHP interpolates variables into the string literal BEFORE "
-                    "$wpdb->prepare() ever sees it. The placeholders that "
-                    "prepare() would escape only exist AFTER interpolation — "
-                    "so any $var, {$var} or ${var} in the format string is "
-                    "direct SQL injection despite the prepare() call."
-                ),
-                recommendation=(
-                    "Replace the interpolated variable with a %s / %d / %f "
-                    "placeholder and pass the raw value as the next argument: "
-                    "$wpdb->prepare('WHERE id = %d', $id)"
-                ),
-            ))
+            out.append(
+                self._finding(
+                    plugin,
+                    source,
+                    line,
+                    arg0,
+                    rule_id="sql.prepare_with_interpolation",
+                    severity="critical",
+                    title="$wpdb->prepare() format string contains PHP interpolation",
+                    description=(
+                        "PHP interpolates variables into the string literal BEFORE "
+                        "$wpdb->prepare() ever sees it. The placeholders that "
+                        "prepare() would escape only exist AFTER interpolation — "
+                        "so any $var, {$var} or ${var} in the format string is "
+                        "direct SQL injection despite the prepare() call."
+                    ),
+                    recommendation=(
+                        "Replace the interpolated variable with a %s / %d / %f "
+                        "placeholder and pass the raw value as the next argument: "
+                        "$wpdb->prepare('WHERE id = %d', $id)"
+                    ),
+                )
+            )
             return out
         # prepare() with no % specifiers at all — ornamental.
         if form in ("single", "double", "heredoc", "nowdoc"):
             if not _PLACEHOLDER_RE.search(inner):
-                out.append(self._finding(
-                    plugin, source, line, arg0,
-                    rule_id="sql.prepare_missing_placeholders",
-                    severity="low",
-                    title="$wpdb->prepare() called without any %s/%d placeholders",
-                    description=(
-                        "The format string has no placeholder specifiers. "
-                        "prepare() still returns the string, so the call is "
-                        "legal, but no value is being escaped — suggesting "
-                        "prepare() was added as ornamentation around an "
-                        "already-built query. Audit upstream."
-                    ),
-                    recommendation=(
-                        "Confirm this prepare() call is intentional. If the "
-                        "full query is a constant, prepare() is unnecessary; "
-                        "if variables are being embedded upstream, move them "
-                        "to placeholder arguments here."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        line,
+                        arg0,
+                        rule_id="sql.prepare_missing_placeholders",
+                        severity="low",
+                        title="$wpdb->prepare() called without any %s/%d placeholders",
+                        description=(
+                            "The format string has no placeholder specifiers. "
+                            "prepare() still returns the string, so the call is "
+                            "legal, but no value is being escaped — suggesting "
+                            "prepare() was added as ornamentation around an "
+                            "already-built query. Audit upstream."
+                        ),
+                        recommendation=(
+                            "Confirm this prepare() call is intentional. If the "
+                            "full query is a constant, prepare() is unnecessary; "
+                            "if variables are being embedded upstream, move them "
+                            "to placeholder arguments here."
+                        ),
+                    )
+                )
         return out
 
     def _classify_query_like(self, plugin, source, line, arg0, form, inner, method):
@@ -318,45 +345,55 @@ class SqlInjectionScanner(ASTScanner):
 
         # Double-quoted string with PHP interpolation → critical SQLi.
         if form in ("double", "heredoc") and _INTERP_RE.search(inner):
-            out.append(self._finding(
-                plugin, source, line, arg0,
-                rule_id="sql.interpolation_in_query",
-                severity="critical",
-                title=f"$wpdb->{method}() called with an interpolated SQL string",
-                description=(
-                    f"The query passed to $wpdb->{method}() embeds PHP "
-                    f"variables by string interpolation. Any variable content "
-                    f"is concatenated into the SQL without escaping — this is "
-                    f"the direct SQLi pattern."
-                ),
-                recommendation=(
-                    "Use $wpdb->prepare() with placeholders: "
-                    f"$wpdb->{method}($wpdb->prepare('... %s ...', $val))"
-                ),
-                evidence_extra={"method": method},
-            ))
+            out.append(
+                self._finding(
+                    plugin,
+                    source,
+                    line,
+                    arg0,
+                    rule_id="sql.interpolation_in_query",
+                    severity="critical",
+                    title=f"$wpdb->{method}() called with an interpolated SQL string",
+                    description=(
+                        f"The query passed to $wpdb->{method}() embeds PHP "
+                        f"variables by string interpolation. Any variable content "
+                        f"is concatenated into the SQL without escaping — this is "
+                        f"the direct SQLi pattern."
+                    ),
+                    recommendation=(
+                        "Use $wpdb->prepare() with placeholders: "
+                        f"$wpdb->{method}($wpdb->prepare('... %s ...', $val))"
+                    ),
+                    evidence_extra={"method": method},
+                )
+            )
             return out
 
         # Non-literal (a variable, a concat, a heredoc that didn't regex-match).
         if form is None:
-            out.append(self._finding(
-                plugin, source, line, arg0,
-                rule_id="sql.interpolation_in_query",
-                severity="high",
-                title=f"$wpdb->{method}() called with a dynamic (non-literal) query",
-                description=(
-                    f"The first argument to $wpdb->{method}() is not a quoted "
-                    f"string literal. The query was assembled upstream, and "
-                    f"without $wpdb->prepare() in the chain, any user input "
-                    f"that fed the assembly is a SQLi vector."
-                ),
-                recommendation=(
-                    "Re-assemble the query via $wpdb->prepare() so every "
-                    "variable becomes a typed placeholder. If the query is "
-                    "fully constant, inline it as a single string literal."
-                ),
-                evidence_extra={"method": method},
-            ))
+            out.append(
+                self._finding(
+                    plugin,
+                    source,
+                    line,
+                    arg0,
+                    rule_id="sql.interpolation_in_query",
+                    severity="high",
+                    title=f"$wpdb->{method}() called with a dynamic (non-literal) query",
+                    description=(
+                        f"The first argument to $wpdb->{method}() is not a quoted "
+                        f"string literal. The query was assembled upstream, and "
+                        f"without $wpdb->prepare() in the chain, any user input "
+                        f"that fed the assembly is a SQLi vector."
+                    ),
+                    recommendation=(
+                        "Re-assemble the query via $wpdb->prepare() so every "
+                        "variable becomes a typed placeholder. If the query is "
+                        "fully constant, inline it as a single string literal."
+                    ),
+                    evidence_extra={"method": method},
+                )
+            )
 
         return out
 
@@ -411,23 +448,38 @@ class SqlInjectionScanner(ASTScanner):
                         f"not portable across DB drivers."
                     )
 
-                out.append(self._finding(
-                    plugin, source, call.line, arg0,
-                    rule_id=rule, severity=severity,
-                    title=title, description=desc,
-                    recommendation=(
-                        "Replace with $wpdb->prepare() + $wpdb->query()."
-                    ),
-                    evidence_extra={"raw_api": fn},
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        arg0,
+                        rule_id=rule,
+                        severity=severity,
+                        title=title,
+                        description=desc,
+                        recommendation=(
+                            "Replace with $wpdb->prepare() + $wpdb->query()."
+                        ),
+                        evidence_extra={"raw_api": fn},
+                    )
+                )
         return out
 
     # ── Finding factory ────────────────────────────────────────────
 
     def _finding(
-        self, plugin, source, line, arg0,
-        rule_id, severity, title, description,
-        recommendation="", evidence_extra=None,
+        self,
+        plugin,
+        source,
+        line,
+        arg0,
+        rule_id,
+        severity,
+        title,
+        description,
+        recommendation="",
+        evidence_extra=None,
     ) -> ASTFinding:
         snippet = arg0.strip().replace("\n", " ")[:240]
         return ASTFinding(

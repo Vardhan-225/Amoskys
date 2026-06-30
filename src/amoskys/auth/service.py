@@ -1195,11 +1195,11 @@ class AuthService:
                 - Subsequent users → join existing org (VIEWER, admin approves)
         """
         from amoskys.auth.organization import (
+            Organization,
             OrgMembership,
             OrgRole,
             OrgTier,
             OrgType,
-            Organization,
             classify_email_domain,
             generate_org_slug,
         )

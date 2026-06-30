@@ -29,7 +29,6 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
@@ -149,20 +148,30 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Cache server PID for 30 seconds
         now = time.time()
-        if not hasattr(self, "_server_ctx") or now - getattr(self, "_server_ctx_at", 0) > 30:
+        if (
+            not hasattr(self, "_server_ctx")
+            or now - getattr(self, "_server_ctx_at", 0) > 30
+        ):
             self._server_ctx = {}
             try:
                 result = _sp.run(
                     ["lsof", "-i", "TCP", "-sTCP:LISTEN", "-nP", "-F", "pcn"],
-                    capture_output=True, text=True, timeout=3,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
                 )
                 pid = None
                 for line in result.stdout.splitlines():
                     if line.startswith("p"):
                         pid = int(line[1:])
-                    elif line.startswith("n") and pid and (":443" in line or ":8443" in line or ":5001" in line):
+                    elif (
+                        line.startswith("n")
+                        and pid
+                        and (":443" in line or ":8443" in line or ":5001" in line)
+                    ):
                         self._server_ctx = mandate_context_from_pid(
-                            pid, "network_sentinel",
+                            pid,
+                            "network_sentinel",
                             detection_source="lsof_listen",
                         )
                         break

@@ -350,7 +350,9 @@ class LifecycleMixin:
         if total > 10000:
             try:
                 self.db.execute("PRAGMA incremental_vacuum(1000)")
-                logger.info("Incremental vacuum: reclaimed space after %d deletes", total)
+                logger.info(
+                    "Incremental vacuum: reclaimed space after %d deletes", total
+                )
             except sqlite3.Error:
                 pass
 

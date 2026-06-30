@@ -110,10 +110,12 @@ class IPWHOISSource(ReconSource):
         )
 
         # Extract any URLs from Comment / Description → domain candidates
-        url_text = " ".join([
-            parsed.get("comment", "") or "",
-            parsed.get("ref_url", "") or "",
-        ])
+        url_text = " ".join(
+            [
+                parsed.get("comment", "") or "",
+                parsed.get("ref_url", "") or "",
+            ]
+        )
         for url in _URL_RE.findall(url_text):
             host = _host_from_url(url)
             if not host:
@@ -173,7 +175,7 @@ def _parse_whois(raw: str) -> Dict[str, str]:
         for canonical, aliases in _FIELD_ALIASES.items():
             for alias in aliases:
                 if stripped.lower().startswith(alias.lower()):
-                    value = stripped[len(alias):].strip()
+                    value = stripped[len(alias) :].strip()
                     if not value:
                         continue
                     if canonical in ("comment", "ref_url"):

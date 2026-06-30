@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from amoskys.agents.Web.argos.legitimacy import (
     BackoffController,
@@ -16,7 +16,6 @@ from amoskys.agents.Web.argos.legitimacy import (
     load_robots,
     load_security_txt,
 )
-
 
 # ── UserAgentPool ──────────────────────────────────────────────────
 
@@ -71,8 +70,10 @@ def test_pacer_first_call_does_not_sleep():
 def test_pacer_subsequent_calls_respect_floor():
     # Override the profile to make the test fast but still testable.
     prof = PacingProfile(
-        median_s=0.05, stddev_s=0.01,
-        min_s=0.03, max_s=0.1,
+        median_s=0.05,
+        stddev_s=0.01,
+        min_s=0.03,
+        max_s=0.1,
         long_tail_prob=0.0,  # disable long-tail so test is deterministic
     )
     p = Pacer(profile=prof, rng=random.Random(1))
@@ -90,9 +91,12 @@ def test_pacer_long_tail_excursion():
     # — we use max_s high enough here that the long-tail value passes
     # through, and assert the sleep is in the long-tail range.
     prof = PacingProfile(
-        median_s=0.05, stddev_s=0.01,
-        min_s=0.0, max_s=1.0,
-        min_long_s=0.1, max_long_s=0.15,
+        median_s=0.05,
+        stddev_s=0.01,
+        min_s=0.0,
+        max_s=1.0,
+        min_long_s=0.1,
+        max_long_s=0.15,
         long_tail_prob=1.0,
     )
     p = Pacer(profile=prof, rng=random.Random(1))

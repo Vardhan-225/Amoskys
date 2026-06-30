@@ -248,7 +248,11 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "platform",
         "icon": "shield-alert",
         "tier": "specialist",
-        "activation_signals": ["credential_access", "keychain_access", "browser_cred_theft"],
+        "activation_signals": [
+            "credential_access",
+            "keychain_access",
+            "browser_cred_theft",
+        ],
     },
     "macos_quarantine_guard": {
         "class": MacOSQuarantineGuardAgent,
@@ -384,9 +388,7 @@ def get_available_agents(platform: Optional[str] = None) -> Dict[str, Dict[str, 
 def get_agents_by_tier(tier: str) -> Dict[str, Dict[str, Any]]:
     """Get all agents for a specific tier (core/specialist/situational/merged)."""
     return {
-        name: meta
-        for name, meta in AGENT_REGISTRY.items()
-        if meta.get("tier") == tier
+        name: meta for name, meta in AGENT_REGISTRY.items() if meta.get("tier") == tier
     }
 
 

@@ -24,6 +24,7 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
+from amoskys.agents.common.process_resolver import mandate_context_from_pid
 from amoskys.agents.os.macos.internet_activity.collector import (
     InternetConnection,
     _is_cdn,
@@ -32,8 +33,6 @@ from amoskys.agents.os.macos.internet_activity.collector import (
     _is_tor_exit_node,
 )
 
-from amoskys.agents.common.process_resolver import mandate_context_from_pid
-
 logger = logging.getLogger(__name__)
 
 
@@ -41,14 +40,18 @@ def _enrich_connection_process(conn: Any) -> Dict[str, Any]:
     """Resolve full process context from a connection's PID — Mandate v1.0."""
     pid = getattr(conn, "pid", 0) or 0
     hint = getattr(conn, "process_name", "") or ""
-    return mandate_context_from_pid(pid, "internet_activity", process_name_hint=hint, detection_source="lsof")
+    return mandate_context_from_pid(
+        pid, "internet_activity", process_name_hint=hint, detection_source="lsof"
+    )
 
 
 def _enrich_primary_pid(pids: set, process_names: set) -> Dict[str, Any]:
     """Resolve the first available PID from an aggregate set — Mandate v1.0."""
     pid = next(iter(sorted(pids)), 0) if pids else 0
     hint = next(iter(sorted(process_names)), "") if process_names else ""
-    return mandate_context_from_pid(pid, "internet_activity", process_name_hint=hint, detection_source="lsof")
+    return mandate_context_from_pid(
+        pid, "internet_activity", process_name_hint=hint, detection_source="lsof"
+    )
 
 
 # ── Shared utilities ─────────────────────────────────────────────────────────

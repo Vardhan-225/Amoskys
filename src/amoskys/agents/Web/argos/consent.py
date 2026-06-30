@@ -35,7 +35,7 @@ class ArtifactRef:
     customer_id and use `ref_type` + `ref_value` to locate it.
     """
 
-    ref_type: str   # "docusign_envelope" | "contract_number" | "email_message_id" | "file_path" | "other"
+    ref_type: str  # "docusign_envelope" | "contract_number" | "email_message_id" | "file_path" | "other"
     ref_value: str  # the identifier itself
     notes: str = ""
 

@@ -258,7 +258,9 @@ class SigmaEngine:
         # Pre-filter: only evaluate rules matching event category (O(k) not O(n))
         candidate_rules = self._rules_by_category.get(category, [])
         if event_type and event_type != category:
-            candidate_rules = candidate_rules + self._rules_by_category.get(event_type, [])
+            candidate_rules = candidate_rules + self._rules_by_category.get(
+                event_type, []
+            )
         # Also include wildcard/uncategorized rules
         candidate_rules = candidate_rules + self._rules_by_category.get("", [])
         # Fallback: if no candidates found by category, evaluate ALL rules so

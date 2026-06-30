@@ -40,16 +40,20 @@ _DEFAULT_TIMEOUT = 20.0
 
 @dataclass
 class CTDiscoveryResult:
-    query:         str
-    raw_count:     int
+    query: str
+    raw_count: int
     unique_domains: List[str] = field(default_factory=list)
-    errors:        List[str] = field(default_factory=list)
-    queried_at:    float = 0.0
+    errors: List[str] = field(default_factory=list)
+    queried_at: float = 0.0
 
 
-def _fetch_crtsh(query: str, timeout: float = _DEFAULT_TIMEOUT,
-                 http_get=None, retries: int = 3,
-                 retry_backoff_s: float = 2.0) -> Optional[str]:
+def _fetch_crtsh(
+    query: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    http_get=None,
+    retries: int = 3,
+    retry_backoff_s: float = 2.0,
+) -> Optional[str]:
     """Low-level fetch. `http_get` is injectable for tests.
 
     crt.sh is a free community service and occasionally returns 502/503.
@@ -67,14 +71,23 @@ def _fetch_crtsh(query: str, timeout: float = _DEFAULT_TIMEOUT,
         if attempt > 0:
             # Exponential backoff with small jitter.
             import random as _r
+
             delay = retry_backoff_s * (2 ** (attempt - 1)) * _r.uniform(0.8, 1.2)
-            logger.info("crt.sh retry %d/%d after %.1fs (last: %s)",
-                        attempt + 1, retries, delay, last_err)
+            logger.info(
+                "crt.sh retry %d/%d after %.1fs (last: %s)",
+                attempt + 1,
+                retries,
+                delay,
+                last_err,
+            )
             time.sleep(delay)
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "AMOSKYS-Argos-Prospecting/1.0 (+https://amoskys.com)",
-            "Accept":     "application/json",
-        })
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "AMOSKYS-Argos-Prospecting/1.0 (+https://amoskys.com)",
+                "Accept": "application/json",
+            },
+        )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if resp.status != 200:
@@ -101,8 +114,18 @@ def _registered_domain(host: str) -> str:
     if len(parts) <= 2:
         return host
     # Multi-suffix handling for the common country-code ccTLDs.
-    multi = {"co.uk", "ac.uk", "gov.uk", "com.au", "com.br", "co.in",
-             "co.jp", "co.za", "com.mx", "com.sg"}
+    multi = {
+        "co.uk",
+        "ac.uk",
+        "gov.uk",
+        "com.au",
+        "com.br",
+        "co.in",
+        "co.jp",
+        "co.za",
+        "com.mx",
+        "com.sg",
+    }
     tail_2 = ".".join(parts[-2:])
     tail_3 = ".".join(parts[-3:])
     if tail_2 in multi:
@@ -110,8 +133,9 @@ def _registered_domain(host: str) -> str:
     return tail_2
 
 
-def discover_domains_via_ct(query: str, max_results: int = 500,
-                            http_get=None) -> CTDiscoveryResult:
+def discover_domains_via_ct(
+    query: str, max_results: int = 500, http_get=None
+) -> CTDiscoveryResult:
     """Return unique registered domains appearing in certs matching `query`.
 
     Args:
@@ -127,7 +151,9 @@ def discover_domains_via_ct(query: str, max_results: int = 500,
     body = _fetch_crtsh(query, http_get=http_get)
     if not body:
         return CTDiscoveryResult(
-            query=query, raw_count=0, unique_domains=[],
+            query=query,
+            raw_count=0,
+            unique_domains=[],
             errors=[f"crt.sh returned empty/error for {query!r}"],
             queried_at=time.time(),
         )
@@ -136,13 +162,17 @@ def discover_domains_via_ct(query: str, max_results: int = 500,
         rows = json.loads(body)
     except json.JSONDecodeError as e:
         return CTDiscoveryResult(
-            query=query, raw_count=0, unique_domains=[],
+            query=query,
+            raw_count=0,
+            unique_domains=[],
             errors=[f"json decode error: {e}"],
             queried_at=time.time(),
         )
     if not isinstance(rows, list):
         return CTDiscoveryResult(
-            query=query, raw_count=0, unique_domains=[],
+            query=query,
+            raw_count=0,
+            unique_domains=[],
             errors=["crt.sh returned non-list JSON"],
             queried_at=time.time(),
         )

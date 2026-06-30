@@ -6,8 +6,8 @@ import json
 import time
 from typing import Optional
 
-from ..db import query, query_one, scalar, hours_ago_ns, hours_ago_epoch
 from ..config import cfg
+from ..db import hours_ago_epoch, hours_ago_ns, query, query_one, scalar
 from ..server import mcp
 
 
@@ -22,22 +22,31 @@ def detect_threat_posture(device_id: str = "", hours: int = 24) -> dict:
         hours:     Lookback window
     """
     dev_clause = "AND device_id = ?" if device_id else ""
-    params_base = (hours_ago_ns(hours), device_id) if device_id else (hours_ago_ns(hours),)
+    params_base = (
+        (hours_ago_ns(hours), device_id) if device_id else (hours_ago_ns(hours),)
+    )
 
-    total = scalar(
-        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? {dev_clause}",
-        params_base,
-    ) or 0
+    total = (
+        scalar(
+            f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? {dev_clause}",
+            params_base,
+        )
+        or 0
+    )
 
-    classifications = query(f"""
+    classifications = query(
+        f"""
         SELECT final_classification, COUNT(*) as count
         FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
               AND final_classification IS NOT NULL
         GROUP BY final_classification
-    """, params_base)
+    """,
+        params_base,
+    )
 
-    risk_dist = query(f"""
+    risk_dist = query(
+        f"""
         SELECT
             CASE
                 WHEN risk_score >= 0.9 THEN 'critical'
@@ -50,24 +59,34 @@ def detect_threat_posture(device_id: str = "", hours: int = 24) -> dict:
         FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
         GROUP BY severity ORDER BY count DESC
-    """, params_base)
+    """,
+        params_base,
+    )
 
-    top_categories = query(f"""
+    top_categories = query(
+        f"""
         SELECT event_category, COUNT(*) as count,
                AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk
         FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
         GROUP BY event_category ORDER BY avg_risk DESC LIMIT 10
-    """, params_base)
+    """,
+        params_base,
+    )
 
-    incidents = scalar(
-        f"SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
-        (hours_ago_epoch(hours),),
-    ) or 0
+    incidents = (
+        scalar(
+            f"SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
+            (hours_ago_epoch(hours),),
+        )
+        or 0
+    )
 
     return {
         "total_events": total,
-        "classifications": {r["final_classification"]: r["count"] for r in classifications},
+        "classifications": {
+            r["final_classification"]: r["count"] for r in classifications
+        },
         "risk_distribution": {r["severity"]: r["count"] for r in risk_dist},
         "top_categories": top_categories,
         "incidents": incidents,
@@ -107,13 +126,16 @@ def detect_list_incidents(
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     params.append(min(limit, cfg.max_query_rows))
 
-    incidents = query(f"""
+    incidents = query(
+        f"""
         SELECT id, severity, title, description, device_ids,
                mitre_techniques, status, created_at, updated_at, resolved_at
         FROM fleet_incidents
         {where}
         ORDER BY created_at DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"incidents": incidents, "returned": len(incidents)}
 
@@ -125,9 +147,7 @@ def detect_incident_detail(incident_id: int) -> dict:
     Args:
         incident_id: The incident ID to inspect
     """
-    incident = query_one(
-        "SELECT * FROM fleet_incidents WHERE id = ?", (incident_id,)
-    )
+    incident = query_one("SELECT * FROM fleet_incidents WHERE id = ?", (incident_id,))
     if not incident:
         return {"error": f"Incident {incident_id} not found"}
 
@@ -141,14 +161,17 @@ def detect_incident_detail(incident_id: int) -> dict:
     related_events = []
     if event_ids:
         placeholders = ",".join("?" for _ in event_ids[:50])
-        related_events = query(f"""
+        related_events = query(
+            f"""
             SELECT event_id, device_id, event_category, event_action,
                    risk_score, mitre_techniques, description,
                    collection_agent, timestamp_dt
             FROM security_events
             WHERE event_id IN ({placeholders})
             ORDER BY timestamp_ns ASC
-        """, tuple(str(eid) for eid in event_ids[:50]))
+        """,
+            tuple(str(eid) for eid in event_ids[:50]),
+        )
 
     return {
         "incident": incident,
@@ -170,7 +193,8 @@ def detect_kill_chain_summary(device_id: str = "", hours: int = 24) -> dict:
     dev_clause = "AND device_id = ?" if device_id else ""
     params = (hours_ago_ns(hours), device_id) if device_id else (hours_ago_ns(hours),)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT mitre_techniques, collection_agent, risk_score,
                device_id, event_category, timestamp_dt
         FROM security_events
@@ -178,7 +202,9 @@ def detect_kill_chain_summary(device_id: str = "", hours: int = 24) -> dict:
               AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
         ORDER BY risk_score DESC
-    """, params)
+    """,
+        params,
+    )
 
     techniques: dict[str, dict] = {}
     for row in rows:
@@ -234,14 +260,17 @@ def detect_mitre_coverage(hours: int = 24) -> dict:
     Args:
         hours: Lookback window
     """
-    rows = query("""
+    rows = query(
+        """
         SELECT mitre_techniques, COUNT(*) as hit_count
         FROM security_events
         WHERE timestamp_ns > ?
               AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
         GROUP BY mitre_techniques
-    """, (hours_ago_ns(hours),))
+    """,
+        (hours_ago_ns(hours),),
+    )
 
     technique_counts: dict[str, int] = {}
     for row in rows:
@@ -277,7 +306,8 @@ def detect_sigma_hits(device_id: str = "", hours: int = 24) -> dict:
     dev_clause = "AND device_id = ?" if device_id else ""
     params = (hours_ago_ns(hours), device_id) if device_id else (hours_ago_ns(hours),)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT event_category, collection_agent, detection_source,
                COUNT(*) as count,
                AVG(risk_score) as avg_risk,
@@ -287,6 +317,8 @@ def detect_sigma_hits(device_id: str = "", hours: int = 24) -> dict:
               AND risk_score > 0.3
         GROUP BY event_category, collection_agent
         ORDER BY avg_risk DESC
-    """, params)
+    """,
+        params,
+    )
 
     return {"sigma_hits": rows, "hours": hours}

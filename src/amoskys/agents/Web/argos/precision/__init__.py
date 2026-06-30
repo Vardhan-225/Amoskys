@@ -72,23 +72,23 @@ analysis + targeted probing — nothing passive. Requires a signed
 engagement or AMOSKYS_CONSENT_DOMAIN match.
 """
 
-from amoskys.agents.Web.argos.precision.payload_synth import (
-    PayloadProbe,
-    synthesize_probe,
-)
-from amoskys.agents.Web.argos.precision.temporal import (
-    SchedulePlan,
-    TargetTimezone,
-    low_slow_schedule,
-)
 from amoskys.agents.Web.argos.precision.chain import (
     ChainContext,
     PrecisionPlan,
     build_precision_plan,
 )
+from amoskys.agents.Web.argos.precision.payload_synth import (
+    PayloadProbe,
+    synthesize_probe,
+)
 from amoskys.agents.Web.argos.precision.precision import (
     PrecisionEngagement,
     run_precision,
+)
+from amoskys.agents.Web.argos.precision.temporal import (
+    SchedulePlan,
+    TargetTimezone,
+    low_slow_schedule,
 )
 
 __all__ = [

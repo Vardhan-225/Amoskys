@@ -38,15 +38,14 @@ from typing import Any, Dict, List, Optional
 
 from amoskys.agents.Web.argos.precision.payload_synth import PayloadProbe
 
-
 # ---- Tiering ------------------------------------------------------
 
 
 _TIER_RANK = {
-    "intel.enum":      0,
+    "intel.enum": 0,
     "confirm.passive": 1,
-    "confirm.active":  2,
-    "escalate":        3,
+    "confirm.active": 2,
+    "escalate": 3,
 }
 
 
@@ -87,13 +86,14 @@ def _tier_for(probe: PayloadProbe) -> str:
 @dataclass
 class ChainContext:
     """What we've learned from probes so far."""
-    target_host:        str = ""
-    plugin_namespaces:  List[str] = field(default_factory=list)
-    known_post_ids:     List[int] = field(default_factory=list)
-    known_usernames:    List[str] = field(default_factory=list)
+
+    target_host: str = ""
+    plugin_namespaces: List[str] = field(default_factory=list)
+    known_post_ids: List[int] = field(default_factory=list)
+    known_usernames: List[str] = field(default_factory=list)
     known_plugin_versions: Dict[str, str] = field(default_factory=dict)
     # Each entry: finding_id -> most recent probe result
-    probe_results:      Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    probe_results: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -104,15 +104,15 @@ class PrecisionPlan:
     list of other probe finding_ids the operator should have fired
     and reviewed first.
     """
-    target:   str
-    probes:   List[PayloadProbe] = field(default_factory=list)
-    tiers:    Dict[str, str] = field(default_factory=dict)
-    depends:  Dict[str, List[str]] = field(default_factory=dict)
-    notes:    List[str] = field(default_factory=list)
+
+    target: str
+    probes: List[PayloadProbe] = field(default_factory=list)
+    tiers: Dict[str, str] = field(default_factory=dict)
+    depends: Dict[str, List[str]] = field(default_factory=dict)
+    notes: List[str] = field(default_factory=list)
 
     def summary(self) -> Dict[str, int]:
-        c = {"intel.enum": 0, "confirm.passive": 0,
-             "confirm.active": 0, "escalate": 0}
+        c = {"intel.enum": 0, "confirm.passive": 0, "confirm.active": 0, "escalate": 0}
         for t in self.tiers.values():
             if t in c:
                 c[t] += 1
@@ -120,17 +120,16 @@ class PrecisionPlan:
 
     def to_dict(self) -> Dict:
         return {
-            "target":   self.target,
-            "summary":  self.summary(),
-            "probes":   [p.to_dict() for p in self.probes],
-            "tiers":    self.tiers,
-            "depends":  self.depends,
-            "notes":    self.notes,
+            "target": self.target,
+            "summary": self.summary(),
+            "probes": [p.to_dict() for p in self.probes],
+            "tiers": self.tiers,
+            "depends": self.depends,
+            "notes": self.notes,
         }
 
 
-def _depends_on(probe: PayloadProbe,
-                other_probes: List[PayloadProbe]) -> List[str]:
+def _depends_on(probe: PayloadProbe, other_probes: List[PayloadProbe]) -> List[str]:
     """Identify which earlier-tier probes this one depends on."""
     rule = probe.source_rule_id
     deps: List[str] = []
@@ -145,8 +144,8 @@ def _depends_on(probe: PayloadProbe,
 
 
 def build_precision_plan(
-    target_url:   str,
-    probes:       List[PayloadProbe],
+    target_url: str,
+    probes: List[PayloadProbe],
     include_escalate: bool = False,
 ) -> PrecisionPlan:
     """Take a set of synthesized probes + produce the ordered plan.
@@ -176,12 +175,14 @@ def build_precision_plan(
         kept.append(p)
         plan.tiers[p.finding_id] = tier
 
-    kept.sort(key=lambda p: (
-        _TIER_RANK.get(_tier_for(p), 99),
-        p.plugin_slug,
-        p.source_rule_id,
-        p.finding_id,
-    ))
+    kept.sort(
+        key=lambda p: (
+            _TIER_RANK.get(_tier_for(p), 99),
+            p.plugin_slug,
+            p.source_rule_id,
+            p.finding_id,
+        )
+    )
     plan.probes = kept
     for p in kept:
         plan.depends[p.finding_id] = _depends_on(p, kept)

@@ -16,14 +16,11 @@ also write audit-log entries so the operator can defend every request
 made on a customer's behalf.
 """
 
+from amoskys.agents.Web.argos.stealth.identity import IdentityPool, Session
 from amoskys.agents.Web.argos.stealth.rate_limiter import (
     AdaptiveRateLimiter,
     BlockedTargetError,
     RateLimiterConfig,
-)
-from amoskys.agents.Web.argos.stealth.identity import (
-    IdentityPool,
-    Session,
 )
 
 __all__ = [

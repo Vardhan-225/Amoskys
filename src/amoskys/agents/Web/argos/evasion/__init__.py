@@ -56,15 +56,15 @@ Usage pattern
 
 from amoskys.agents.Web.argos.evasion.encode import (
     available_encoders,
-    compose,
     b64,
     case_mutate,
     comment_pad,
+    compose,
     hex_escape,
+    hpp,
     html_entity,
     html_entity_hex,
     html_escape,
-    hpp,
     js_unicode_escape,
     null_byte_after,
     sql_keyword_obfuscate,
@@ -81,6 +81,11 @@ from amoskys.agents.Web.argos.evasion.mutate import (
     variant_stream,
     xss_variants,
 )
+from amoskys.agents.Web.argos.evasion.session import (
+    SessionResponse,
+    StealthSession,
+    session_for,
+)
 from amoskys.agents.Web.argos.evasion.statistical import (
     StatSample,
     TimingExperiment,
@@ -91,29 +96,47 @@ from amoskys.agents.Web.argos.evasion.waf_fingerprint import (
     fingerprint,
     recommend_bypass_layers,
 )
-from amoskys.agents.Web.argos.evasion.session import (
-    SessionResponse,
-    StealthSession,
-    session_for,
-)
 
 # A friendlier alias.
 fingerprint_waf = fingerprint
 
 __all__ = [
     # encode
-    "available_encoders", "compose", "b64", "case_mutate", "comment_pad",
-    "hex_escape", "html_entity", "html_entity_hex", "html_escape", "hpp",
-    "js_unicode_escape", "null_byte_after", "sql_keyword_obfuscate",
-    "url", "url2", "url_unicode", "utf8_overlong", "whitespace_mutate",
+    "available_encoders",
+    "compose",
+    "b64",
+    "case_mutate",
+    "comment_pad",
+    "hex_escape",
+    "html_entity",
+    "html_entity_hex",
+    "html_escape",
+    "hpp",
+    "js_unicode_escape",
+    "null_byte_after",
+    "sql_keyword_obfuscate",
+    "url",
+    "url2",
+    "url_unicode",
+    "utf8_overlong",
+    "whitespace_mutate",
     # mutate
-    "lfi_variants", "rce_variants", "sqli_variants", "variant_stream",
+    "lfi_variants",
+    "rce_variants",
+    "sqli_variants",
+    "variant_stream",
     "xss_variants",
     # statistical
-    "StatSample", "TimingExperiment", "welch_t_test",
+    "StatSample",
+    "TimingExperiment",
+    "welch_t_test",
     # waf
-    "WAFFingerprint", "fingerprint", "fingerprint_waf",
+    "WAFFingerprint",
+    "fingerprint",
+    "fingerprint_waf",
     "recommend_bypass_layers",
     # session
-    "SessionResponse", "StealthSession", "session_for",
+    "SessionResponse",
+    "StealthSession",
+    "session_for",
 ]

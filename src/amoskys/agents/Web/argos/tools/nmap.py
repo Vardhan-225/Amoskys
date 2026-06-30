@@ -41,7 +41,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -59,7 +59,9 @@ class NmapTool(Tool):
     HIGH_RISK_PORTS = frozenset({3306, 5432, 6379, 9200, 27017, 11211, 9000, 9001})
 
     # Ports of concern even if sometimes legitimate (needs review).
-    MEDIUM_RISK_PORTS = frozenset({21, 22, 23, 3389, 5900, 8000, 8001, 8080, 8443, 9090})
+    MEDIUM_RISK_PORTS = frozenset(
+        {21, 22, 23, 3389, 5900, 8000, 8001, 8080, 8443, 9090}
+    )
 
     def __init__(
         self,
@@ -79,7 +81,8 @@ class NmapTool(Tool):
 
         if not self.available():
             return ToolResult.failed(
-                self.name, target,
+                self.name,
+                target,
                 "nmap binary not found. Install: apt install nmap",
             )
 
@@ -93,14 +96,18 @@ class NmapTool(Tool):
         cmd: List[str] = ["nmap"]
         # -sT uses TCP connect, no root needed; -sS is SYN scan, faster but needs CAP_NET_RAW.
         cmd.append("-sT" if self.mode == "connect" else "-sS")
-        cmd.extend([
-            "-p", self.ports,
-            "-T4",              # aggressive timing
-            "--open",           # only report open ports
-            "-Pn",              # skip host discovery (assume up)
-            "-oG", str(out_path),  # grep-parseable output
-            "-n",               # don't resolve DNS (we have the host)
-        ])
+        cmd.extend(
+            [
+                "-p",
+                self.ports,
+                "-T4",  # aggressive timing
+                "--open",  # only report open ports
+                "-Pn",  # skip host discovery (assume up)
+                "-oG",
+                str(out_path),  # grep-parseable output
+                "-n",  # don't resolve DNS (we have the host)
+            ]
+        )
         if self.service_detect:
             cmd.append("-sV")
         cmd.append(host)
@@ -110,7 +117,9 @@ class NmapTool(Tool):
         try:
             with open(stderr_path, "wb") as stderr_fh:
                 proc = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=stderr_fh,
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=stderr_fh,
                 )
                 try:
                     exit_code = proc.wait(timeout=min(scope.max_duration_s, 600))
@@ -158,7 +167,9 @@ class NmapTool(Tool):
             Host: 98.89.32.163 ()  Ports: 80/open/tcp//http///, 443/open/tcp//ssl|https///
         """
         findings: List[Dict[str, Any]] = []
-        port_re = re.compile(r"(\d+)/(open|closed|filtered)/(tcp|udp)//([^/]*)///([^,]*)")
+        port_re = re.compile(
+            r"(\d+)/(open|closed|filtered)/(tcp|udp)//([^/]*)///([^,]*)"
+        )
 
         for line in content.splitlines():
             if not line.startswith("Host:") or "Ports:" not in line:

@@ -43,8 +43,9 @@ from typing import Callable, List, Optional, Tuple
 @dataclass
 class StatSample:
     """A collection of timing samples."""
-    label:    str
-    values:   List[float] = field(default_factory=list)
+
+    label: str
+    values: List[float] = field(default_factory=list)
 
     def add(self, x: float) -> None:
         self.values.append(x)
@@ -90,8 +91,7 @@ def welch_t_test(a: StatSample, b: StatSample) -> Tuple[float, float]:
 
     # Welch-Satterthwaite degrees of freedom.
     num = (v_a / n_a + v_b / n_b) ** 2
-    den = (v_a ** 2) / ((n_a ** 2) * (n_a - 1)) + \
-          (v_b ** 2) / ((n_b ** 2) * (n_b - 1))
+    den = (v_a**2) / ((n_a**2) * (n_a - 1)) + (v_b**2) / ((n_b**2) * (n_b - 1))
     if den == 0:
         return t, 0.0
     df = num / den
@@ -132,16 +132,17 @@ class TimingExperiment:
     Results include t-statistic, p-value, mean latency delta, and
     a boolean `significant` given the pre-committed alpha.
     """
-    label:     str = ""
+
+    label: str = ""
     n_samples: int = 8
-    alpha:     float = 0.01
-    fire:      Optional[Callable[[bool], float]] = None
+    alpha: float = 0.01
+    fire: Optional[Callable[[bool], float]] = None
 
     def run(self) -> dict:
         if not self.fire:
             raise ValueError("fire callback not provided")
         baseline = StatSample("baseline")
-        probe    = StatSample("probe")
+        probe = StatSample("probe")
         # Interleave to control for network drift.
         for i in range(self.n_samples):
             # baseline, then probe — order matters less with interleaving
@@ -154,20 +155,20 @@ class TimingExperiment:
         t, p = welch_t_test(baseline, probe)
         delta = probe.mean() - baseline.mean()
         return {
-            "label":           self.label,
-            "n":               self.n_samples,
-            "baseline_mean":   round(baseline.mean(), 3),
+            "label": self.label,
+            "n": self.n_samples,
+            "baseline_mean": round(baseline.mean(), 3),
             "baseline_stddev": round(baseline.stddev(), 3),
-            "probe_mean":      round(probe.mean(), 3),
-            "probe_stddev":    round(probe.stddev(), 3),
-            "delta":           round(delta, 3),
-            "t_statistic":     None if math.isnan(t) else round(t, 3),
-            "p_value":         round(p, 6),
-            "alpha":           self.alpha,
-            "significant":     p < self.alpha,
-            "verdict":         (
+            "probe_mean": round(probe.mean(), 3),
+            "probe_stddev": round(probe.stddev(), 3),
+            "delta": round(delta, 3),
+            "t_statistic": None if math.isnan(t) else round(t, 3),
+            "p_value": round(p, 6),
+            "alpha": self.alpha,
+            "significant": p < self.alpha,
+            "verdict": (
                 "VULNERABLE (probe caused statistically significant delay)"
-                if p < self.alpha and delta > 0 else
-                "inconclusive (delta not statistically significant)"
+                if p < self.alpha and delta > 0
+                else "inconclusive (delta not statistically significant)"
             ),
         }

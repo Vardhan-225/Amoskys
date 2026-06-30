@@ -64,7 +64,7 @@ def test_unserialize_on_dynamic_option(tmp_path):
 
 
 def test_unserialize_on_dynamic_option_no_taint(tmp_path):
-    src = '<?php $k = my_sanitizer(); $x = unserialize(get_option($k)); ?>'
+    src = "<?php $k = my_sanitizer(); $x = unserialize(get_option($k)); ?>"
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "poi.unserialize_on_option"
@@ -96,7 +96,7 @@ def test_phar_on_user_path(tmp_path):
 
 
 def test_unserialize_without_allowed_classes(tmp_path):
-    src = '<?php $cache = unserialize($internal_blob); ?>'
+    src = "<?php $cache = unserialize($internal_blob); ?>"
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "poi.unserialize_no_allowed_classes"
@@ -143,4 +143,7 @@ def test_metadata_cwe_refs(tmp_path):
     f = findings[0]
     assert f.cwe == "CWE-502"
     assert "T1190" in f.mitre_techniques
-    assert any("unserialize" in r.lower() or "owasp" in r.lower() or "patchstack" in r.lower() for r in f.references)
+    assert any(
+        "unserialize" in r.lower() or "owasp" in r.lower() or "patchstack" in r.lower()
+        for r in f.references
+    )

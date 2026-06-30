@@ -149,89 +149,110 @@ class PoiScanner(ASTScanner):
                         if fn == "unserialize"
                         else "poi.maybe_unserialize_on_request"
                     )
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id=rule, severity="critical",
-                        title=f"{fn}() on request-controlled input",
-                        description=(
-                            f"{fn}() is being called with a value derived "
-                            f"directly from a PHP request super-global. Any "
-                            f"class loaded in the process with a magic "
-                            f"method (__destruct, __wakeup, __toString, …) "
-                            f"becomes a chainable POI gadget. This is among "
-                            f"the highest-impact plugin CVE classes."
-                        ),
-                        recommendation=(
-                            "Replace with json_decode() for data exchange, "
-                            "or pass ['allowed_classes' => false] to refuse "
-                            "class instantiation entirely."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id=rule,
+                            severity="critical",
+                            title=f"{fn}() on request-controlled input",
+                            description=(
+                                f"{fn}() is being called with a value derived "
+                                f"directly from a PHP request super-global. Any "
+                                f"class loaded in the process with a magic "
+                                f"method (__destruct, __wakeup, __toString, …) "
+                                f"becomes a chainable POI gadget. This is among "
+                                f"the highest-impact plugin CVE classes."
+                            ),
+                            recommendation=(
+                                "Replace with json_decode() for data exchange, "
+                                "or pass ['allowed_classes' => false] to refuse "
+                                "class instantiation entirely."
+                            ),
+                        )
+                    )
                     continue
 
                 # get_option(dynamic) — operator-controlled option key.
                 if _arg_is_get_option_dynamic(arg0):
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="poi.unserialize_on_option",
-                        severity="critical",
-                        title=f"{fn}() on a dynamic get_option() value",
-                        description=(
-                            f"The option key passed to get_option() is not a "
-                            f"constant. Any attacker who can influence the "
-                            f"option name (or who can write to a writable "
-                            f"option_name the plugin later reads) has an "
-                            f"unserialize-on-input path."
-                        ),
-                        recommendation=(
-                            "Use a constant option name. If the key must be "
-                            "dynamic, validate it against an allow-list "
-                            "before reading."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="poi.unserialize_on_option",
+                            severity="critical",
+                            title=f"{fn}() on a dynamic get_option() value",
+                            description=(
+                                f"The option key passed to get_option() is not a "
+                                f"constant. Any attacker who can influence the "
+                                f"option name (or who can write to a writable "
+                                f"option_name the plugin later reads) has an "
+                                f"unserialize-on-input path."
+                            ),
+                            recommendation=(
+                                "Use a constant option name. If the key must be "
+                                "dynamic, validate it against an allow-list "
+                                "before reading."
+                            ),
+                        )
+                    )
                     continue
 
                 # Meta getter — postmeta is editable by editor+ role.
                 if _arg_is_meta_getter(arg0):
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="poi.unserialize_on_meta",
-                        severity="high",
-                        title=f"{fn}() on a post/user/term meta value",
-                        description=(
-                            f"{fn}() runs against a meta value that can be "
-                            f"written by editor- or author-level accounts "
-                            f"(and sometimes lower, depending on plugin "
-                            f"behavior). An attacker with a modest role can "
-                            f"plant a serialized payload and trigger POI."
-                        ),
-                        recommendation=(
-                            "Store meta as JSON, or validate the structure "
-                            "before unserializing with "
-                            "['allowed_classes' => false]."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="poi.unserialize_on_meta",
+                            severity="high",
+                            title=f"{fn}() on a post/user/term meta value",
+                            description=(
+                                f"{fn}() runs against a meta value that can be "
+                                f"written by editor- or author-level accounts "
+                                f"(and sometimes lower, depending on plugin "
+                                f"behavior). An attacker with a modest role can "
+                                f"plant a serialized payload and trigger POI."
+                            ),
+                            recommendation=(
+                                "Store meta as JSON, or validate the structure "
+                                "before unserializing with "
+                                "['allowed_classes' => false]."
+                            ),
+                        )
+                    )
                     continue
 
                 # Any other unserialize without allowed_classes=false — low.
                 if not _has_allowed_classes_false(call.args):
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="poi.unserialize_no_allowed_classes",
-                        severity="low",
-                        title=f"{fn}() without allowed_classes=false",
-                        description=(
-                            f"{fn}() is called without passing "
-                            f"['allowed_classes' => false]. Even when the "
-                            f"input appears trusted, defense-in-depth "
-                            f"suggests disabling class instantiation."
-                        ),
-                        recommendation=(
-                            "Add ['allowed_classes' => false] as the second "
-                            "argument unless the code specifically needs to "
-                            "instantiate objects from the serialized blob."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="poi.unserialize_no_allowed_classes",
+                            severity="low",
+                            title=f"{fn}() without allowed_classes=false",
+                            description=(
+                                f"{fn}() is called without passing "
+                                f"['allowed_classes' => false]. Even when the "
+                                f"input appears trusted, defense-in-depth "
+                                f"suggests disabling class instantiation."
+                            ),
+                            recommendation=(
+                                "Add ['allowed_classes' => false] as the second "
+                                "argument unless the code specifically needs to "
+                                "instantiate objects from the serialized blob."
+                            ),
+                        )
+                    )
         return out
 
     def _scan_phar_streams(self, source, plugin) -> List[ASTFinding]:
@@ -239,7 +260,16 @@ class PoiScanner(ASTScanner):
         trigger Phar metadata deserialization. If the path is tainted,
         it's a full POI."""
         out: List[ASTFinding] = []
-        phar_sinks = ("file_exists", "is_file", "fopen", "file_get_contents", "stat", "fileatime", "filemtime", "filesize")
+        phar_sinks = (
+            "file_exists",
+            "is_file",
+            "fopen",
+            "file_get_contents",
+            "stat",
+            "fileatime",
+            "filemtime",
+            "filesize",
+        )
         for fn in phar_sinks:
             for call in find_calls(source, fn):
                 arg0 = call.arg(0) or ""
@@ -248,30 +278,43 @@ class PoiScanner(ASTScanner):
                 # being used to build the path (where phar:// could be
                 # injected via the uploaded filename).
                 if _has_phar_wrapper(arg0) and _has_taint(arg0):
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="poi.phar_stream_on_user_path",
-                        severity="critical",
-                        title=f"{fn}() on a request-controlled phar:// stream",
-                        description=(
-                            f"{fn}() is invoked on a path that contains "
-                            f"both a 'phar://' wrapper and request input. "
-                            f"PHP deserializes Phar metadata on stat/"
-                            f"file_exists/fopen, so this is a POI gadget "
-                            f"even without reading the archive."
-                        ),
-                        recommendation=(
-                            "Reject any path whose scheme is 'phar' or which "
-                            "contains 'phar://'.  Validate the path against "
-                            "an allow-list of expected filesystem roots "
-                            "before passing to file primitives."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="poi.phar_stream_on_user_path",
+                            severity="critical",
+                            title=f"{fn}() on a request-controlled phar:// stream",
+                            description=(
+                                f"{fn}() is invoked on a path that contains "
+                                f"both a 'phar://' wrapper and request input. "
+                                f"PHP deserializes Phar metadata on stat/"
+                                f"file_exists/fopen, so this is a POI gadget "
+                                f"even without reading the archive."
+                            ),
+                            recommendation=(
+                                "Reject any path whose scheme is 'phar' or which "
+                                "contains 'phar://'.  Validate the path against "
+                                "an allow-list of expected filesystem roots "
+                                "before passing to file primitives."
+                            ),
+                        )
+                    )
         return out
 
     def _finding(
-        self, plugin, source, line, arg_text,
-        rule_id, severity, title, description, recommendation="",
+        self,
+        plugin,
+        source,
+        line,
+        arg_text,
+        rule_id,
+        severity,
+        title,
+        description,
+        recommendation="",
     ) -> ASTFinding:
         snippet = arg_text.strip().replace("\n", " ")[:240]
         return ASTFinding(

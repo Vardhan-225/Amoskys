@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from amoskys.agents.Web.argos.reasoning import (
-    EngagementState,
-    default_playbook,
-)
+from amoskys.agents.Web.argos.reasoning import EngagementState, default_playbook
 
 
 def test_default_playbook_stage1_moves_available_for_stage1_state():
@@ -49,9 +46,11 @@ def test_stage2_moves_unlock_with_consent():
         stage=2,
         consent_verified=True,
         plugin_inventory=[{"slug": "akismet", "ver": "5.2"}],
-        moves_executed=["preflight.robots_and_security_txt",
-                        "recon.dns_and_tls",
-                        "recon.stealth_sweep"],
+        moves_executed=[
+            "preflight.robots_and_security_txt",
+            "recon.dns_and_tls",
+            "recon.stealth_sweep",
+        ],
     )
     pb = default_playbook()
     moves = pb.available_moves(state)
@@ -62,7 +61,8 @@ def test_stage2_moves_unlock_with_consent():
 
 def test_permanent_block_halts_all_moves():
     state = EngagementState(
-        target_host="example.com", got_permanent_block=True,
+        target_host="example.com",
+        got_permanent_block=True,
     )
     moves = default_playbook().available_moves(state)
     assert moves == []

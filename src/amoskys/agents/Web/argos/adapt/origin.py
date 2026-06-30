@@ -65,20 +65,20 @@ logger = logging.getLogger("amoskys.argos.adapt.origin")
 @dataclass
 class OriginCandidate:
     ip: str
-    source: str                     # "crt.sh" / "spf" / "dns-history" / "direct-probe"
+    source: str  # "crt.sh" / "spf" / "dns-history" / "direct-probe"
     hostname: Optional[str] = None  # SAN hostname if any
-    confidence: int = 0             # 0–100
+    confidence: int = 0  # 0–100
     evidence: List[str] = field(default_factory=list)
-    confirmed: bool = False         # direct-IP GET returned matching content
+    confirmed: bool = False  # direct-IP GET returned matching content
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "ip":         self.ip,
-            "source":     self.source,
-            "hostname":   self.hostname,
+            "ip": self.ip,
+            "source": self.source,
+            "hostname": self.hostname,
             "confidence": self.confidence,
-            "evidence":   list(self.evidence),
-            "confirmed":  self.confirmed,
+            "evidence": list(self.evidence),
+            "confirmed": self.confirmed,
         }
 
 
@@ -89,19 +89,63 @@ class OriginCandidate:
 
 _CDN_CIDR_PREFIXES = {
     "cloudflare": [
-        "104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.",
-        "104.22.", "104.23.", "104.24.", "104.25.", "104.26.", "104.27.",
-        "104.28.", "172.64.", "172.65.", "172.66.", "172.67.", "172.68.",
-        "172.69.", "172.70.", "172.71.", "131.0.72.", "141.101.", "108.162.",
-        "190.93.", "188.114.", "197.234.", "198.41.",
+        "104.16.",
+        "104.17.",
+        "104.18.",
+        "104.19.",
+        "104.20.",
+        "104.21.",
+        "104.22.",
+        "104.23.",
+        "104.24.",
+        "104.25.",
+        "104.26.",
+        "104.27.",
+        "104.28.",
+        "172.64.",
+        "172.65.",
+        "172.66.",
+        "172.67.",
+        "172.68.",
+        "172.69.",
+        "172.70.",
+        "172.71.",
+        "131.0.72.",
+        "141.101.",
+        "108.162.",
+        "190.93.",
+        "188.114.",
+        "197.234.",
+        "198.41.",
     ],
-    "akamai":     ["23.", "104.64.", "184.24.", "184.25.", "184.26.",
-                    "184.27.", "184.28.", "184.29.", "184.30.", "184.31."],
-    "fastly":     ["151.101.", "199.232."],
-    "cloudfront": ["13.224.", "13.225.", "13.226.", "13.227.", "13.228.",
-                    "13.249.", "52.84.", "52.85.", "54.230.", "54.239.",
-                    "99.84.", "205.251."],
-    "sucuri":     ["192.124.249.", "185.93."],
+    "akamai": [
+        "23.",
+        "104.64.",
+        "184.24.",
+        "184.25.",
+        "184.26.",
+        "184.27.",
+        "184.28.",
+        "184.29.",
+        "184.30.",
+        "184.31.",
+    ],
+    "fastly": ["151.101.", "199.232."],
+    "cloudfront": [
+        "13.224.",
+        "13.225.",
+        "13.226.",
+        "13.227.",
+        "13.228.",
+        "13.249.",
+        "52.84.",
+        "52.85.",
+        "54.230.",
+        "54.239.",
+        "99.84.",
+        "205.251.",
+    ],
+    "sucuri": ["192.124.249.", "185.93."],
 }
 
 
@@ -116,8 +160,9 @@ def _ip_belongs_to_edge(ip: str) -> Optional[str]:
 # ── Low-level HTTP helper ─────────────────────────────────────────
 
 
-def _default_http_get(url: str, timeout: float = 8.0,
-                      headers: Optional[Dict[str, str]] = None):
+def _default_http_get(
+    url: str, timeout: float = 8.0, headers: Optional[Dict[str, str]] = None
+):
     try:
         req = urllib.request.Request(url, headers=headers or {})
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -179,6 +224,7 @@ def _resolve_txt(host: str) -> List[str]:
         # synthetic DNS probe is out of scope. If dnspython is installed
         # we use it; otherwise we gracefully return empty.
         import dns.resolver  # type: ignore
+
         answers = dns.resolver.resolve(host, "TXT")
         out = []
         for r in answers:
@@ -196,14 +242,24 @@ def _spf_candidates(host: str) -> List[OriginCandidate]:
             continue
         for m in _SPF_IP4_RE.finditer(txt):
             ip = m.group(1)
-            cands.append(OriginCandidate(
-                ip=ip, source="spf", confidence=35,
-                evidence=[f"SPF ip4: entry in {host} TXT record"]))
+            cands.append(
+                OriginCandidate(
+                    ip=ip,
+                    source="spf",
+                    confidence=35,
+                    evidence=[f"SPF ip4: entry in {host} TXT record"],
+                )
+            )
         for m in _SPF_IP6_RE.finditer(txt):
             ip = m.group(1)
-            cands.append(OriginCandidate(
-                ip=ip, source="spf", confidence=25,
-                evidence=[f"SPF ip6: entry in {host} TXT record"]))
+            cands.append(
+                OriginCandidate(
+                    ip=ip,
+                    source="spf",
+                    confidence=25,
+                    evidence=[f"SPF ip6: entry in {host} TXT record"],
+                )
+            )
     return cands
 
 
@@ -221,20 +277,28 @@ def _resolve_a(host: str) -> List[str]:
 # ── Source 4: Direct-IP confirmation ──────────────────────────────
 
 
-def _confirm_origin(ip: str, host: str, fingerprint_body: str,
-                    http_get: Callable) -> bool:
+def _confirm_origin(
+    ip: str, host: str, fingerprint_body: str, http_get: Callable
+) -> bool:
     """Probe http://IP/ with Host: spoofed to `host`; return True if
     the body matches fingerprint_body within a loose threshold."""
     url = f"http://{ip}/"
     try:
-        s, _h, body = http_get(url, 8.0, {
-            "Host":       host,
-            "User-Agent": "argos-origin/1",
-        })
+        s, _h, body = http_get(
+            url,
+            8.0,
+            {
+                "Host": host,
+                "User-Agent": "argos-origin/1",
+            },
+        )
         if s == 0 or not body:
             return False
         # Loose match: any 128-char shingle from fingerprint present in body
-        shingles = [fingerprint_body[i:i+128] for i in range(0, len(fingerprint_body) - 128, 128)][:8]
+        shingles = [
+            fingerprint_body[i : i + 128]
+            for i in range(0, len(fingerprint_body) - 128, 128)
+        ][:8]
         for sh in shingles:
             if sh and sh in body:
                 return True
@@ -246,10 +310,12 @@ def _confirm_origin(ip: str, host: str, fingerprint_body: str,
 # ── Orchestrator ──────────────────────────────────────────────────
 
 
-def discover_origin(host: str,
-                    fingerprint_body: Optional[str] = None,
-                    http_get: Optional[Callable] = None,
-                    max_candidates: int = 20) -> List[OriginCandidate]:
+def discover_origin(
+    host: str,
+    fingerprint_body: Optional[str] = None,
+    http_get: Optional[Callable] = None,
+    max_candidates: int = 20,
+) -> List[OriginCandidate]:
     """Return OriginCandidate list sorted by confidence descending.
 
     `host` is the fronted hostname (e.g. "example.com"). If
@@ -274,13 +340,25 @@ def discover_origin(host: str,
                 edge = _ip_belongs_to_edge(ip)
                 if edge:
                     # Still record but low confidence; may be direct-to-CDN-proxy
-                    candidates.append(OriginCandidate(
-                        ip=ip, source="crt.sh", hostname=san, confidence=15,
-                        evidence=[f"CT SAN {san}→{ip} but belongs to {edge} range"]))
+                    candidates.append(
+                        OriginCandidate(
+                            ip=ip,
+                            source="crt.sh",
+                            hostname=san,
+                            confidence=15,
+                            evidence=[f"CT SAN {san}→{ip} but belongs to {edge} range"],
+                        )
+                    )
                 else:
-                    candidates.append(OriginCandidate(
-                        ip=ip, source="crt.sh", hostname=san, confidence=70,
-                        evidence=[f"CT SAN {san} resolved to non-edge IP {ip}"]))
+                    candidates.append(
+                        OriginCandidate(
+                            ip=ip,
+                            source="crt.sh",
+                            hostname=san,
+                            confidence=70,
+                            evidence=[f"CT SAN {san} resolved to non-edge IP {ip}"],
+                        )
+                    )
     except Exception as exc:  # noqa: BLE001
         logger.debug("crt.sh path failed: %s", exc)
 
@@ -305,7 +383,9 @@ def discover_origin(host: str,
                 c.evidence = list(prev.evidence) + list(c.evidence)
             by_ip[c.ip] = c
 
-    ordered = sorted(by_ip.values(), key=lambda x: x.confidence, reverse=True)[:max_candidates]
+    ordered = sorted(by_ip.values(), key=lambda x: x.confidence, reverse=True)[
+        :max_candidates
+    ]
 
     # Confirmation pass — only spend budget on top candidates
     if fingerprint_body and http_get is not None:
@@ -316,7 +396,9 @@ def discover_origin(host: str,
             if _confirm_origin(c.ip, host, fingerprint_body, http_get):
                 c.confirmed = True
                 c.confidence = max(c.confidence, 90)
-                c.evidence.append("direct-IP GET w/ spoofed Host matched fingerprint body")
+                c.evidence.append(
+                    "direct-IP GET w/ spoofed Host matched fingerprint body"
+                )
 
     # Final sort: confirmed first
     ordered.sort(key=lambda x: (x.confirmed, x.confidence), reverse=True)

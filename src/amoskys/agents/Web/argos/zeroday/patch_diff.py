@@ -56,52 +56,53 @@ logger = logging.getLogger("amoskys.argos.zeroday.patch_diff")
 @dataclass
 class PatchedFinding:
     """An AST finding that appears in v_old but was gone in v_new."""
-    rule_id:       str
-    severity:      str
-    plugin_slug:   str
-    old_version:   str
-    new_version:   str
-    file_path:     str
-    old_line:      int
-    old_snippet:   str
-    diff_context:  str                    # hunk from the v_old/v_new diff
-    cwe:           str
-    mitre:         List[str] = field(default_factory=list)
+
+    rule_id: str
+    severity: str
+    plugin_slug: str
+    old_version: str
+    new_version: str
+    file_path: str
+    old_line: int
+    old_snippet: str
+    diff_context: str  # hunk from the v_old/v_new diff
+    cwe: str
+    mitre: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "rule_id":       self.rule_id,
-            "severity":      self.severity,
-            "plugin_slug":   self.plugin_slug,
-            "old_version":   self.old_version,
-            "new_version":   self.new_version,
-            "file_path":     self.file_path,
-            "old_line":      self.old_line,
-            "old_snippet":   self.old_snippet,
-            "diff_context":  self.diff_context,
-            "cwe":           self.cwe,
-            "mitre":         self.mitre,
+            "rule_id": self.rule_id,
+            "severity": self.severity,
+            "plugin_slug": self.plugin_slug,
+            "old_version": self.old_version,
+            "new_version": self.new_version,
+            "file_path": self.file_path,
+            "old_line": self.old_line,
+            "old_snippet": self.old_snippet,
+            "diff_context": self.diff_context,
+            "cwe": self.cwe,
+            "mitre": self.mitre,
         }
 
 
 @dataclass
 class PatchDiffReport:
-    plugin_slug:   str
-    old_version:   str
-    new_version:   str
+    plugin_slug: str
+    old_version: str
+    new_version: str
     files_changed: List[str] = field(default_factory=list)
     patched_findings: List[PatchedFinding] = field(default_factory=list)
-    errors:        List[str] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "plugin_slug":  self.plugin_slug,
-            "old_version":  self.old_version,
-            "new_version":  self.new_version,
+            "plugin_slug": self.plugin_slug,
+            "old_version": self.old_version,
+            "new_version": self.new_version,
             "files_changed": self.files_changed,
             "findings_count": len(self.patched_findings),
             "patched_findings": [f.to_dict() for f in self.patched_findings],
-            "errors":       self.errors,
+            "errors": self.errors,
         }
 
 
@@ -144,18 +145,42 @@ def _is_security_relevant_diff(old_block: str, new_block: str) -> bool:
         eval, file_put_contents, move_uploaded_file, shell_exec)
     """
     sanitizers = (
-        "esc_html", "esc_attr", "esc_url", "esc_js", "esc_textarea",
-        "wp_kses", "sanitize_text_field", "sanitize_key",
-        "sanitize_email", "sanitize_title", "sanitize_user",
-        "sanitize_meta", "sanitize_option", "intval", "absint",
-        "floatval", "wp_verify_nonce", "check_admin_referer",
-        "check_ajax_referer", "current_user_can", "is_user_logged_in",
+        "esc_html",
+        "esc_attr",
+        "esc_url",
+        "esc_js",
+        "esc_textarea",
+        "wp_kses",
+        "sanitize_text_field",
+        "sanitize_key",
+        "sanitize_email",
+        "sanitize_title",
+        "sanitize_user",
+        "sanitize_meta",
+        "sanitize_option",
+        "intval",
+        "absint",
+        "floatval",
+        "wp_verify_nonce",
+        "check_admin_referer",
+        "check_ajax_referer",
+        "current_user_can",
+        "is_user_logged_in",
     )
     danger = (
-        "unserialize", "maybe_unserialize", "eval", "assert",
-        "file_put_contents", "move_uploaded_file", "system",
-        "shell_exec", "passthru", "exec", "popen",
-        "include", "require",
+        "unserialize",
+        "maybe_unserialize",
+        "eval",
+        "assert",
+        "file_put_contents",
+        "move_uploaded_file",
+        "system",
+        "shell_exec",
+        "passthru",
+        "exec",
+        "popen",
+        "include",
+        "require",
     )
     old_l = old_block.lower()
     new_l = new_block.lower()
@@ -164,8 +189,10 @@ def _is_security_relevant_diff(old_block: str, new_block: str) -> bool:
         if s in new_l and s not in old_l:
             return True
     # Added guard?
-    if any(g in new_l and g not in old_l
-           for g in ("wp_die", "return;", "die(", "die ", "exit;", "exit(")):
+    if any(
+        g in new_l and g not in old_l
+        for g in ("wp_die", "return;", "die(", "die ", "exit;", "exit(")
+    ):
         return True
     # Touched a danger sink?
     for d in danger:
@@ -179,8 +206,9 @@ def _is_security_relevant_diff(old_block: str, new_block: str) -> bool:
     return False
 
 
-def _build_diff_hunk(old_text: str, new_text: str,
-                     context: int = 3) -> List[Dict[str, Any]]:
+def _build_diff_hunk(
+    old_text: str, new_text: str, context: int = 3
+) -> List[Dict[str, Any]]:
     """Return list of hunk dicts with old/new blocks + context for
     each region of change. Security-relevant-filtered."""
     old_lines = old_text.splitlines(keepends=True)
@@ -198,13 +226,17 @@ def _build_diff_hunk(old_text: str, new_text: str,
         old_block = "".join(old_lines[a1:a2])
         new_block = "".join(new_lines[b1:b2])
         if _is_security_relevant_diff(old_block, new_block):
-            hunks.append({
-                "tag":       tag,
-                "old_start": i1, "old_end": i2,
-                "new_start": j1, "new_end": j2,
-                "old_block": old_block,
-                "new_block": new_block,
-            })
+            hunks.append(
+                {
+                    "tag": tag,
+                    "old_start": i1,
+                    "old_end": i2,
+                    "new_start": j1,
+                    "new_end": j2,
+                    "old_block": old_block,
+                    "new_block": new_block,
+                }
+            )
     return hunks
 
 
@@ -217,16 +249,18 @@ def _scan(plugin, scanner_classes) -> List[Dict[str, Any]]:
     for name, cls in scanner_classes.items():
         try:
             for f in cls().scan(plugin):
-                out.append({
-                    "key":            (f.rule_id, f.file_path, f.line),
-                    "rule_id":        f.rule_id,
-                    "severity":       f.severity,
-                    "file_path":      f.file_path,
-                    "line":           f.line,
-                    "snippet":        f.snippet,
-                    "cwe":            f.cwe,
-                    "mitre":          list(f.mitre_techniques),
-                })
+                out.append(
+                    {
+                        "key": (f.rule_id, f.file_path, f.line),
+                        "rule_id": f.rule_id,
+                        "severity": f.severity,
+                        "file_path": f.file_path,
+                        "line": f.line,
+                        "snippet": f.snippet,
+                        "cwe": f.cwe,
+                        "mitre": list(f.mitre_techniques),
+                    }
+                )
         except Exception as e:  # noqa: BLE001
             logger.debug("scanner %s crashed: %s", name, e)
     return out
@@ -271,16 +305,21 @@ def diff_plugin_versions(
     if scanner_classes is None:
         try:
             from amoskys.agents.Web.argos.ast import (
-                CsrfScanner, FileUploadScanner, PoiScanner,
-                RestAuthzScanner, SqlInjectionScanner, SsrfScanner,
+                CsrfScanner,
+                FileUploadScanner,
+                PoiScanner,
+                RestAuthzScanner,
+                SqlInjectionScanner,
+                SsrfScanner,
             )
+
             scanner_classes = {
-                "rest_authz":    RestAuthzScanner,
+                "rest_authz": RestAuthzScanner,
                 "sql_injection": SqlInjectionScanner,
-                "file_upload":   FileUploadScanner,
-                "poi":           PoiScanner,
-                "csrf":          CsrfScanner,
-                "ssrf":          SsrfScanner,
+                "file_upload": FileUploadScanner,
+                "poi": PoiScanner,
+                "csrf": CsrfScanner,
+                "ssrf": SsrfScanner,
             }
         except Exception as e:  # noqa: BLE001
             rep.errors.append(f"scanner import failed: {e}")
@@ -309,7 +348,7 @@ def diff_plugin_versions(
             rep.files_changed.append(pth)
 
     if not file_hunks:
-        return rep   # no security-relevant diffs
+        return rep  # no security-relevant diffs
 
     # Run scanners against both versions.
     old_findings = _scan(plugin_old, scanner_classes)
@@ -325,21 +364,23 @@ def diff_plugin_versions(
         # This finding was patched. Collect the diff context.
         hunks = file_hunks[f["file_path"]]
         matching_hunk = _closest_hunk(hunks, f["line"])
-        rep.patched_findings.append(PatchedFinding(
-            rule_id=f["rule_id"],
-            severity=f["severity"],
-            plugin_slug=plugin_old.slug,
-            old_version=rep.old_version,
-            new_version=rep.new_version,
-            file_path=f["file_path"],
-            old_line=f["line"],
-            old_snippet=f["snippet"],
-            diff_context=(matching_hunk.get("old_block") if matching_hunk else "") +
-                         "\n---\n" +
-                         (matching_hunk.get("new_block") if matching_hunk else ""),
-            cwe=f["cwe"],
-            mitre=f["mitre"],
-        ))
+        rep.patched_findings.append(
+            PatchedFinding(
+                rule_id=f["rule_id"],
+                severity=f["severity"],
+                plugin_slug=plugin_old.slug,
+                old_version=rep.old_version,
+                new_version=rep.new_version,
+                file_path=f["file_path"],
+                old_line=f["line"],
+                old_snippet=f["snippet"],
+                diff_context=(matching_hunk.get("old_block") if matching_hunk else "")
+                + "\n---\n"
+                + (matching_hunk.get("new_block") if matching_hunk else ""),
+                cwe=f["cwe"],
+                mitre=f["mitre"],
+            )
+        )
 
     # Severity sort: critical first.
     sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}

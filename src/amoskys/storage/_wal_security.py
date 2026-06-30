@@ -314,7 +314,12 @@ class SecurityMixin:
                 if sigma_matches:
                     best = max(
                         sigma_matches,
-                        key=lambda m: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(m.level, 0),
+                        key=lambda m: {
+                            "critical": 4,
+                            "high": 3,
+                            "medium": 2,
+                            "low": 1,
+                        }.get(m.level, 0),
                     )
                     event_data["detection_source"] = (
                         event_data.get("detection_source", "") + "|sigma"
@@ -373,19 +378,46 @@ class SecurityMixin:
             # Checked HERE (not in the probe) because process_name is
             # only available after PID resolution and WAL enrichment.
             _KNOWN_POLLING = {
-                "ChatGPT", "ChatGPTHelper", "Microsoft Update Assistant",
-                "Dropbox", "DropboxUpdater", "Slack", "Slack Helper",
-                "zoom.us", "Spotify", "SpotifyHelper",
-                "Google Chrome", "Google Chrome Helper",
-                "com.docker.backend", "Docker", "WhatsApp", "WhatsAppHelper",
-                "Teams", "MSTeams", "Microsoft Teams WebView Helper",
-                "OneDrive", "Firefox", "Safari", "Mail", "Notes",
-                "Reminders", "Messages", "replicatord", "NewsToday2",
-                "com.apple.WebKit.Networking", "AddressBookSourceSync",
-                "ControlCenter", "com.apple.appkit.xpc.openAndSavePanelService",
-                "GitHub Desktop Helper", "Cluely Helper", "Electron",
-                "Microsoft Excel", "idleassetsd", "multipassd",
-                "desktop_sdk_macos_exe", "syspolicyd",
+                "ChatGPT",
+                "ChatGPTHelper",
+                "Microsoft Update Assistant",
+                "Dropbox",
+                "DropboxUpdater",
+                "Slack",
+                "Slack Helper",
+                "zoom.us",
+                "Spotify",
+                "SpotifyHelper",
+                "Google Chrome",
+                "Google Chrome Helper",
+                "com.docker.backend",
+                "Docker",
+                "WhatsApp",
+                "WhatsAppHelper",
+                "Teams",
+                "MSTeams",
+                "Microsoft Teams WebView Helper",
+                "OneDrive",
+                "Firefox",
+                "Safari",
+                "Mail",
+                "Notes",
+                "Reminders",
+                "Messages",
+                "replicatord",
+                "NewsToday2",
+                "com.apple.WebKit.Networking",
+                "AddressBookSourceSync",
+                "ControlCenter",
+                "com.apple.appkit.xpc.openAndSavePanelService",
+                "GitHub Desktop Helper",
+                "Cluely Helper",
+                "Electron",
+                "Microsoft Excel",
+                "idleassetsd",
+                "multipassd",
+                "desktop_sdk_macos_exe",
+                "syspolicyd",
             }
             evt_cat = event_data.get("event_category", "")
             proc_name = event_data.get("process_name", "")

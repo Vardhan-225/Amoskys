@@ -35,7 +35,6 @@ from typing import Any, Dict, List, Optional
 
 from ..server import mcp
 
-
 # ── Atlas parsing ─────────────────────────────────────────────────
 
 
@@ -58,6 +57,7 @@ def _parse_atlas_entries(text: str) -> List[Dict[str, Any]]:
     """Walk the atlas markdown and extract the L<n>.<m> entries with their
     WATCH / PROBE / CWE / NOTES lines."""
     import re
+
     entries: List[Dict[str, Any]] = []
     # Entries are inside fenced blocks. Simple state machine: find lines
     # starting with Lx.y, collect until the next blank line.
@@ -69,13 +69,13 @@ def _parse_atlas_entries(text: str) -> List[Dict[str, Any]]:
             if current:
                 entries.append(current)
             current = {
-                "id":    f"L{m.group(1)}.{m.group(2)}",
+                "id": f"L{m.group(1)}.{m.group(2)}",
                 "layer": int(m.group(1)),
-                "seq":   int(m.group(2)),
+                "seq": int(m.group(2)),
                 "title": m.group(3).strip(),
                 "watch": "",
                 "probe": "",
-                "cwe":   "",
+                "cwe": "",
                 "notes": "",
             }
             continue
@@ -120,13 +120,14 @@ def _load_scanners():
         SqlInjectionScanner,
         SsrfScanner,
     )
+
     return {
-        "rest_authz":    RestAuthzScanner,
+        "rest_authz": RestAuthzScanner,
         "sql_injection": SqlInjectionScanner,
-        "file_upload":   FileUploadScanner,
-        "poi":           PoiScanner,
-        "csrf":          CsrfScanner,
-        "ssrf":          SsrfScanner,
+        "file_upload": FileUploadScanner,
+        "poi": PoiScanner,
+        "csrf": CsrfScanner,
+        "ssrf": SsrfScanner,
     }
 
 
@@ -142,29 +143,33 @@ def _run_scanners(plugin, scanner_ids: Optional[List[str]] = None):
     for name, klass in chosen.items():
         try:
             for f in klass().scan(plugin):
-                findings.append({
-                    "scanner":     f.scanner,
-                    "rule_id":     f.rule_id,
-                    "severity":    f.severity,
-                    "title":       f.title,
-                    "file":        f.file_path,
-                    "line":        f.line,
-                    "snippet":     f.snippet,
-                    "cwe":         f.cwe,
-                    "mitre":       f.mitre_techniques,
-                })
+                findings.append(
+                    {
+                        "scanner": f.scanner,
+                        "rule_id": f.rule_id,
+                        "severity": f.severity,
+                        "title": f.title,
+                        "file": f.file_path,
+                        "line": f.line,
+                        "snippet": f.snippet,
+                        "cwe": f.cwe,
+                        "mitre": f.mitre_techniques,
+                    }
+                )
         except Exception as e:  # noqa: BLE001
-            findings.append({
-                "scanner": name,
-                "rule_id": "scanner.error",
-                "severity": "info",
-                "title": f"scanner crashed: {type(e).__name__}: {e}",
-                "file": "",
-                "line": 0,
-                "snippet": "",
-                "cwe": "",
-                "mitre": [],
-            })
+            findings.append(
+                {
+                    "scanner": name,
+                    "rule_id": "scanner.error",
+                    "severity": "info",
+                    "title": f"scanner crashed: {type(e).__name__}: {e}",
+                    "file": "",
+                    "line": 0,
+                    "snippet": "",
+                    "cwe": "",
+                    "mitre": [],
+                }
+            )
     return findings
 
 
@@ -194,11 +199,13 @@ def web_list_ast_scanners() -> dict:
     out = []
     for sid, klass in registry.items():
         inst = klass()
-        out.append({
-            "scanner_id":       sid,
-            "description":      getattr(inst, "description", ""),
-            "severity_default": getattr(inst, "severity_default", "medium"),
-        })
+        out.append(
+            {
+                "scanner_id": sid,
+                "description": getattr(inst, "description", ""),
+                "severity_default": getattr(inst, "severity_default", "medium"),
+            }
+        )
     return {"scanners": out, "total": len(out)}
 
 
@@ -217,17 +224,19 @@ def web_atlas_coverage() -> dict:
     probed = sum(1 for e in entries if e["probe"] and e["probe"].upper() != "BLIND")
     by_layer: Dict[int, Dict[str, int]] = {}
     for e in entries:
-        bucket = by_layer.setdefault(e["layer"], {"total": 0, "watched": 0, "probed": 0})
+        bucket = by_layer.setdefault(
+            e["layer"], {"total": 0, "watched": 0, "probed": 0}
+        )
         bucket["total"] += 1
         if e["watch"] and e["watch"].upper() != "BLIND":
             bucket["watched"] += 1
         if e["probe"] and e["probe"].upper() != "BLIND":
             bucket["probed"] += 1
     return {
-        "total_entries":   total,
-        "aegis_coverage":  {"count": watched, "pct": round(100 * watched / total, 1)},
-        "argos_coverage":  {"count": probed, "pct": round(100 * probed / total, 1)},
-        "by_layer":        by_layer,
+        "total_entries": total,
+        "aegis_coverage": {"count": watched, "pct": round(100 * watched / total, 1)},
+        "argos_coverage": {"count": probed, "pct": round(100 * probed / total, 1)},
+        "by_layer": by_layer,
     }
 
 
@@ -251,9 +260,14 @@ def web_list_blind_spots(layer: Optional[int] = None, limit: int = 40) -> dict:
             e2["probe_blind"] = probe_blind
             blind.append(e2)
     # Rank: entries blind on BOTH sides first, then argos-blind, then aegis-blind.
-    blind.sort(key=lambda x: (not (x["watch_blind"] and x["probe_blind"]),
-                              not x["probe_blind"],
-                              x["layer"], x["seq"]))
+    blind.sort(
+        key=lambda x: (
+            not (x["watch_blind"] and x["probe_blind"]),
+            not x["probe_blind"],
+            x["layer"],
+            x["seq"],
+        )
+    )
     return {
         "blind_count": len(blind),
         "returned": min(len(blind), limit),
@@ -262,8 +276,9 @@ def web_list_blind_spots(layer: Optional[int] = None, limit: int = 40) -> dict:
 
 
 @mcp.tool()
-def web_analyze_plugin(slug: str, version: Optional[str] = None,
-                       scanners: Optional[List[str]] = None) -> dict:
+def web_analyze_plugin(
+    slug: str, version: Optional[str] = None, scanners: Optional[List[str]] = None
+) -> dict:
     """Download a plugin from wp.org SVN at the given version and run AST scanners.
 
     Args:
@@ -291,7 +306,13 @@ def web_analyze_plugin(slug: str, version: Optional[str] = None,
 
     # Aggregate
     by_rule: Dict[str, int] = {}
-    by_severity: Dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    by_severity: Dict[str, int] = {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0,
+    }
     for f in findings:
         by_rule[f["rule_id"]] = by_rule.get(f["rule_id"], 0) + 1
         if f["severity"] in by_severity:
@@ -299,19 +320,20 @@ def web_analyze_plugin(slug: str, version: Optional[str] = None,
 
     return {
         "ok": True,
-        "slug":     plugin.slug,
-        "version":  plugin.version,
+        "slug": plugin.slug,
+        "version": plugin.version,
         "scanners": list((scanners or list(_load_scanners().keys()))),
         "finding_count": len(findings),
-        "by_severity":   by_severity,
-        "by_rule":       dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
-        "findings":      findings[:100],  # cap to keep response sane
+        "by_severity": by_severity,
+        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "findings": findings[:100],  # cap to keep response sane
     }
 
 
 @mcp.tool()
-def web_hunt_top_plugins(count: int = 10, scanners: Optional[List[str]] = None,
-                         min_installs: int = 100000) -> dict:
+def web_hunt_top_plugins(
+    count: int = 10, scanners: Optional[List[str]] = None, min_installs: int = 100000
+) -> dict:
     """Sweep the top-N wp.org plugins by install count with all AST scanners.
 
     Args:
@@ -339,25 +361,27 @@ def web_hunt_top_plugins(count: int = 10, scanners: Optional[List[str]] = None,
             by_sev: Dict[str, int] = {}
             for f in findings:
                 by_sev[f["severity"]] = by_sev.get(f["severity"], 0) + 1
-            results.append({
-                "slug":          slug,
-                "version":       plugin.version,
-                "finding_count": len(findings),
-                "critical":      by_sev.get("critical", 0),
-                "high":          by_sev.get("high", 0),
-                "medium":        by_sev.get("medium", 0),
-                "low":           by_sev.get("low", 0),
-            })
+            results.append(
+                {
+                    "slug": slug,
+                    "version": plugin.version,
+                    "finding_count": len(findings),
+                    "critical": by_sev.get("critical", 0),
+                    "high": by_sev.get("high", 0),
+                    "medium": by_sev.get("medium", 0),
+                    "low": by_sev.get("low", 0),
+                }
+            )
         except Exception as e:  # noqa: BLE001
             results.append({"slug": slug, "error": str(e)})
 
     results.sort(key=lambda r: -r.get("critical", 0))
     return {
-        "ok":         True,
-        "count":      len(results),
-        "plugins":    results,
-        "scanners":   list(scanners or list(_load_scanners().keys())),
-        "timestamp":  time.time(),
+        "ok": True,
+        "count": len(results),
+        "plugins": results,
+        "scanners": list(scanners or list(_load_scanners().keys())),
+        "timestamp": time.time(),
     }
 
 
@@ -394,16 +418,17 @@ def web_aegis_event_counts(hours: int = 1) -> dict:
         return {"ok": False, "error": str(oe)}
 
     return {
-        "ok":     True,
-        "hours":  hours,
-        "total":  total,
+        "ok": True,
+        "hours": hours,
+        "total": total,
         "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
     }
 
 
 @mcp.tool()
-def web_operator_playbook(target_host: str = "", stage: int = 1,
-                          consent_verified: bool = False) -> dict:
+def web_operator_playbook(
+    target_host: str = "", stage: int = 1, consent_verified: bool = False
+) -> dict:
     """Return the Argos engagement playbook ranked for a given state.
 
     Call this FIRST when a reasoning agent (Claude, or any MCP client)
@@ -430,10 +455,8 @@ def web_operator_playbook(target_host: str = "", stage: int = 1,
           all_moves      — every move in the playbook
           available_now  — moves the agent may execute RIGHT NOW
     """
-    from amoskys.agents.Web.argos.reasoning import (
-        EngagementState,
-        default_playbook,
-    )
+    from amoskys.agents.Web.argos.reasoning import EngagementState, default_playbook
+
     state = EngagementState(
         target_host=target_host or "unknown",
         stage=stage,  # type: ignore[arg-type]
@@ -478,9 +501,11 @@ def web_run_stage1(target_url: str) -> dict:
         next-steps, robots summary, security.txt if present.
     """
     from amoskys.agents.Web.argos.stage1 import Stage1
+
     stage = Stage1(target_url)
     dossier = stage.run()
     import json
+
     return json.loads(dossier.to_json())
 
 
@@ -503,16 +528,17 @@ def web_pitch_email(target_url: str, sender_name: str = "AMOSKYS Web") -> dict:
           teaser      — short Slack/chat version
           summary     — severity counts from the underlying dossier
     """
-    from amoskys.agents.Web.argos.stage1 import Stage1
     from amoskys.agents.Web.argos.pitch import to_email_text, to_slack_teaser
+    from amoskys.agents.Web.argos.stage1 import Stage1
+
     dossier = Stage1(target_url).run()
     email = to_email_text(dossier, sender_name=sender_name)
     subject_line = email.split("\n", 1)[0].replace("Subject:", "").strip()
     return {
         "email_text": email,
-        "subject":    subject_line,
-        "teaser":     to_slack_teaser(dossier),
-        "summary":    dossier.severity_counts(),
+        "subject": subject_line,
+        "teaser": to_slack_teaser(dossier),
+        "summary": dossier.severity_counts(),
         "duration_s": dossier.duration_s,
     }
 
@@ -535,25 +561,28 @@ def web_legitimacy_profile() -> dict:
         LegitimacyProfile,
         PacingProfile,
     )
+
     prof = LegitimacyProfile()
     identity = prof.ua_pool.identity()
     return {
-        "ua_pool_size":  6,  # matches _UA_POOL in legitimacy.py
+        "ua_pool_size": 6,  # matches _UA_POOL in legitimacy.py
         "sticky_identity_example": {
-            "user_agent":      identity.ua,
+            "user_agent": identity.ua,
             "accept_language": identity.accept_language,
-            "dnt":             identity.dnt,
+            "dnt": identity.dnt,
         },
         "pacing": {
-            "median_s":          prof.pacer.profile.median_s,
-            "stddev_s":          prof.pacer.profile.stddev_s,
-            "long_tail_prob":    prof.pacer.profile.long_tail_prob,
-            "long_tail_range":   [prof.pacer.profile.min_long_s,
-                                  prof.pacer.profile.max_long_s],
+            "median_s": prof.pacer.profile.median_s,
+            "stddev_s": prof.pacer.profile.stddev_s,
+            "long_tail_prob": prof.pacer.profile.long_tail_prob,
+            "long_tail_range": [
+                prof.pacer.profile.min_long_s,
+                prof.pacer.profile.max_long_s,
+            ],
         },
         "backoff": {
-            "base_delay_s":       prof.backoff.base_delay_s,
-            "max_delay_s":        prof.backoff.max_delay_s,
+            "base_delay_s": prof.backoff.base_delay_s,
+            "max_delay_s": prof.backoff.max_delay_s,
             "consecutive_budget": prof.backoff.budget,
         },
         "mandate": (
@@ -597,11 +626,13 @@ def web_find_wp_prospects(
     Returns: dict with `prospects` (ranked descending by score) and
     `skipped` (host + reason) so the operator can sanity-check.
     """
-    from amoskys.agents.Web.argos.prospecting import (
-        find_wp_prospects_from_domain_list,
-    )
+    from amoskys.agents.Web.argos.prospecting import find_wp_prospects_from_domain_list
+
     run = find_wp_prospects_from_domain_list(
-        domains, want=want, min_score=min_score, pacing_s=pacing_s,
+        domains,
+        want=want,
+        min_score=min_score,
+        pacing_s=pacing_s,
     )
     return run.to_dict()
 
@@ -621,8 +652,9 @@ def web_render_pitch_pdf(target_url: str, save_path: str) -> dict:
     Returns: dict with `ok`, `pdf_path`, `pdf_bytes`, and the summary
     of the underlying dossier.
     """
-    from amoskys.agents.Web.argos.stage1 import Stage1
     from amoskys.agents.Web.argos.pitch import to_pdf_bytes
+    from amoskys.agents.Web.argos.stage1 import Stage1
+
     dossier = Stage1(target_url).run()
     pdf = to_pdf_bytes(dossier)
     if not pdf:
@@ -634,12 +666,12 @@ def web_render_pitch_pdf(target_url: str, save_path: str) -> dict:
     with open(save_path, "wb") as fh:
         fh.write(pdf)
     return {
-        "ok":          True,
-        "pdf_path":    save_path,
-        "pdf_bytes":   len(pdf),
+        "ok": True,
+        "pdf_path": save_path,
+        "pdf_bytes": len(pdf),
         "target_host": dossier.target_host,
-        "duration_s":  dossier.duration_s,
-        "summary":     dossier.severity_counts(),
+        "duration_s": dossier.duration_s,
+        "summary": dossier.severity_counts(),
         "finding_count": len(dossier.findings),
     }
 
@@ -674,14 +706,16 @@ def web_aegis_recent_critical(limit: int = 10) -> dict:
                 except json.JSONDecodeError:
                     continue
                 if e.get("severity") in ("critical", "high"):
-                    events.append({
-                        "ts_ns":      e.get("event_timestamp_ns"),
-                        "event_type": e.get("event_type"),
-                        "severity":   e.get("severity"),
-                        "ip":         e.get("request", {}).get("ip"),
-                        "uri":        (e.get("request", {}).get("uri") or "")[:120],
-                        "attributes": e.get("attributes"),
-                    })
+                    events.append(
+                        {
+                            "ts_ns": e.get("event_timestamp_ns"),
+                            "event_type": e.get("event_type"),
+                            "severity": e.get("severity"),
+                            "ip": e.get("request", {}).get("ip"),
+                            "uri": (e.get("request", {}).get("uri") or "")[:120],
+                            "attributes": e.get("attributes"),
+                        }
+                    )
     except OSError as oe:
         return {"ok": False, "error": str(oe)}
 

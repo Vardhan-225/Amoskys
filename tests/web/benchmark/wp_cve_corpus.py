@@ -34,8 +34,8 @@ class BenchmarkCVE:
     slug: str
     version: str
     cve: str
-    vuln_class: str         # human category
-    rule_expected: str      # Argos scanner.rule_id we expect to see
+    vuln_class: str  # human category
+    rule_expected: str  # Argos scanner.rule_id we expect to see
     description: str
 
 
@@ -44,7 +44,6 @@ class BenchmarkCVE:
 # still downloadable. Some less-popular plugin versions are pruned from
 # SVN after a few years.
 BENCHMARK_CORPUS: List[BenchmarkCVE] = [
-
     # ── SQLi (rule: sql.*) ──────────────────────────────────────────
     BenchmarkCVE(
         slug="wp-statistics",
@@ -53,7 +52,7 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="sql_injection",
         rule_expected="sql.interpolation_in_query",
         description="wp-statistics 13.2.9: authenticated SQLi via "
-                    "search parameters interpolated into $wpdb->query",
+        "search parameters interpolated into $wpdb->query",
     ),
     BenchmarkCVE(
         slug="ninja-forms",
@@ -71,7 +70,6 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         rule_expected="sql.interpolation_in_query",
         description="booking 9.4.2: SQLi via resource_id parameter",
     ),
-
     # ── File upload (rule: upload.*) ────────────────────────────────
     BenchmarkCVE(
         slug="elementor",
@@ -80,7 +78,7 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="file_upload",
         rule_expected="upload.wp_handle_upload_test_form_off",
         description="elementor 3.6.2: authenticated arbitrary file "
-                    "upload via template import (test_form=false)",
+        "upload via template import (test_form=false)",
     ),
     BenchmarkCVE(
         slug="the-events-calendar",
@@ -89,9 +87,8 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="file_upload",
         rule_expected="upload.move_uploaded_file_tainted_dest",
         description="the-events-calendar 6.0.1: file upload with "
-                    "attacker-controlled extension",
+        "attacker-controlled extension",
     ),
-
     # ── POI (rule: poi.*) ──────────────────────────────────────────
     BenchmarkCVE(
         slug="contact-form-7",
@@ -100,8 +97,8 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="poi",
         rule_expected="poi.unserialize_on_option",
         description="contact-form-7 5.3.1: unauth POI via form meta "
-                    "(note: actually an arbitrary file upload in core, "
-                    "but POI patterns also present in options read)",
+        "(note: actually an arbitrary file upload in core, "
+        "but POI patterns also present in options read)",
     ),
     BenchmarkCVE(
         slug="wp-super-cache",
@@ -110,9 +107,8 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="poi",
         rule_expected="poi.unserialize_on_option",
         description="wp-super-cache 1.7.1: serialized option read + "
-                    "unserialize without allowed_classes",
+        "unserialize without allowed_classes",
     ),
-
     # ── CSRF (rule: csrf.*) ────────────────────────────────────────
     BenchmarkCVE(
         slug="all-in-one-seo-pack",
@@ -121,7 +117,7 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="csrf",
         rule_expected="csrf.admin_post_no_nonce",
         description="all-in-one-seo-pack 4.1.5.3: CSRF on settings "
-                    "update leading to stored XSS",
+        "update leading to stored XSS",
     ),
     BenchmarkCVE(
         slug="woocommerce",
@@ -131,7 +127,6 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         rule_expected="csrf.admin_post_no_nonce",
         description="woocommerce 3.4.5: CSRF on tax class delete",
     ),
-
     # ── SSRF (rule: ssrf.*) ────────────────────────────────────────
     BenchmarkCVE(
         slug="unfiltered-mime-types-for-multisite",
@@ -140,9 +135,8 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="ssrf",
         rule_expected="ssrf.wp_remote_request_tainted",
         description="unfiltered-mime-types 1.0.1: wp_remote_get with "
-                    "attacker-supplied URL",
+        "attacker-supplied URL",
     ),
-
     # ── REST authz (rule: rest_authz.*) ────────────────────────────
     BenchmarkCVE(
         slug="wpforo-forum",
@@ -151,6 +145,6 @@ BENCHMARK_CORPUS: List[BenchmarkCVE] = [
         vuln_class="rest_authz",
         rule_expected="rest_authz.permission_callback_return_true",
         description="wpforo-forum 2.1.5: __return_true on a REST "
-                    "route that mutates forum data",
+        "route that mutates forum data",
     ),
 ]

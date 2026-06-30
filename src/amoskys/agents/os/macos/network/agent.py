@@ -49,8 +49,12 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     # Observability Mandate v1.0 — network context fields
     MANDATE_DATA_FIELDS = (
-        "remote_ip", "remote_port", "local_port",
-        "protocol", "pid", "process_name",
+        "remote_ip",
+        "remote_port",
+        "local_port",
+        "protocol",
+        "pid",
+        "process_name",
     )
 
     def __init__(self, collection_interval: float = 10.0) -> None:
@@ -132,9 +136,7 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         snapshot["unique_remote_ips"] = len(
             {c.remote_ip for c in all_conns_raw if c.remote_ip}
         )
-        snapshot["unique_processes"] = len(
-            {c.process_name for c in all_conns_raw}
-        )
+        snapshot["unique_processes"] = len({c.process_name for c in all_conns_raw})
 
         # Filter: only store real connections as flow observations.
         # LISTEN/bind sockets are socket inventory, not traffic flows.

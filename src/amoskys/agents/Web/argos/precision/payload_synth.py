@@ -39,7 +39,6 @@ import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-
 # ---- The probe object --------------------------------------------
 
 
@@ -54,43 +53,44 @@ class PayloadProbe:
       - the minimum evidence we want to collect
       - a risk rating so the operator can approve before firing
     """
+
     # The request
-    method:      str = "GET"
-    url:         str = ""
-    headers:     Dict[str, str] = field(default_factory=dict)
-    body:        Optional[str] = None
+    method: str = "GET"
+    url: str = ""
+    headers: Dict[str, str] = field(default_factory=dict)
+    body: Optional[str] = None
     # Interpretation
-    vuln_signal: str = ""     # what in the response proves it
-    safe_signal: str = ""     # what proves it's NOT vulnerable
+    vuln_signal: str = ""  # what in the response proves it
+    safe_signal: str = ""  # what proves it's NOT vulnerable
     evidence_regex: Optional[str] = None  # extract this from response
     # Provenance
     source_rule_id: str = ""
-    plugin_slug:   str = ""
+    plugin_slug: str = ""
     plugin_version: str = ""
-    finding_id:    str = ""
-    cwe:           str = ""
+    finding_id: str = ""
+    cwe: str = ""
     # Risk classification
-    risk_tier:    str = "low"    # low | medium | high — for operator gate
-    rationale:    str = ""
+    risk_tier: str = "low"  # low | medium | high — for operator gate
+    rationale: str = ""
     # Observability
     expected_aegis_events: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return {
-            "method":                self.method,
-            "url":                   self.url,
-            "headers":               self.headers,
-            "body":                  self.body,
-            "vuln_signal":           self.vuln_signal,
-            "safe_signal":           self.safe_signal,
-            "evidence_regex":        self.evidence_regex,
-            "source_rule_id":        self.source_rule_id,
-            "plugin_slug":           self.plugin_slug,
-            "plugin_version":        self.plugin_version,
-            "finding_id":            self.finding_id,
-            "cwe":                   self.cwe,
-            "risk_tier":             self.risk_tier,
-            "rationale":             self.rationale,
+            "method": self.method,
+            "url": self.url,
+            "headers": self.headers,
+            "body": self.body,
+            "vuln_signal": self.vuln_signal,
+            "safe_signal": self.safe_signal,
+            "evidence_regex": self.evidence_regex,
+            "source_rule_id": self.source_rule_id,
+            "plugin_slug": self.plugin_slug,
+            "plugin_version": self.plugin_version,
+            "finding_id": self.finding_id,
+            "cwe": self.cwe,
+            "risk_tier": self.risk_tier,
+            "rationale": self.rationale,
             "expected_aegis_events": self.expected_aegis_events,
         }
 
@@ -99,9 +99,11 @@ class PayloadProbe:
 
 
 def _hash_finding_id(finding: dict) -> str:
-    key = f"{finding.get('scanner')}|{finding.get('rule_id')}|" \
-          f"{finding.get('plugin_slug')}|{finding.get('file_path')}|" \
-          f"{finding.get('line')}"
+    key = (
+        f"{finding.get('scanner')}|{finding.get('rule_id')}|"
+        f"{finding.get('plugin_slug')}|{finding.get('file_path')}|"
+        f"{finding.get('line')}"
+    )
     return hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
@@ -120,12 +122,12 @@ def synthesize_probe(finding: dict, target_url: str) -> Optional[PayloadProbe]:
     fid = _hash_finding_id(finding)
 
     dispatchers = {
-        "sql_injection":  _synth_sqli,
-        "file_upload":    _synth_upload,
-        "poi":            _synth_poi,
-        "csrf":           _synth_csrf,
-        "ssrf":           _synth_ssrf,
-        "rest_authz":     _synth_rest_authz,
+        "sql_injection": _synth_sqli,
+        "file_upload": _synth_upload,
+        "poi": _synth_poi,
+        "csrf": _synth_csrf,
+        "ssrf": _synth_ssrf,
+        "rest_authz": _synth_rest_authz,
     }
     fn = dispatchers.get(scanner)
     if not fn:
@@ -133,11 +135,11 @@ def synthesize_probe(finding: dict, target_url: str) -> Optional[PayloadProbe]:
     probe = fn(finding, base)
     if probe is None:
         return None
-    probe.finding_id    = fid
-    probe.plugin_slug   = finding.get("plugin_slug") or ""
+    probe.finding_id = fid
+    probe.plugin_slug = finding.get("plugin_slug") or ""
     probe.plugin_version = finding.get("plugin_version") or ""
     probe.source_rule_id = rule
-    probe.cwe           = finding.get("cwe") or ""
+    probe.cwe = finding.get("cwe") or ""
     return probe
 
 
@@ -196,8 +198,7 @@ def _synth_sqli(finding: dict, base: str) -> Optional[PayloadProbe]:
         # Guess a plausible action name — ONLY if the operator edits
         # before firing. Default action="probe" is INTENTIONALLY not
         # going to match anything; the operator is forced to set it.
-        params = {"action": "PLACEHOLDER_ACTION",
-                  "id": "1' AND SLEEP(4)-- -"}
+        params = {"action": "PLACEHOLDER_ACTION", "id": "1' AND SLEEP(4)-- -"}
         url_with = url + "?" + urllib.parse.urlencode(params)
     else:
         url_with = f"{base}/wp-json/{finding.get('plugin_slug')}/v1/query?id=1'%20AND%20SLEEP(4)--%20-"
@@ -217,16 +218,16 @@ def _synth_sqli(finding: dict, base: str) -> Optional[PayloadProbe]:
             "query delay means the payload didn't reach the DB)"
         ),
         evidence_regex=None,
-        risk_tier="low",   # time-based blind; no data exfil in the probe
+        risk_tier="low",  # time-based blind; no data exfil in the probe
         rationale=(
             "Time-based blind SQLi confirms the injection point without "
             "extracting any data. Minimal evidence, maximum deniability."
         ),
         expected_aegis_events=[
             "aegis.db.suspicious_query",  # our SQLi runtime sensor should
-                                          # catch 'SLEEP(' in the query
-            "aegis.block.started",         # if our Aegis sqli_attempt rule
-                                          # fires (threshold 2/60s)
+            # catch 'SLEEP(' in the query
+            "aegis.block.started",  # if our Aegis sqli_attempt rule
+            # fires (threshold 2/60s)
         ],
     )
 
@@ -317,10 +318,12 @@ def _synth_poi(finding: dict, base: str) -> Optional[PayloadProbe]:
     payload = f'O:8:"stdClass":1:{{s:5:"probe";s:{len(tag)}:"{tag}";}}'
     # Most plugin POI vectors are POST params.
     url = f"{base}/wp-admin/admin-ajax.php"
-    body = urllib.parse.urlencode({
-        "action": "PLACEHOLDER_POI_ACTION",
-        "data":   payload,
-    })
+    body = urllib.parse.urlencode(
+        {
+            "action": "PLACEHOLDER_POI_ACTION",
+            "data": payload,
+        }
+    )
 
     return PayloadProbe(
         method="POST",
@@ -346,8 +349,8 @@ def _synth_poi(finding: dict, base: str) -> Optional[PayloadProbe]:
             "Purely confirms the unserialize() sink fires on our input."
         ),
         expected_aegis_events=[
-            "aegis.request.poi_payload",   # our v0.7 sensor
-            "aegis.block.started",          # poi_attempt threshold=1
+            "aegis.request.poi_payload",  # our v0.7 sensor
+            "aegis.block.started",  # poi_attempt threshold=1
         ],
     )
 
@@ -374,10 +377,12 @@ def _synth_csrf(finding: dict, base: str) -> Optional[PayloadProbe]:
         url = f"{base}/wp-admin/admin-post.php"
     else:
         url = f"{base}/wp-admin/admin-ajax.php"
-    body = urllib.parse.urlencode({
-        "action":   "PLACEHOLDER_STATE_CHANGE_ACTION",
-        "marker":   tag,
-    })
+    body = urllib.parse.urlencode(
+        {
+            "action": "PLACEHOLDER_STATE_CHANGE_ACTION",
+            "marker": tag,
+        }
+    )
 
     return PayloadProbe(
         method="POST",
@@ -386,7 +391,7 @@ def _synth_csrf(finding: dict, base: str) -> Optional[PayloadProbe]:
             # The evasion here is REFERER: a real CSRF comes from a
             # different origin. We use a plausible third-party site.
             "Referer": "https://www.google.com/search",
-            "Origin":  "https://www.google.com",
+            "Origin": "https://www.google.com",
             "Content-Type": "application/x-www-form-urlencoded",
         },
         body=body,
@@ -435,8 +440,10 @@ def _synth_ssrf(finding: dict, base: str) -> Optional[PayloadProbe]:
     canary_host = "canary.amoskys-lab.test"  # operator configures this
     canary_url = f"http://{tag}.{canary_host}/ssrf-probe"
 
-    url = f"{base}/wp-admin/admin-ajax.php?action=PLACEHOLDER_URL_FETCH" \
-          f"&url={urllib.parse.quote(canary_url)}"
+    url = (
+        f"{base}/wp-admin/admin-ajax.php?action=PLACEHOLDER_URL_FETCH"
+        f"&url={urllib.parse.quote(canary_url)}"
+    )
 
     return PayloadProbe(
         method="GET",
@@ -492,9 +499,7 @@ def _synth_rest_authz(finding: dict, base: str) -> Optional[PayloadProbe]:
             f"response is 200 AND JSON includes a 'routes' key listing "
             f"endpoints — the plugin's namespace is accessible unauth."
         ),
-        safe_signal=(
-            "response is 401/403 — the index is gated"
-        ),
+        safe_signal=("response is 401/403 — the index is gated"),
         evidence_regex=r'"routes"\s*:\s*\{',
         risk_tier="low",
         rationale=(

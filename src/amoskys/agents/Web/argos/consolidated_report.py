@@ -42,9 +42,10 @@ SEVERITY_ORDER = ("critical", "high", "medium", "low", "info")
 @dataclass
 class AssetSection:
     """One asset's subsection of the consolidated report."""
+
     asset_value: str
     asset_kind: str
-    status: str                 # from ScanJob.status
+    status: str  # from ScanJob.status
     findings_count: int
     findings: List[StoredFinding] = field(default_factory=list)
     skip_reason: Optional[str] = None
@@ -64,6 +65,7 @@ class ConsolidatedReport:
 
     Returned by build_report(); rendered to HTML/PDF by render().
     """
+
     queue: ScanQueue
     customer: Customer
     operator_email: Optional[str]
@@ -74,7 +76,9 @@ class ConsolidatedReport:
 
     @property
     def critical_plus_high(self) -> int:
-        return self.severity_totals.get("critical", 0) + self.severity_totals.get("high", 0)
+        return self.severity_totals.get("critical", 0) + self.severity_totals.get(
+            "high", 0
+        )
 
     def to_summary_dict(self) -> Dict[str, Any]:
         return {
@@ -116,7 +120,9 @@ def build_report(db: AssetsDB, queue_id: str) -> ConsolidatedReport:
         raise LookupError(f"no scan_queue with id {queue_id!r}")
     customer = db.get_customer(queue.customer_id)
     if customer is None:
-        raise LookupError(f"customer {queue.customer_id!r} missing for queue {queue_id}")
+        raise LookupError(
+            f"customer {queue.customer_id!r} missing for queue {queue_id}"
+        )
     operator = db.get_operator(queue.operator_id)
     operator_email = operator.email if operator else None
 
@@ -128,15 +134,17 @@ def build_report(db: AssetsDB, queue_id: str) -> ConsolidatedReport:
 
     sections: List[AssetSection] = []
     for job in jobs:
-        sections.append(AssetSection(
-            asset_value=job.asset_value,
-            asset_kind=job.asset_kind,
-            status=job.status,
-            findings_count=job.findings_count,
-            findings=findings_by_job.get(job.job_id, []),
-            skip_reason=job.skip_reason,
-            error=job.error,
-        ))
+        sections.append(
+            AssetSection(
+                asset_value=job.asset_value,
+                asset_kind=job.asset_kind,
+                status=job.status,
+                findings_count=job.findings_count,
+                findings=findings_by_job.get(job.job_id, []),
+                skip_reason=job.skip_reason,
+                error=job.error,
+            )
+        )
 
     severity_totals = {s: 0 for s in SEVERITY_ORDER}
     for f in findings_all:
@@ -177,14 +185,14 @@ def render(
 
     try:
         from weasyprint import HTML  # type: ignore
+
         pdf_bytes = HTML(string=html).write_pdf()
         pdf_path = out_dir / f"{stem}.pdf"
         pdf_path.write_bytes(pdf_bytes)
         result.pdf_path = pdf_path
     except ImportError:
         result.pdf_error = (
-            "weasyprint not installed — HTML only. "
-            "Install: pip install weasyprint"
+            "weasyprint not installed — HTML only. " "Install: pip install weasyprint"
         )
     except Exception as e:  # noqa: BLE001
         result.pdf_error = f"{type(e).__name__}: {e}"
@@ -321,7 +329,7 @@ def _render_asset_section(section: AssetSection) -> str:
     elif section.findings_count == 0:
         status_note = (
             '<p class="note">No findings — this asset is clean against the '
-            'current tool bundle.</p>'
+            "current tool bundle.</p>"
         )
 
     findings_html = "".join(_render_finding(f) for f in section.findings)
@@ -336,10 +344,8 @@ def _render_asset_section(section: AssetSection) -> str:
 def _render_finding(f: StoredFinding) -> str:
     refs_html = ""
     if f.references:
-        links = "".join(
-            f'<li><a href="{_h(r)}">{_h(r)}</a></li>' for r in f.references
-        )
-        refs_html = f'<strong>References:</strong><ul>{links}</ul>'
+        links = "".join(f'<li><a href="{_h(r)}">{_h(r)}</a></li>' for r in f.references)
+        refs_html = f"<strong>References:</strong><ul>{links}</ul>"
 
     evidence_html = ""
     if f.evidence:
@@ -350,9 +356,7 @@ def _render_finding(f: StoredFinding) -> str:
             if len(v_str) > 300:
                 v_str = v_str[:297] + "..."
             items.append(f"{_h(str(k))}: {_h(v_str)}")
-        evidence_html = (
-            f'<div class="evidence">{"<br>".join(items)}</div>'
-        )
+        evidence_html = f'<div class="evidence">{"<br>".join(items)}</div>'
 
     meta_parts = []
     if f.tool:
@@ -363,9 +367,7 @@ def _render_finding(f: StoredFinding) -> str:
         meta_parts.append(_h(f.cwe))
     if f.cvss is not None:
         meta_parts.append(f"CVSS {f.cvss}")
-    meta_line = (
-        f'<p class="meta">{" · ".join(meta_parts)}</p>' if meta_parts else ""
-    )
+    meta_line = f'<p class="meta">{" · ".join(meta_parts)}</p>' if meta_parts else ""
 
     return f"""
 <div class="finding sev-{_h(f.severity)}">

@@ -11,14 +11,31 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.Web.argos.evasion import (
-    StatSample, StealthSession, TimingExperiment,
-    available_encoders, b64, case_mutate, comment_pad, compose,
-    fingerprint_waf, hex_escape, html_entity, lfi_variants, null_byte_after,
-    recommend_bypass_layers, rce_variants,
-    sql_keyword_obfuscate, sqli_variants, url, url2, url_unicode,
-    utf8_overlong, welch_t_test, whitespace_mutate, xss_variants,
+    StatSample,
+    StealthSession,
+    TimingExperiment,
+    available_encoders,
+    b64,
+    case_mutate,
+    comment_pad,
+    compose,
+    fingerprint_waf,
+    hex_escape,
+    html_entity,
+    lfi_variants,
+    null_byte_after,
+    rce_variants,
+    recommend_bypass_layers,
+    sql_keyword_obfuscate,
+    sqli_variants,
+    url,
+    url2,
+    url_unicode,
+    utf8_overlong,
+    welch_t_test,
+    whitespace_mutate,
+    xss_variants,
 )
-
 
 # ──────────────────────────────────────────────────────────────────
 # encode
@@ -31,8 +48,8 @@ def test_url_basic():
 
 def test_url2_is_double_encoded():
     raw = "'"
-    once = url(raw)                  # %27
-    twice = url2(raw)                # %2527
+    once = url(raw)  # %27
+    twice = url2(raw)  # %2527
     assert once == "%27"
     assert twice == "%2527"
     # Decoding once should give %27, not the literal '.
@@ -60,6 +77,7 @@ def test_hex_escape_basic():
 
 def test_b64_round_trip():
     import base64
+
     original = "SELECT * FROM users"
     assert base64.b64decode(b64(original)).decode() == original
 
@@ -125,15 +143,19 @@ def test_available_encoders_is_non_empty():
 def test_sqli_variants_timing_mode_contains_sleep():
     variants = sqli_variants(mode="timing", max_variants=20, seed=1)
     assert variants
-    assert any("SLEEP" in v.upper() or "pg_sleep" in v.lower() or "WAITFOR" in v.upper()
-               for v in variants)
+    assert any(
+        "SLEEP" in v.upper() or "pg_sleep" in v.lower() or "WAITFOR" in v.upper()
+        for v in variants
+    )
 
 
 def test_sqli_variants_tautology_mode_contains_tautology():
     variants = sqli_variants(mode="tautology", max_variants=10, seed=1)
     # Some original tautologies plus encoded versions.
-    assert any("1=1" in v or "1%3D1" in v or "'1'%3D'1'" in v or "OR" in v.upper()
-               for v in variants)
+    assert any(
+        "1=1" in v or "1%3D1" in v or "'1'%3D'1'" in v or "OR" in v.upper()
+        for v in variants
+    )
 
 
 def test_sqli_variants_max_count_respected():
@@ -145,16 +167,16 @@ def test_sqli_variants_no_destructive_keywords():
     # Rule of engagement: never produce a payload that drops/deletes data.
     variants = sqli_variants(mode="all", max_variants=100, seed=0)
     joined = " ".join(variants).upper()
-    for danger in ("DROP TABLE", "DROP DATABASE", "DELETE FROM",
-                   "TRUNCATE TABLE"):
+    for danger in ("DROP TABLE", "DROP DATABASE", "DELETE FROM", "TRUNCATE TABLE"):
         assert danger not in joined, f"forbidden keyword: {danger}"
 
 
 def test_xss_variants_contains_script_or_svg():
     v = xss_variants(max_variants=20, seed=1)
     joined = " ".join(v).lower()
-    assert any(needle in joined for needle in ("script", "svg", "iframe",
-                                                "onerror", "alert"))
+    assert any(
+        needle in joined for needle in ("script", "svg", "iframe", "onerror", "alert")
+    )
 
 
 def test_lfi_variants_includes_traversal():
@@ -216,14 +238,19 @@ def test_welch_t_test_tiny_samples_safe():
 def test_timing_experiment_detects_vuln_when_probe_slower():
     # Simulate: baseline ~1s, probe ~5s (SLEEP(4) would look like this).
     call_count = {"n": 0}
+
     def fire(is_probe: bool) -> float:
         call_count["n"] += 1
         random.seed(call_count["n"])
         if is_probe:
             return 5.0 + random.gauss(0, 0.1)
         return 1.0 + random.gauss(0, 0.1)
+
     expt = TimingExperiment(
-        label="sleep4", n_samples=8, alpha=0.01, fire=fire,
+        label="sleep4",
+        n_samples=8,
+        alpha=0.01,
+        fire=fire,
     )
     r = expt.run()
     assert r["significant"]
@@ -235,6 +262,7 @@ def test_timing_experiment_no_vuln_when_similar_timing():
     def fire(is_probe: bool) -> float:
         random.seed(random.random())
         return 1.0 + random.gauss(0, 0.1)
+
     expt = TimingExperiment(n_samples=8, alpha=0.01, fire=fire)
     r = expt.run()
     assert not r["significant"]
@@ -288,7 +316,7 @@ def test_recommend_bypass_layers_wordfence():
 
 def test_recommend_bypass_layers_unknown_falls_back():
     layers = recommend_bypass_layers([])
-    assert layers                    # non-empty default stack
+    assert layers  # non-empty default stack
     assert "case" in layers
 
 
@@ -300,8 +328,11 @@ def test_recommend_bypass_layers_unknown_falls_back():
 def test_session_absorbs_cookies():
     # Build a session and call the internal cookie-absorb method.
     s = StealthSession("example.com")
-    s._absorb_cookies({"set-cookie":
-        "PHPSESSID=abc123; path=/; HttpOnly, wordpress_test_cookie=1; path=/"})
+    s._absorb_cookies(
+        {
+            "set-cookie": "PHPSESSID=abc123; path=/; HttpOnly, wordpress_test_cookie=1; path=/"
+        }
+    )
     assert s._cookies.get("PHPSESSID") == "abc123"
     assert s._cookies.get("wordpress_test_cookie") == "1"
 

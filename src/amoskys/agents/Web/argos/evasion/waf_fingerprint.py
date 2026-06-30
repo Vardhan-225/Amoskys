@@ -46,10 +46,11 @@ from typing import Dict, List, Optional
 @dataclass
 class WAFFingerprint:
     """One WAF identification."""
-    name:           str
-    confidence:     int                   # 0-100
-    evidence:      List[str] = field(default_factory=list)
-    bypass_tags:   List[str] = field(default_factory=list)
+
+    name: str
+    confidence: int  # 0-100
+    evidence: List[str] = field(default_factory=list)
+    bypass_tags: List[str] = field(default_factory=list)
 
 
 # ── Per-WAF detector rules ────────────────────────────────────────
@@ -82,10 +83,10 @@ def _detect_cloudflare(headers: Dict[str, str], body: str) -> Optional[WAFFinger
         evidence=evidence,
         bypass_tags=[
             # Categories known to bypass or reduce CF score:
-            "user-agent-rotation",     # CF tracks UA+IP rep
-            "keep-alive-reuse",         # many CF rules gate on new TCP
-            "path-case-mutate",         # CF matches URI case-sensitively
-            "http2-goaway-evasion",     # CF aggressively enforces HTTP/2
+            "user-agent-rotation",  # CF tracks UA+IP rep
+            "keep-alive-reuse",  # many CF rules gate on new TCP
+            "path-case-mutate",  # CF matches URI case-sensitively
+            "http2-goaway-evasion",  # CF aggressively enforces HTTP/2
             "managed-challenge-pause",  # pause on 403 + retry after 5m
         ],
     )
@@ -111,15 +112,15 @@ def _detect_wordfence(headers: Dict[str, str], body: str) -> Optional[WAFFingerp
         confidence=min(100, conf),
         evidence=evidence,
         bypass_tags=[
-            "sql-keyword-comment",    # Wordfence historically weak on
-                                      # /*!50000SELECT*/ MySQL conditionals
-            "utf8-overlong-quote",    # Wordfence normalizes URL-decode
-                                      # once but not overlong UTF-8
-            "rest-endpoint-direct",   # Some vulns bypass WF by going
-                                      # directly to /wp-json/... instead
-                                      # of /wp-admin/admin-ajax.php
-            "param-pollution",        # WF checks first occurrence of a
-                                      # duplicated param in many contexts
+            "sql-keyword-comment",  # Wordfence historically weak on
+            # /*!50000SELECT*/ MySQL conditionals
+            "utf8-overlong-quote",  # Wordfence normalizes URL-decode
+            # once but not overlong UTF-8
+            "rest-endpoint-direct",  # Some vulns bypass WF by going
+            # directly to /wp-json/... instead
+            # of /wp-admin/admin-ajax.php
+            "param-pollution",  # WF checks first occurrence of a
+            # duplicated param in many contexts
         ],
     )
 
@@ -141,7 +142,7 @@ def _detect_sucuri(headers: Dict[str, str], body: str) -> Optional[WAFFingerprin
         confidence=min(100, conf),
         evidence=evidence,
         bypass_tags=[
-            "path-encoding-cascade",   # Sucuri aggressive on paths
+            "path-encoding-cascade",  # Sucuri aggressive on paths
             "header-case-mutate",
         ],
     )
@@ -169,8 +170,8 @@ def _detect_akamai(headers: Dict[str, str], body: str) -> Optional[WAFFingerprin
         evidence=evidence,
         bypass_tags=[
             "path-case-mutate",
-            "http2-large-header",     # Akamai's HTTP/1.1→2 transform
-                                      # sometimes mangles large headers
+            "http2-large-header",  # Akamai's HTTP/1.1→2 transform
+            # sometimes mangles large headers
         ],
     )
 
@@ -308,8 +309,8 @@ def recommend_bypass_layers(waf_names: List[str]) -> List[str]:
     # Dedup preserving order.
     seen = set()
     out: List[str] = []
-    for l in layers:
-        if l not in seen:
-            out.append(l)
-            seen.add(l)
+    for layer in layers:
+        if layer not in seen:
+            out.append(layer)
+            seen.add(layer)
     return out

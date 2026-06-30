@@ -199,7 +199,13 @@ def nexus_probe_calibration():
     try:
         conn = _ro_conn(PROBE_CAL_DB)
         if conn is None:
-            return jsonify({"status": "success", "probes": [], "message": "Probe calibration data not available in fleet mode"})
+            return jsonify(
+                {
+                    "status": "success",
+                    "probes": [],
+                    "message": "Probe calibration data not available in fleet mode",
+                }
+            )
         rows = conn.execute(
             """
             SELECT probe_name,
@@ -262,7 +268,14 @@ def nexus_soma_stats():
     try:
         conn = _ro_conn(SOMA_DB)
         if conn is None:
-            return jsonify({"status": "success", "soma": {"total_patterns": 0, "mature": 0, "maturity_pct": 0}, "suppressors": [], "message": "SOMA not available in fleet mode"})
+            return jsonify(
+                {
+                    "status": "success",
+                    "soma": {"total_patterns": 0, "mature": 0, "maturity_pct": 0},
+                    "suppressors": [],
+                    "message": "SOMA not available in fleet mode",
+                }
+            )
 
         stats = conn.execute(
             """
@@ -438,7 +451,9 @@ def nexus_constellation():
     try:
         conn = _fleet_telemetry_conn() or _ro_conn(TELEMETRY_DB)
         if conn is None:
-            return jsonify({"agents": [], "arcs": [], "message": "No telemetry data available"})
+            return jsonify(
+                {"agents": [], "arcs": [], "message": "No telemetry data available"}
+            )
 
         # Per-agent: event count in full window
         agent_rows = conn.execute(

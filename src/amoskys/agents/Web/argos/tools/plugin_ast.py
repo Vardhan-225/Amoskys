@@ -27,13 +27,9 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from typing import Any, Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
-from amoskys.agents.Web.argos.ast import (
-    ASTFinding,
-    ASTScanner,
-    RestAuthzScanner,
-)
+from amoskys.agents.Web.argos.ast import ASTFinding, ASTScanner, RestAuthzScanner
 from amoskys.agents.Web.argos.corpus import PluginSource, WPOrgCorpus, WPOrgCorpusError
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -120,8 +116,10 @@ class PluginASTTool(Tool):
         started = int(time.time() * 1e9)
         command = [
             "plugin-ast",
-            "--scanners", ",".join(s.scanner_id for s in self.scanners),
-            "--plugins", f"{len(self._plugins)}",
+            "--scanners",
+            ",".join(s.scanner_id for s in self.scanners),
+            "--plugins",
+            f"{len(self._plugins)}",
         ]
 
         findings: List[Dict[str, Any]] = []

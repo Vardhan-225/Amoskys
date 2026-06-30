@@ -41,7 +41,6 @@ import re
 import urllib.parse
 from typing import Callable, Dict, Iterable, List, Optional
 
-
 # ── URL encodings ─────────────────────────────────────────────────
 
 
@@ -153,8 +152,9 @@ def case_mutate(s: str, rng: Optional[random.Random] = None) -> str:
     keyword-list WAFs that check for exact-case substrings.
     """
     rng = rng or random.Random()
-    return "".join(c.upper() if rng.random() > 0.5 else c.lower()
-                   if c.isalpha() else c for c in s)
+    return "".join(
+        c.upper() if rng.random() > 0.5 else c.lower() if c.isalpha() else c for c in s
+    )
 
 
 def comment_pad(s: str, comment: str = "/**/") -> str:
@@ -175,9 +175,11 @@ def sql_keyword_obfuscate(s: str) -> str:
     Only MySQL parses these; WAFs that don't know the MySQL dialect
     treat them as regular comments and miss the keyword inside.
     """
+
     # Wrap every SQL keyword we find in /*!50000 ... */.
     def _rep(m: re.Match) -> str:
         return f"/*!50000{m.group(0)}*/"
+
     keywords = (
         r"\b(SELECT|UNION|FROM|WHERE|OR|AND|INSERT|UPDATE|DELETE|DROP"
         r"|JOIN|LIMIT|ORDER|BY|GROUP|HAVING|SLEEP|BENCHMARK|LOAD_FILE"
@@ -229,20 +231,20 @@ def hpp(params: Dict[str, str]) -> str:
 
 
 _ENCODER_REGISTRY: Dict[str, Callable[[str], str]] = {
-    "url":            url,
-    "url2":           url2,
-    "url_unicode":    url_unicode,
-    "utf8_overlong":  utf8_overlong,
-    "html_entity":    html_entity,
+    "url": url,
+    "url2": url2,
+    "url_unicode": url_unicode,
+    "utf8_overlong": utf8_overlong,
+    "html_entity": html_entity,
     "html_entity_hex": html_entity_hex,
-    "html_escape":    html_escape,
-    "hex":            hex_escape,
-    "unicode":        js_unicode_escape,
-    "b64":            b64,
-    "case":           case_mutate,
-    "comment":        comment_pad,
-    "sql_keyword":    sql_keyword_obfuscate,
-    "whitespace":     whitespace_mutate,
+    "html_escape": html_escape,
+    "hex": hex_escape,
+    "unicode": js_unicode_escape,
+    "b64": b64,
+    "case": case_mutate,
+    "comment": comment_pad,
+    "sql_keyword": sql_keyword_obfuscate,
+    "whitespace": whitespace_mutate,
 }
 
 

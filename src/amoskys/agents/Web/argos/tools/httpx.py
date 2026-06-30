@@ -22,7 +22,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -63,9 +63,11 @@ class HTTPXTool(Tool):
 
         cmd: List[str] = [
             "httpx",
-            "-u", url,
+            "-u",
+            url,
             "-json",
-            "-o", str(out_path),
+            "-o",
+            str(out_path),
             "-status-code",
             "-title",
             "-tech-detect",
@@ -74,8 +76,10 @@ class HTTPXTool(Tool):
             "-location",
             "-tls-grab",
             "-silent",
-            "-rate-limit", str(scope.max_rps),
-            "-timeout", "10",
+            "-rate-limit",
+            str(scope.max_rps),
+            "-timeout",
+            "10",
         ]
         if self.probe_all_ips:
             cmd.append("-probe-all-ips")
@@ -85,7 +89,9 @@ class HTTPXTool(Tool):
         try:
             with open(stderr_path, "wb") as stderr_fh:
                 proc = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=stderr_fh,
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=stderr_fh,
                 )
                 try:
                     exit_code = proc.wait(timeout=min(scope.max_duration_s, 600))
@@ -164,8 +170,12 @@ class HTTPXTool(Tool):
                     "server": server,
                     "title": title,
                     "technologies": techs,
-                    "tls_subject": tls.get("subject_dn") if isinstance(tls, dict) else None,
-                    "tls_issuer": tls.get("issuer_dn") if isinstance(tls, dict) else None,
+                    "tls_subject": (
+                        tls.get("subject_dn") if isinstance(tls, dict) else None
+                    ),
+                    "tls_issuer": (
+                        tls.get("issuer_dn") if isinstance(tls, dict) else None
+                    ),
                 },
             }
         ]

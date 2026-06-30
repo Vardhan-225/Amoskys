@@ -337,7 +337,9 @@ def _get_igris_chat():
     if _igris_chat_instance is None:
         try:
             import os as _os
+
             from flask import current_app
+
             from amoskys.igris.chat import IgrisChat
 
             action_executor = current_app.config.get("ACTION_EXECUTOR")
@@ -346,7 +348,12 @@ def _get_igris_chat():
             # Local mode: use telemetry.db (agent running on this machine)
             if _os.environ.get("AMOSKYS_OPS_SERVER"):
                 from web.app.dashboard.telemetry_bridge import _CACHE_DB_PATH
-                db_path = str(_CACHE_DB_PATH) if _CACHE_DB_PATH.exists() else "data/telemetry.db"
+
+                db_path = (
+                    str(_CACHE_DB_PATH)
+                    if _CACHE_DB_PATH.exists()
+                    else "data/telemetry.db"
+                )
             else:
                 db_path = "data/telemetry.db"
 
@@ -445,7 +452,7 @@ def igris_proactive_brief():
 def igris_chat_backend():
     """Get IGRIS LLM backend status."""
     claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
-    from amoskys.igris.backends import COMMANDER_MODEL, AGENT_MODEL
+    from amoskys.igris.backends import AGENT_MODEL, COMMANDER_MODEL
 
     return jsonify(
         {
@@ -700,6 +707,7 @@ def guardian_execute():
             if _os.environ.get("AMOSKYS_OPS_SERVER"):
                 try:
                     from .routes_command_center import _ops_get
+
                     data = _ops_get("/api/v1/devices")
                     if data and data.get("devices"):
                         dev = data["devices"][0]

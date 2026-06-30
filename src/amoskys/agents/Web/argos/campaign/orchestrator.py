@@ -34,31 +34,35 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from amoskys.agents.Web.argos.adapt import (
-    ArchitectureProfile, fingerprint_architecture,
-    AdaptedStrategy, pick_strategy,
-    OriginCandidate, discover_origin,
+    AdaptedStrategy,
+    ArchitectureProfile,
+    OriginCandidate,
+    discover_origin,
+    fingerprint_architecture,
+    pick_strategy,
 )
-from amoskys.agents.Web.argos.auth import (
-    scan_jwt, bypass_case_variation,
-)
+from amoskys.agents.Web.argos.auth import bypass_case_variation, scan_jwt
 from amoskys.agents.Web.argos.campaign.events import EventBus, EventKind
+from amoskys.agents.Web.argos.campaign.wp_probe import run_wp_probe
 from amoskys.agents.Web.argos.chain import (
-    ChainFinding, reason_chains, ExploitChain,
+    ChainFinding,
+    ExploitChain,
+    reason_chains,
     reason_graph,
 )
 from amoskys.agents.Web.argos.smuggle import detect_smuggling
-from amoskys.agents.Web.argos.campaign.wp_probe import run_wp_probe
 from amoskys.agents.Web.argos.zeroday import (
-    HIDDEN_PARAM_WORDLIST, discover_hidden_params,
+    HIDDEN_PARAM_WORDLIST,
+    discover_hidden_params,
 )
 
 logger = logging.getLogger("amoskys.argos.campaign.orchestrator")
 
 
 class CampaignMode:
-    REPORT  = "report"      # OSINT + passive only — any domain
-    CONFIRM = "confirm"     # + low-volume probes — consent advised
-    EXPLOIT = "exploit"     # + active exploitation — written authorization required
+    REPORT = "report"  # OSINT + passive only — any domain
+    CONFIRM = "confirm"  # + low-volume probes — consent advised
+    EXPLOIT = "exploit"  # + active exploitation — written authorization required
 
 
 # ── Data model ────────────────────────────────────────────────────
@@ -82,28 +86,28 @@ class CampaignReport:
     errors: List[str] = field(default_factory=list)
     consent_verified: bool = False
     consent_method: str = "none"
-    graph: Optional[Dict[str, Any]] = None   # graph reasoner extras
+    graph: Optional[Dict[str, Any]] = None  # graph reasoner extras
 
     def to_dict(self):
         return {
-            "target_url":        self.target_url,
-            "target_host":       self.target_host,
-            "mode":              self.mode,
-            "started_at":        self.started_at,
-            "finished_at":       self.finished_at,
-            "duration_s":        max(0.0, self.finished_at - self.started_at),
-            "profile":           self.profile,
-            "strategy":          self.strategy,
+            "target_url": self.target_url,
+            "target_host": self.target_host,
+            "mode": self.mode,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_s": max(0.0, self.finished_at - self.started_at),
+            "profile": self.profile,
+            "strategy": self.strategy,
             "origin_candidates": list(self.origin_candidates),
-            "smuggle_report":    self.smuggle_report,
-            "findings":          list(self.findings),
-            "chains":            list(self.chains),
-            "max_severity":      self.max_severity,
-            "events":            list(self.events),
-            "errors":            list(self.errors),
-            "consent_verified":  self.consent_verified,
-            "consent_method":    self.consent_method,
-            "graph":             self.graph,
+            "smuggle_report": self.smuggle_report,
+            "findings": list(self.findings),
+            "chains": list(self.chains),
+            "max_severity": self.max_severity,
+            "events": list(self.events),
+            "errors": list(self.errors),
+            "consent_verified": self.consent_verified,
+            "consent_method": self.consent_method,
+            "graph": self.graph,
         }
 
 
@@ -113,14 +117,18 @@ class CampaignReport:
 class Campaign:
     """Run a full Argos kill chain with live event streaming."""
 
-    def __init__(self, target_url: str, mode: str = CampaignMode.REPORT,
-                 consent_token: Optional[str] = None,
-                 bus: Optional[EventBus] = None,
-                 http_get: Optional[Callable] = None,
-                 smuggle_sender: Optional[Callable] = None,
-                 plugin_source_dir: Optional[str] = None,
-                 precision_sender: Optional[Callable] = None,
-                 prebuilt_findings: Optional[List[ChainFinding]] = None):
+    def __init__(
+        self,
+        target_url: str,
+        mode: str = CampaignMode.REPORT,
+        consent_token: Optional[str] = None,
+        bus: Optional[EventBus] = None,
+        http_get: Optional[Callable] = None,
+        smuggle_sender: Optional[Callable] = None,
+        plugin_source_dir: Optional[str] = None,
+        precision_sender: Optional[Callable] = None,
+        prebuilt_findings: Optional[List[ChainFinding]] = None,
+    ):
         """
         target_url         : fully-qualified https://host URL
         mode               : one of CampaignMode.*
@@ -168,8 +176,9 @@ class Campaign:
           - CampaignMode.REPORT — no consent required (OSINT only)
         """
         stage = "consent"
-        self.bus.stage_start(stage, f"verifying authorization for {self.target_host}",
-                              mode=self.mode)
+        self.bus.stage_start(
+            stage, f"verifying authorization for {self.target_host}", mode=self.mode
+        )
         if self.mode == CampaignMode.REPORT:
             self._report.consent_verified = True
             self._report.consent_method = "report-mode-no-consent-required"
@@ -195,8 +204,10 @@ class Campaign:
             self._report.consent_verified = True
             self._report.consent_method = token
             self.bus.stage_end(
-                stage, f"consent via bug-bounty scope: {token}",
-                note="operator self-attests target is in a public bug-bounty scope")
+                stage,
+                f"consent via bug-bounty scope: {token}",
+                note="operator self-attests target is in a public bug-bounty scope",
+            )
             return True
         if token.startswith("sow:"):
             self._report.consent_verified = True
@@ -207,8 +218,10 @@ class Campaign:
             self._report.consent_verified = True
             self._report.consent_method = token
             self.bus.stage_end(
-                stage, f"consent via dev-mode token: {token}",
-                note="dev/test run — production deployments require a real consent token")
+                stage,
+                f"consent via dev-mode token: {token}",
+                note="dev/test run — production deployments require a real consent token",
+            )
             return True
 
         self._report.consent_verified = False
@@ -228,10 +241,10 @@ class Campaign:
         stage = "recon"
         self.bus.stage_start(stage, "DNS + robots + OSINT")
         items = {
-            "robots_txt":    f"{self.target_url}/robots.txt",
-            "sitemap_xml":   f"{self.target_url}/sitemap.xml",
-            "humans_txt":    f"{self.target_url}/humans.txt",
-            "security_txt":  f"{self.target_url}/.well-known/security.txt",
+            "robots_txt": f"{self.target_url}/robots.txt",
+            "sitemap_xml": f"{self.target_url}/sitemap.xml",
+            "humans_txt": f"{self.target_url}/humans.txt",
+            "security_txt": f"{self.target_url}/.well-known/security.txt",
         }
         found: Dict[str, str] = {}
         if self.http_get is not None:
@@ -241,7 +254,9 @@ class Campaign:
                     if status == 200 and body:
                         snippet = body[:200].replace("\n", " ")
                         found[name] = snippet
-                        self.bus.evidence(stage, f"{name}: {snippet[:80]}", url=url, status=status)
+                        self.bus.evidence(
+                            stage, f"{name}: {snippet[:80]}", url=url, status=status
+                        )
                 except Exception as exc:  # noqa: BLE001
                     self.bus.log(stage, f"{name} fetch failed: {exc}")
                 self.bus.progress(stage, len(found), len(items))
@@ -260,30 +275,48 @@ class Campaign:
         except Exception as exc:  # noqa: BLE001
             self.bus.error(stage, f"fingerprint failed: {exc}")
             self._report.errors.append(f"fingerprint: {exc}")
-            profile = ArchitectureProfile(target_url=self.target_url,
-                                           target_host=self.target_host)
+            profile = ArchitectureProfile(
+                target_url=self.target_url, target_host=self.target_host
+            )
         # Emit per-layer evidence
         if profile.cdn_name:
-            self.bus.evidence(stage, f"CDN: {profile.cdn_name} (conf={profile.cdn_confidence})")
+            self.bus.evidence(
+                stage, f"CDN: {profile.cdn_name} (conf={profile.cdn_confidence})"
+            )
         if profile.waf_names:
             self.bus.evidence(stage, f"WAF: {', '.join(profile.waf_names)}")
         if profile.origin_server:
-            self.bus.evidence(stage, f"Origin server: {profile.origin_server} {profile.origin_version or ''}")
+            self.bus.evidence(
+                stage,
+                f"Origin server: {profile.origin_server} {profile.origin_version or ''}",
+            )
         if profile.runtime:
-            self.bus.evidence(stage, f"Runtime: {profile.runtime} {profile.runtime_version or ''}")
+            self.bus.evidence(
+                stage, f"Runtime: {profile.runtime} {profile.runtime_version or ''}"
+            )
         if profile.database:
             self.bus.evidence(stage, f"Database: {profile.database}")
         if profile.os_family:
             self.bus.evidence(stage, f"OS: {profile.os_family}")
         if profile.framework:
-            self.bus.evidence(stage, f"Framework: {profile.framework} {profile.framework_version or ''}")
+            self.bus.evidence(
+                stage,
+                f"Framework: {profile.framework} {profile.framework_version or ''}",
+            )
         if profile.debug_mode or profile.verbose_errors:
-            self.bus.finding(stage, "verbose_errors", self.target_url, "low",
-                             "Target leaks debug info / stack traces")
+            self.bus.finding(
+                stage,
+                "verbose_errors",
+                self.target_url,
+                "low",
+                "Target leaks debug info / stack traces",
+            )
         self._report.profile = profile.to_dict()
-        self.bus.stage_end(stage,
+        self.bus.stage_end(
+            stage,
             f"profiled in {profile.fingerprint_time_ms}ms "
-            f"({profile.http_requests_used} reqs)")
+            f"({profile.http_requests_used} reqs)",
+        )
         return profile
 
     # ── Strategy selection ---------------------------------------
@@ -323,13 +356,21 @@ class Campaign:
         for c in cands[:5]:
             label = f"{c.ip} ({c.source}, conf={c.confidence})"
             if c.confirmed:
-                self.bus.finding(stage, "cdn_bypass", c.ip, "high",
-                                 f"origin IP confirmed: {c.ip} via {c.source}")
+                self.bus.finding(
+                    stage,
+                    "cdn_bypass",
+                    c.ip,
+                    "high",
+                    f"origin IP confirmed: {c.ip} via {c.source}",
+                )
             else:
                 self.bus.evidence(stage, f"candidate: {label}")
         self._report.origin_candidates = [c.to_dict() for c in cands]
-        self.bus.stage_end(stage, f"{len(cands)} candidate(s); "
-                            f"{sum(1 for c in cands if c.confirmed)} confirmed")
+        self.bus.stage_end(
+            stage,
+            f"{len(cands)} candidate(s); "
+            f"{sum(1 for c in cands if c.confirmed)} confirmed",
+        )
 
     # ── WordPress active probe (framework=wordpress only) --------
 
@@ -347,8 +388,7 @@ class Campaign:
 
         stage = "wp_probe"
         self.bus.stage_start(
-            stage,
-            "WordPress active probes: core/users/plugins/xmlrpc/REST/dev-leaks"
+            stage, "WordPress active probes: core/users/plugins/xmlrpc/REST/dev-leaks"
         )
 
         def _progress(name, done, total):
@@ -371,14 +411,13 @@ class Campaign:
             f"users enumerated: {len(result.users)} · "
             f"xmlrpc_open: {result.xmlrpc_open} · "
             f"rest_namespaces: {len(result.rest_namespaces)} · "
-            f"dev_leaks: {len(result.dev_leaks)}"
+            f"dev_leaks: {len(result.dev_leaks)}",
         )
 
         # Emit each plugin detection as an info event so operator sees inventory
         for p in result.plugins[:10]:
             self.bus.evidence(
-                stage,
-                f"plugin: {p.get('slug')} version={p.get('version') or '?'}"
+                stage, f"plugin: {p.get('slug')} version={p.get('version') or '?'}"
             )
 
         # Emit findings into the bus + stash on report
@@ -393,8 +432,7 @@ class Campaign:
             )
 
         self.bus.stage_end(
-            stage,
-            f"{len(result.findings)} finding(s) from active WP probes"
+            stage, f"{len(result.findings)} finding(s) from active WP probes"
         )
 
     # ── Hidden-param fuzzer (CONFIRM / EXPLOIT) ------------------
@@ -410,6 +448,7 @@ class Campaign:
         # Build a sender for discover_hidden_params:
         #   sender(url, params_dict) -> ResponseObservation-compatible object
         from amoskys.agents.Web.argos.zeroday import ResponseObservation
+
         def _sender(url, params):
             try:
                 qs = "&".join(f"{k}={v}" for k, v in (params or {}).items())
@@ -426,18 +465,22 @@ class Campaign:
                 )
             except Exception as exc:  # noqa: BLE001
                 return ResponseObservation(
-                    status=0, length=0, body_hash="",
-                    content_type="", latency_ms=0,
-                    headers={}, body_preview=f"__error__:{exc}",
+                    status=0,
+                    length=0,
+                    body_hash="",
+                    content_type="",
+                    latency_ms=0,
+                    headers={},
+                    body_preview=f"__error__:{exc}",
                 )
 
         try:
             # Cap wordlist to keep volume polite in CONFIRM mode
             limit = 15 if self.mode == CampaignMode.CONFIRM else 40
             wl = HIDDEN_PARAM_WORDLIST[:limit]
-            fuzz_rep = discover_hidden_params(self.target_url, sender=_sender,
-                                                wordlist=wl,
-                                                baseline_samples=1)
+            fuzz_rep = discover_hidden_params(
+                self.target_url, sender=_sender, wordlist=wl, baseline_samples=1
+            )
         except Exception as exc:  # noqa: BLE001
             self.bus.error(stage, f"discover_hidden_params failed: {exc}")
             self._report.errors.append(f"fuzz_params: {exc}")
@@ -446,8 +489,13 @@ class Campaign:
         for h in hits[:8]:
             param = h.get("param") if isinstance(h, dict) else getattr(h, "param", "")
             sig = h.get("signal") if isinstance(h, dict) else getattr(h, "signal", "")
-            self.bus.finding(stage, "hidden_param", f"{self.target_url}?{param}=",
-                             "medium", f"{param}: {sig}")
+            self.bus.finding(
+                stage,
+                "hidden_param",
+                f"{self.target_url}?{param}=",
+                "medium",
+                f"{param}: {sig}",
+            )
         self.bus.stage_end(stage, f"{len(hits)} hidden param candidate(s)")
 
     # ── Auth surface probe (EXPLOIT) -----------------------------
@@ -462,8 +510,11 @@ class Campaign:
             return
         # 1. Try well-known auth endpoints and capture any bearer token
         endpoints = [
-            "/wp-login.php", "/wp-json/jwt-auth/v1/token", "/api/login",
-            "/api/auth/login", "/oauth/token",
+            "/wp-login.php",
+            "/wp-json/jwt-auth/v1/token",
+            "/api/login",
+            "/api/auth/login",
+            "/oauth/token",
         ]
         tokens_seen: List[str] = []
         for ep in endpoints:
@@ -487,10 +538,14 @@ class Campaign:
                 continue
             for f in rep.findings:
                 if f.severity in ("critical", "high"):
-                    self.bus.finding(stage, f"jwt_{f.technique}",
-                                     self.target_url, f.severity, f.evidence)
-        self.bus.stage_end(stage,
-            f"tokens captured={len(tokens_seen)}")
+                    self.bus.finding(
+                        stage,
+                        f"jwt_{f.technique}",
+                        self.target_url,
+                        f.severity,
+                        f.evidence,
+                    )
+        self.bus.stage_end(stage, f"tokens captured={len(tokens_seen)}")
 
     # ── Smuggling probe ------------------------------------------
 
@@ -498,9 +553,13 @@ class Campaign:
         if self.mode == CampaignMode.REPORT:
             return
         stage = "smuggle"
-        self.bus.stage_start(stage, "HTTP request-smuggling detection (CL.TE / TE.CL / TE.TE)")
+        self.bus.stage_start(
+            stage, "HTTP request-smuggling detection (CL.TE / TE.CL / TE.TE)"
+        )
         if self.smuggle_sender is None and self.mode != CampaignMode.EXPLOIT:
-            self.bus.log(stage, "no smuggle_sender provided — skipping live timing probe")
+            self.bus.log(
+                stage, "no smuggle_sender provided — skipping live timing probe"
+            )
             self.bus.stage_end(stage, "skipped (no sender)")
             return
         try:
@@ -512,11 +571,17 @@ class Campaign:
         self._report.smuggle_report = rep.to_dict()
         for r in rep.results:
             if r.get("vulnerable"):
-                self.bus.finding(stage, "smuggling", self.target_url, "high",
-                                 f"{r['technique']}: latency={r['latency_ms']}ms note={r.get('note','')}")
-        self.bus.stage_end(stage,
-            f"baseline={rep.baseline_latency_ms}ms; "
-            f"vulnerable={rep.vulnerable}")
+                self.bus.finding(
+                    stage,
+                    "smuggling",
+                    self.target_url,
+                    "high",
+                    f"{r['technique']}: latency={r['latency_ms']}ms note={r.get('note','')}",
+                )
+        self.bus.stage_end(
+            stage,
+            f"baseline={rep.baseline_latency_ms}ms; " f"vulnerable={rep.vulnerable}",
+        )
 
     # ── Chain reasoning ------------------------------------------
 
@@ -530,13 +595,15 @@ class Campaign:
             if evt.kind != EventKind.FINDING:
                 continue
             d = evt.data or {}
-            findings.append(ChainFinding(
-                kind=d.get("finding_kind", "info_leak"),
-                location=d.get("location", evt.message),
-                severity=d.get("severity", "medium"),
-                evidence=d.get("evidence", evt.message),
-                metadata=dict(d.get("metadata") or {}),
-            ))
+            findings.append(
+                ChainFinding(
+                    kind=d.get("finding_kind", "info_leak"),
+                    location=d.get("location", evt.message),
+                    severity=d.get("severity", "medium"),
+                    evidence=d.get("evidence", evt.message),
+                    metadata=dict(d.get("metadata") or {}),
+                )
+            )
 
         if not findings:
             self.bus.stage_end(stage, "no findings to chain")
@@ -594,7 +661,9 @@ class Campaign:
         sev_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
         max_sev = "low"
         for c in merged:
-            s = getattr(c, "severity", None) or (c.get("severity") if isinstance(c, dict) else None)
+            s = getattr(c, "severity", None) or (
+                c.get("severity") if isinstance(c, dict) else None
+            )
             if sev_rank.get(s, 0) > sev_rank.get(max_sev, 0):
                 max_sev = s
         self._report.max_severity = max_sev
@@ -603,12 +672,12 @@ class Campaign:
         if graph_rep is not None:
             self._report_extra = {
                 "graph": {
-                    "near_misses":       [nm.to_dict() for nm in graph_rep.near_misses],
+                    "near_misses": [nm.to_dict() for nm in graph_rep.near_misses],
                     "defenses_detected": list(graph_rep.defenses_detected),
-                    "pruned_edges":      list(graph_rep.pruned_edges),
-                    "activated_edges":   graph_rep.activated_edges,
-                    "total_edges":       graph_rep.total_edges,
-                    "goals_reached":     sorted(graph_rep.goals_reached),
+                    "pruned_edges": list(graph_rep.pruned_edges),
+                    "activated_edges": graph_rep.activated_edges,
+                    "total_edges": graph_rep.total_edges,
+                    "goals_reached": sorted(graph_rep.goals_reached),
                 },
             }
 
@@ -667,7 +736,8 @@ class Campaign:
         self.bus.done(
             f"campaign finished in "
             f"{self._report.finished_at - self._report.started_at:.1f}s",
-            target=self.target_url, mode=self.mode,
+            target=self.target_url,
+            mode=self.mode,
         )
 
 
@@ -677,8 +747,9 @@ class Campaign:
 import hashlib as _hashlib
 import re as _re
 
-
-_JWT_RE = _re.compile(r"\b(ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{0,})\b")
+_JWT_RE = _re.compile(
+    r"\b(ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{0,})\b"
+)
 
 
 def _extract_jwts(text: str) -> List[str]:
@@ -692,14 +763,17 @@ def _short_hash(s: str) -> str:
     return _hashlib.sha256(s.encode("utf-8", errors="replace")).hexdigest()[:12]
 
 
-def run_campaign(target_url: str,
-                 mode: str = CampaignMode.REPORT,
-                 consent_token: Optional[str] = None,
-                 bus: Optional[EventBus] = None,
-                 **kwargs) -> CampaignReport:
+def run_campaign(
+    target_url: str,
+    mode: str = CampaignMode.REPORT,
+    consent_token: Optional[str] = None,
+    bus: Optional[EventBus] = None,
+    **kwargs,
+) -> CampaignReport:
     """One-liner: spin a Campaign and return its report."""
-    return Campaign(target_url=target_url, mode=mode,
-                    consent_token=consent_token, bus=bus, **kwargs).run()
+    return Campaign(
+        target_url=target_url, mode=mode, consent_token=consent_token, bus=bus, **kwargs
+    ).run()
 
 
 __all__ = ["Campaign", "CampaignMode", "CampaignReport", "run_campaign"]

@@ -1053,9 +1053,7 @@ class ScoringEngine:
         # The analyzer may be force-killed (SIGKILL) so we can't rely on close().
         if device_bl._total_learned % 25 == 0 and device_bl._total_learned > 0:
             os.makedirs(self._baseline_dir, exist_ok=True)
-            device_bl.save(
-                os.path.join(self._baseline_dir, f"{device_id}.json")
-            )
+            device_bl.save(os.path.join(self._baseline_dir, f"{device_id}.json"))
 
         # Compute three dimensions
         geo_score, geo_factors = self._geo.score(event)

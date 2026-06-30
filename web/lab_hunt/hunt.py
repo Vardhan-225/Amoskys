@@ -51,7 +51,9 @@ from typing import Any, Dict, List, Optional
 #   AMOSKYS_HUNT_RATE_LIMIT_S    (default: 30)  seconds between
 #       submits from the same IP. Set to 0 to disable entirely.
 
-_REQUIRE_CONSENT = os.environ.get("AMOSKYS_HUNT_REQUIRE_CONSENT", "false").lower() == "true"
+_REQUIRE_CONSENT = (
+    os.environ.get("AMOSKYS_HUNT_REQUIRE_CONSENT", "false").lower() == "true"
+)
 _RATE_LIMIT_S_ENV = os.environ.get("AMOSKYS_HUNT_RATE_LIMIT_S")
 try:
     _RATE_LIMIT_S_VAL = int(_RATE_LIMIT_S_ENV) if _RATE_LIMIT_S_ENV else 30
@@ -61,14 +63,18 @@ except ValueError:
 from flask import Blueprint, Response, jsonify, render_template, request
 
 from amoskys.agents.Web.argos.campaign import (
-    Campaign, CampaignMode, EventBus, render_campaign_html,
+    Campaign,
+    CampaignMode,
+    EventBus,
+    render_campaign_html,
 )
 
 try:
     from amoskys.agents.Web.argos.campaign import render_campaign_pdf
+
     _PDF_AVAILABLE = True
 except Exception:  # noqa: BLE001
-    render_campaign_pdf = None   # type: ignore
+    render_campaign_pdf = None  # type: ignore
     _PDF_AVAILABLE = False
 
 logger = logging.getLogger("amoskys.lab.hunt")
@@ -88,13 +94,16 @@ _ACTIVE: Dict[str, Dict[str, Any]] = {}
 _LAST_SUBMIT: Dict[str, float] = {}
 _SUBMIT_LOCK = threading.Lock()
 _RATE_LIMIT_S = _RATE_LIMIT_S_VAL
-_CAMPAIGN_TTL_S = 3600        # 1 hour
+_CAMPAIGN_TTL_S = 3600  # 1 hour
 
 
 def _purge_old():
     now = time.time()
-    stale = [cid for cid, meta in _ACTIVE.items()
-             if now - meta.get("started", now) > _CAMPAIGN_TTL_S]
+    stale = [
+        cid
+        for cid, meta in _ACTIVE.items()
+        if now - meta.get("started", now) > _CAMPAIGN_TTL_S
+    ]
     for cid in stale:
         _ACTIVE.pop(cid, None)
 
@@ -103,9 +112,16 @@ def _purge_old():
 
 _HOST_RE = re.compile(r"^[a-zA-Z0-9]([-a-zA-Z0-9.]*[a-zA-Z0-9])?$")
 _BLOCKED_HOSTS = {
-    "anthropic.com", "claude.ai", "openai.com",
-    "google.com", "apple.com", "microsoft.com", "amazon.com",
-    "github.com", "gitlab.com", "cloudflare.com",
+    "anthropic.com",
+    "claude.ai",
+    "openai.com",
+    "google.com",
+    "apple.com",
+    "microsoft.com",
+    "amazon.com",
+    "github.com",
+    "gitlab.com",
+    "cloudflare.com",
 }
 
 
@@ -134,12 +150,16 @@ def _validate_target(raw: str):
 
 # ── HTTP getter used by Campaign (urllib) ──────────────────────────
 
-def _http_get(url: str, timeout: float = 8.0,
-              headers: Optional[Dict[str, str]] = None):
+
+def _http_get(url: str, timeout: float = 8.0, headers: Optional[Dict[str, str]] = None):
     try:
-        req = urllib.request.Request(url, headers=headers or {
-            "User-Agent": "Mozilla/5.0 (compatible; Argos-Hunt/2.4; +https://amoskys.com)",
-        })
+        req = urllib.request.Request(
+            url,
+            headers=headers
+            or {
+                "User-Agent": "Mozilla/5.0 (compatible; Argos-Hunt/2.4; +https://amoskys.com)",
+            },
+        )
         with urllib.request.urlopen(req, timeout=timeout) as r:
             body = r.read(200_000).decode("utf-8", errors="replace")
             return r.status, dict(r.headers.items()), body
@@ -155,6 +175,7 @@ def _http_get(url: str, timeout: float = 8.0,
 
 # ── Landing page ──────────────────────────────────────────────────
 
+
 @hunt_bp.route("/")
 def hunt_page():
     return render_template("hunt.html")
@@ -162,18 +183,30 @@ def hunt_page():
 
 # ── Submit campaign ───────────────────────────────────────────────
 
+
 @hunt_bp.route("/submit", methods=["POST"])
 def hunt_submit():
     _purge_old()
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    ip = (
+        request.headers.get("X-Forwarded-For", request.remote_addr or "?")
+        .split(",")[0]
+        .strip()
+    )
 
     if _RATE_LIMIT_S > 0:
         with _SUBMIT_LOCK:
             last = _LAST_SUBMIT.get(ip, 0)
             if time.time() - last < _RATE_LIMIT_S:
                 wait = int(_RATE_LIMIT_S - (time.time() - last))
-                return jsonify({"ok": False,
-                                "error": f"rate limit: wait {wait}s before another hunt"}), 429
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": f"rate limit: wait {wait}s before another hunt",
+                        }
+                    ),
+                    429,
+                )
             _LAST_SUBMIT[ip] = time.time()
 
     data = request.get_json(silent=True) or {}
@@ -191,11 +224,16 @@ def hunt_submit():
     if mode != CampaignMode.REPORT:
         valid_token = consent_token.startswith(("bounty:", "sow:", "dev:"))
         if _REQUIRE_CONSENT and not valid_token:
-            return jsonify({
-                "ok": False,
-                "error": f"mode '{mode}' requires consent_token starting with "
-                          f"'bounty:<program>' or 'sow:<client>'",
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": f"mode '{mode}' requires consent_token starting with "
+                        f"'bounty:<program>' or 'sow:<client>'",
+                    }
+                ),
+                400,
+            )
         if not valid_token:
             # Dev-mode path: auto-inject a self-audit token so the
             # orchestrator's consent gate still writes a clear record.
@@ -212,21 +250,29 @@ def hunt_submit():
             q.put(evt.to_dict(), block=False)
         except queue.Full:
             pass
+
     bus.subscribe(_forward)
 
     meta = {
-        "target": url, "host": host, "mode": mode,
-        "started": time.time(), "ip": ip,
-        "queue": q, "bus": bus,
-        "report": None, "thread": None,
+        "target": url,
+        "host": host,
+        "mode": mode,
+        "started": time.time(),
+        "ip": ip,
+        "queue": q,
+        "bus": bus,
+        "report": None,
+        "thread": None,
     }
 
     def _runner():
         try:
             rep = Campaign(
-                target_url=url, mode=mode,
+                target_url=url,
+                mode=mode,
                 consent_token=consent_token or None,
-                bus=bus, http_get=_http_get,
+                bus=bus,
+                http_get=_http_get,
             ).run()
             meta["report"] = rep.to_dict()
         except Exception as exc:  # noqa: BLE001
@@ -241,14 +287,19 @@ def hunt_submit():
     _ACTIVE[campaign_id] = meta
     t.start()
 
-    return jsonify({
-        "ok": True, "campaign_id": campaign_id,
-        "target": url, "mode": mode,
-        "stream_url": f"/web/hunt/{campaign_id}/stream",
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "campaign_id": campaign_id,
+            "target": url,
+            "mode": mode,
+            "stream_url": f"/web/hunt/{campaign_id}/stream",
+        }
+    )
 
 
 # ── SSE event stream ──────────────────────────────────────────────
+
 
 @hunt_bp.route("/<campaign_id>/stream")
 def hunt_stream(campaign_id: str):
@@ -262,7 +313,7 @@ def hunt_stream(campaign_id: str):
         yield f"event: hello\ndata: {json.dumps({'campaign_id': campaign_id})}\n\n"
         # Pump events until sentinel
         t_start = time.time()
-        idle_timeout = 120           # seconds with no events → close stream
+        idle_timeout = 120  # seconds with no events → close stream
         last_evt = time.time()
         while True:
             try:
@@ -271,7 +322,7 @@ def hunt_stream(campaign_id: str):
                 # Keepalive comment
                 yield ": keepalive\n\n"
                 if time.time() - last_evt > idle_timeout:
-                    yield f"event: timeout\ndata: {{\"idle\": {idle_timeout}}}\n\n"
+                    yield f'event: timeout\ndata: {{"idle": {idle_timeout}}}\n\n'
                     break
                 continue
             last_evt = time.time()
@@ -286,7 +337,7 @@ def hunt_stream(campaign_id: str):
                 break
             yield f"event: argos_event\ndata: {json.dumps(evt, default=str)}\n\n"
             # Safety ceiling
-            if time.time() - t_start > 1200:   # 20 min hard cap
+            if time.time() - t_start > 1200:  # 20 min hard cap
                 yield "event: timeout\ndata: {}\n\n"
                 break
 
@@ -303,6 +354,7 @@ def hunt_stream(campaign_id: str):
 
 # ── Status / report endpoints ──────────────────────────────────────
 
+
 @hunt_bp.route("/<campaign_id>")
 def hunt_status(campaign_id: str):
     _purge_old()
@@ -310,17 +362,19 @@ def hunt_status(campaign_id: str):
     if meta is None:
         return jsonify({"ok": False, "error": "unknown campaign"}), 404
     running = meta.get("thread") and meta["thread"].is_alive()
-    return jsonify({
-        "ok": True,
-        "campaign_id": campaign_id,
-        "target": meta["target"],
-        "host":   meta["host"],
-        "mode":   meta["mode"],
-        "started": meta["started"],
-        "running": running,
-        "report":  meta.get("report"),
-        "error":   meta.get("error"),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "campaign_id": campaign_id,
+            "target": meta["target"],
+            "host": meta["host"],
+            "mode": meta["mode"],
+            "started": meta["started"],
+            "running": running,
+            "report": meta.get("report"),
+            "error": meta.get("error"),
+        }
+    )
 
 
 @hunt_bp.route("/<campaign_id>/report.html")
@@ -328,11 +382,17 @@ def hunt_report_html(campaign_id: str):
     _purge_old()
     meta = _ACTIVE.get(campaign_id)
     if meta is None or meta.get("report") is None:
-        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+        return (
+            jsonify({"ok": False, "error": "campaign not found or still running"}),
+            404,
+        )
     body = render_campaign_html(meta["report"])
     fname = f"argos-hunt-{meta['host']}-{campaign_id}.html"
-    return Response(body, mimetype="text/html; charset=utf-8",
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    return Response(
+        body,
+        mimetype="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @hunt_bp.route("/<campaign_id>/report.json")
@@ -340,7 +400,10 @@ def hunt_report_json(campaign_id: str):
     _purge_old()
     meta = _ACTIVE.get(campaign_id)
     if meta is None or meta.get("report") is None:
-        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+        return (
+            jsonify({"ok": False, "error": "campaign not found or still running"}),
+            404,
+        )
     fname = f"argos-hunt-{meta['host']}-{campaign_id}.json"
     return Response(
         json.dumps(meta["report"], indent=2, default=str),
@@ -355,13 +418,23 @@ def hunt_report_pdf(campaign_id: str):
     _purge_old()
     meta = _ACTIVE.get(campaign_id)
     if meta is None or meta.get("report") is None:
-        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+        return (
+            jsonify({"ok": False, "error": "campaign not found or still running"}),
+            404,
+        )
     if not _PDF_AVAILABLE or render_campaign_pdf is None:
-        return jsonify({
-            "ok": False,
-            "error": ("PDF rendering unavailable on this host (WeasyPrint "
-                      "not installed). Use /report.html and Save-as-PDF."),
-        }), 503
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": (
+                        "PDF rendering unavailable on this host (WeasyPrint "
+                        "not installed). Use /report.html and Save-as-PDF."
+                    ),
+                }
+            ),
+            503,
+        )
     try:
         pdf_bytes = render_campaign_pdf(meta["report"])
     except Exception as exc:  # noqa: BLE001

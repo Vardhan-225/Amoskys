@@ -31,14 +31,19 @@ from amoskys.agents.Web.argos.smuggle.http_smuggle import (
     SmuggleReport,
     SmuggleTechnique,
     build_cl_te_probe,
+    build_h2_downgrade_probe,
     build_te_cl_probe,
     build_te_te_probe,
-    build_h2_downgrade_probe,
     detect_smuggling,
 )
 
 __all__ = [
-    "SmuggleProbe", "SmuggleReport", "SmuggleTechnique",
-    "build_cl_te_probe", "build_te_cl_probe", "build_te_te_probe",
-    "build_h2_downgrade_probe", "detect_smuggling",
+    "SmuggleProbe",
+    "SmuggleReport",
+    "SmuggleTechnique",
+    "build_cl_te_probe",
+    "build_te_cl_probe",
+    "build_te_te_probe",
+    "build_h2_downgrade_probe",
+    "detect_smuggling",
 ]

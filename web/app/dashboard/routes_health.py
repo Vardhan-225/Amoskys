@@ -85,9 +85,7 @@ def health_summary():
             )
 
         agents_online = sum(1 for s in agents_status.values() if s == "running")
-        agents_total = len(
-            [a for a in agents_status.values() if a != "incompatible"]
-        )
+        agents_total = len([a for a in agents_status.values() if a != "incompatible"])
 
         # Cache for 10 seconds
         _agent_status_cache["data"] = {

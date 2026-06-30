@@ -686,21 +686,23 @@ class IgrisToolkit:
         )
         if not risk.get("score"):
             # Compute risk from security events directly
-            risk_row = self._query_one(
-                self._telemetry_db,
-                "SELECT AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk, "
-                "COUNT(*) as cnt FROM security_events WHERE timestamp_ns > ? "
-                "AND risk_score > 0",
-                (cutoff,),
-            ) or {}
+            risk_row = (
+                self._query_one(
+                    self._telemetry_db,
+                    "SELECT AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk, "
+                    "COUNT(*) as cnt FROM security_events WHERE timestamp_ns > ? "
+                    "AND risk_score > 0",
+                    (cutoff,),
+                )
+                or {}
+            )
             avg_r = risk_row.get("avg_risk", 0) or 0
             max_r = risk_row.get("max_risk", 0) or 0
             score = round((1.0 - (avg_r * 0.6 + max_r * 0.4)) * 100, 1)
             level = (
-                "CRITICAL" if score < 30 else
-                "HIGH" if score < 50 else
-                "ELEVATED" if score < 70 else
-                "LOW"
+                "CRITICAL"
+                if score < 30
+                else "HIGH" if score < 50 else "ELEVATED" if score < 70 else "LOW"
             )
             risk = {"score": score, "level": level}
 
@@ -882,13 +884,19 @@ class IgrisToolkit:
 
         # Mark agents based on event recency (matches 6h query window)
         for info in agent_map.values():
-            age_s = (now_ns - info["last_event_ns"]) / 1e9 if info["last_event_ns"] else 999999
+            age_s = (
+                (now_ns - info["last_event_ns"]) / 1e9
+                if info["last_event_ns"]
+                else 999999
+            )
             if age_s > 21600:  # >6h = offline
                 info["health"] = "offline"
             elif age_s > 7200:  # >2h = degraded
                 info["health"] = "degraded"
 
-        agents = sorted(agent_map.values(), key=lambda a: a["event_count"], reverse=True)
+        agents = sorted(
+            agent_map.values(), key=lambda a: a["event_count"], reverse=True
+        )
         online = sum(1 for a in agents if a["health"] == "online")
 
         if agents:

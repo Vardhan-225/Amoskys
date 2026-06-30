@@ -913,9 +913,7 @@ class SchemaMixin:
             self._ensure_column("security_events", "agent_version", "TEXT")
 
             # Tier column: attack vs observation
-            self._ensure_column(
-                "security_events", "tier", "TEXT DEFAULT 'observation'"
-            )
+            self._ensure_column("security_events", "tier", "TEXT DEFAULT 'observation'")
             # Index for tier filtering
             try:
                 self.db.execute(

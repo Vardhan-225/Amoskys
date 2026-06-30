@@ -21,18 +21,19 @@ from amoskys.agents.Web.argos.adapt.fingerprint import (
     ArchitectureProfile,
     fingerprint_architecture,
 )
+from amoskys.agents.Web.argos.adapt.origin import OriginCandidate, discover_origin
 from amoskys.agents.Web.argos.adapt.strategy import (
     AdaptedStrategy,
     TacticSpec,
     pick_strategy,
 )
-from amoskys.agents.Web.argos.adapt.origin import (
-    OriginCandidate,
-    discover_origin,
-)
 
 __all__ = [
-    "ArchitectureProfile", "fingerprint_architecture",
-    "AdaptedStrategy", "TacticSpec", "pick_strategy",
-    "OriginCandidate", "discover_origin",
+    "ArchitectureProfile",
+    "fingerprint_architecture",
+    "AdaptedStrategy",
+    "TacticSpec",
+    "pick_strategy",
+    "OriginCandidate",
+    "discover_origin",
 ]

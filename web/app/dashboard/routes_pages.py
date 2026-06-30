@@ -41,8 +41,9 @@ def setup_page():
 def setup_complete():
     """Mark setup as completed for the current user."""
     from flask import jsonify
-    from amoskys.db.web_db import get_web_session_context
+
     from amoskys.auth.models import User
+    from amoskys.db.web_db import get_web_session_context
 
     user = get_current_user()
     if not user:
@@ -293,7 +294,9 @@ def dns_redirect():
 def dns_intelligence(device_id):
     """DNS Intelligence — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/dns-intelligence.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/dns-intelligence.html", user=user, device_id=device_id
+    )
 
 
 @dashboard_bp.route("/file-integrity")
@@ -308,7 +311,9 @@ def file_integrity_redirect():
 def file_integrity(device_id):
     """File Integrity Monitor — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/file-integrity.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/file-integrity.html", user=user, device_id=device_id
+    )
 
 
 @dashboard_bp.route("/persistence")
@@ -323,7 +328,9 @@ def persistence_redirect():
 def persistence_landscape(device_id):
     """Persistence Landscape — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/persistence-landscape.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/persistence-landscape.html", user=user, device_id=device_id
+    )
 
 
 @dashboard_bp.route("/auth")
@@ -338,7 +345,9 @@ def auth_redirect():
 def auth_observatory(device_id):
     """Auth & Access — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/auth-observatory.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/auth-observatory.html", user=user, device_id=device_id
+    )
 
 
 @dashboard_bp.route("/timeline-replay")
@@ -353,7 +362,9 @@ def timeline_redirect():
 def timeline_replay(device_id):
     """Threat Timeline Replay — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/timeline-replay.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/timeline-replay.html", user=user, device_id=device_id
+    )
 
 
 @dashboard_bp.route("/observations")
@@ -368,7 +379,9 @@ def observations_redirect():
 def observation_domains(device_id):
     """Observation Domains — scoped to a single device."""
     user = get_current_user()
-    return render_template("dashboard/observations.html", user=user, device_id=device_id)
+    return render_template(
+        "dashboard/observations.html", user=user, device_id=device_id
+    )
 
 
 # ── Consolidated Views (v3 Architecture) ──

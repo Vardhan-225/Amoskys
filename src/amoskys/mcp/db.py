@@ -84,6 +84,7 @@ def execute(sql: str, params: tuple = (), db_path: str | None = None) -> int:
 
 # ── Cutoff helpers ─────────────────────────────────────────────────
 
+
 def hours_ago_ns(hours: int) -> int:
     """Nanosecond timestamp for N hours ago."""
     return int((time.time() - hours * 3600) * 1e9)

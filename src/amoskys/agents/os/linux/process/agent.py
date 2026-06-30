@@ -35,7 +35,15 @@ class LinuxProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
     Only the collector needs Linux-specific implementation.
     """
 
-    MANDATE_DATA_FIELDS = ("pid", "process_name", "exe", "cmdline", "ppid", "parent_name", "username")
+    MANDATE_DATA_FIELDS = (
+        "pid",
+        "process_name",
+        "exe",
+        "cmdline",
+        "ppid",
+        "parent_name",
+        "username",
+    )
 
     def __init__(self, collection_interval: float = 10.0) -> None:
         device_id = socket.gethostname()

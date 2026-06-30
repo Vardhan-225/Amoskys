@@ -37,10 +37,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from amoskys.agents.Web.argos.legitimacy import (
-    LegitimacyProfile,
-    UserAgentPool,
-)
+from amoskys.agents.Web.argos.legitimacy import LegitimacyProfile, UserAgentPool
 
 logger = logging.getLogger("amoskys.argos.prospecting.wp_indicator")
 
@@ -62,28 +59,28 @@ _BUG_BOUNTY_TELLS = [
 
 @dataclass
 class WPIndicatorResult:
-    host:                 str
-    is_wordpress:         bool = False
-    wp_confidence:        int = 0          # 0-100
-    wp_version_hint:      Optional[str] = None
+    host: str
+    is_wordpress: bool = False
+    wp_confidence: int = 0  # 0-100
+    wp_version_hint: Optional[str] = None
     plugin_slugs_in_html: List[str] = field(default_factory=list)
     # Contact
-    has_security_txt:     bool = False
-    contact_hints:        List[str] = field(default_factory=list)
+    has_security_txt: bool = False
+    contact_hints: List[str] = field(default_factory=list)
     # Bounty
-    on_bug_bounty:        bool = False
-    bounty_evidence:      Optional[str] = None
+    on_bug_bounty: bool = False
+    bounty_evidence: Optional[str] = None
     # Infra signals
-    server_header:        Optional[str] = None
-    uses_cdn:             bool = False
-    cdn_name:             Optional[str] = None
+    server_header: Optional[str] = None
+    uses_cdn: bool = False
+    cdn_name: Optional[str] = None
     # Exposure signals (visible on homepage alone)
     wp_generator_exposed: bool = False
     plugin_inventory_leaks: int = 0
     # Meta
-    http_requests_used:   int = 0
-    errors:               List[str] = field(default_factory=list)
-    checked_at:           float = 0.0
+    http_requests_used: int = 0
+    errors: List[str] = field(default_factory=list)
+    checked_at: float = 0.0
 
 
 def _decompress(body_bytes: bytes, encoding: Optional[str]) -> str:
@@ -101,9 +98,11 @@ def _decompress(body_bytes: bytes, encoding: Optional[str]) -> str:
     try:
         if enc == "gzip":
             import gzip
+
             body_bytes = gzip.decompress(body_bytes)
         elif enc == "deflate":
             import zlib
+
             try:
                 body_bytes = zlib.decompress(body_bytes)
             except zlib.error:
@@ -111,6 +110,7 @@ def _decompress(body_bytes: bytes, encoding: Optional[str]) -> str:
         elif enc == "br":
             try:
                 import brotli  # type: ignore
+
                 body_bytes = brotli.decompress(body_bytes)
             except ImportError:
                 # Brotli not installed — return as-is; caller may still
@@ -124,10 +124,13 @@ def _decompress(body_bytes: bytes, encoding: Optional[str]) -> str:
     return body_bytes.decode("utf-8", errors="replace")
 
 
-def _get(url: str, headers: Dict[str, str],
-         timeout: float = _DEFAULT_TIMEOUT,
-         max_bytes: int = 512 * 1024,
-         http_fetch=None):
+def _get(
+    url: str,
+    headers: Dict[str, str],
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_bytes: int = 512 * 1024,
+    http_fetch=None,
+):
     """Single HTTP GET. Returns (status, headers_lower, body_text, final_url).
 
     `http_fetch` override for tests: fn(url, headers) -> (status, headers_dict, body).
@@ -148,8 +151,9 @@ def _get(url: str, headers: Dict[str, str],
         err_headers = {k.lower(): v for k, v in (e.headers or {}).items()}
         if e.fp:
             try:
-                body = _decompress(e.fp.read(max_bytes),
-                                   err_headers.get("content-encoding"))
+                body = _decompress(
+                    e.fp.read(max_bytes), err_headers.get("content-encoding")
+                )
             except Exception:
                 pass
         return e.code, err_headers, body, url
@@ -163,9 +167,15 @@ def _detect_cdn(headers: Dict[str, str]) -> Optional[str]:
         return "Cloudflare"
     if "x-amz-cf-id" in headers or "x-amz-cf-pop" in headers:
         return "CloudFront"
-    if "x-fastly-request-id" in headers or "fastly" in (headers.get("via") or "").lower():
+    if (
+        "x-fastly-request-id" in headers
+        or "fastly" in (headers.get("via") or "").lower()
+    ):
         return "Fastly"
-    if "x-akamai-transformed" in headers or "akamai" in (headers.get("server") or "").lower():
+    if (
+        "x-akamai-transformed" in headers
+        or "akamai" in (headers.get("server") or "").lower()
+    ):
         return "Akamai"
     if "x-cache" in headers and "varnish" in (headers.get("x-cache") or "").lower():
         return "Varnish"
@@ -175,17 +185,18 @@ def _detect_cdn(headers: Dict[str, str]) -> Optional[str]:
 def _extract_wp_signals(html_body: str) -> Dict:
     """Parse homepage HTML for WordPress fingerprints and contact hints."""
     out = {
-        "meta_generator":   None,
-        "rest_api_link":    False,
-        "plugin_slugs":     [],
-        "is_wordpress":     False,
-        "contact_mailto":   [],
+        "meta_generator": None,
+        "rest_api_link": False,
+        "plugin_slugs": [],
+        "is_wordpress": False,
+        "contact_mailto": [],
         "contact_form_ref": False,
     }
     # WP meta generator — exactly the value, when present.
     m = re.search(
         r"""<meta\s+name=['"]generator['"]\s+content=['"]([^'"]+)['"]""",
-        html_body, re.IGNORECASE,
+        html_body,
+        re.IGNORECASE,
     )
     if m:
         out["meta_generator"] = m.group(1)
@@ -193,7 +204,9 @@ def _extract_wp_signals(html_body: str) -> Dict:
             out["is_wordpress"] = True
     # REST API link hint.
     if re.search(
-        r"""<link\s+rel=['"]https://api\.w\.org/['"]""", html_body, re.IGNORECASE,
+        r"""<link\s+rel=['"]https://api\.w\.org/['"]""",
+        html_body,
+        re.IGNORECASE,
     ):
         out["rest_api_link"] = True
         out["is_wordpress"] = True
@@ -203,7 +216,8 @@ def _extract_wp_signals(html_body: str) -> Dict:
     # Extract plugin slugs from asset URLs.
     plugin_refs = re.findall(
         r"""/wp-content/plugins/([a-z0-9][-a-z0-9._]*)/[^'"]+\?ver=([0-9][0-9a-z.+-]*)""",
-        html_body, re.IGNORECASE,
+        html_body,
+        re.IGNORECASE,
     )
     seen = {}
     for slug, ver in plugin_refs:
@@ -212,7 +226,11 @@ def _extract_wp_signals(html_body: str) -> Dict:
     # Contact hints — mailto: + /contact paths referenced.
     mailtos = re.findall(r"""mailto:([^"'?\s]+)""", html_body)
     out["contact_mailto"] = sorted(set(mailtos))[:10]
-    if re.search(r"""href=['"][^'"]*/(contact|contact-us|get-in-touch)""", html_body, re.IGNORECASE):
+    if re.search(
+        r"""href=['"][^'"]*/(contact|contact-us|get-in-touch)""",
+        html_body,
+        re.IGNORECASE,
+    ):
         out["contact_form_ref"] = True
     return out
 
@@ -238,10 +256,12 @@ def _parse_security_txt_snippet(text: str) -> Dict:
     return out
 
 
-def check_wp_indicator(domain: str,
-                       legitimacy: Optional[LegitimacyProfile] = None,
-                       scheme: str = "https",
-                       http_fetch=None) -> WPIndicatorResult:
+def check_wp_indicator(
+    domain: str,
+    legitimacy: Optional[LegitimacyProfile] = None,
+    scheme: str = "https",
+    http_fetch=None,
+) -> WPIndicatorResult:
     """One lightweight qualification check. At most 2 HTTP GETs.
 
     Returns a WPIndicatorResult that downstream scoring uses.
@@ -274,9 +294,12 @@ def check_wp_indicator(domain: str,
     # Scored confidence: 40 for REST link, 30 for generator meta, 30 for asset
     # path. Capped at 100.
     conf = 0
-    if signals["rest_api_link"]:    conf += 40
-    if signals["meta_generator"]:   conf += 30
-    if "/wp-content/" in body:      conf += 30
+    if signals["rest_api_link"]:
+        conf += 40
+    if signals["meta_generator"]:
+        conf += 30
+    if "/wp-content/" in body:
+        conf += 30
     result.wp_confidence = min(100, conf)
     if signals["meta_generator"]:
         mg = signals["meta_generator"]
@@ -302,7 +325,9 @@ def check_wp_indicator(domain: str,
 
     # 2. security.txt GET.
     status, headers, body, _ = _get(
-        base + "/.well-known/security.txt", hdr, http_fetch=http_fetch,
+        base + "/.well-known/security.txt",
+        hdr,
+        http_fetch=http_fetch,
     )
     result.http_requests_used += 1
     if status == 200 and body and ("contact:" in body.lower() or "Contact:" in body):

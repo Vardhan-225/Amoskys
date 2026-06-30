@@ -74,23 +74,27 @@ class ArchitectureProfile:
     waf_names: List[str] = field(default_factory=list)
     waf_confidence: int = 0
     # Origin web server
-    origin_server: Optional[str] = None   # "nginx" / "apache" / "iis" / "caddy" / "litespeed"
+    origin_server: Optional[str] = (
+        None  # "nginx" / "apache" / "iis" / "caddy" / "litespeed"
+    )
     origin_version: Optional[str] = None
     origin_confidence: int = 0
     # Runtime
-    runtime: Optional[str] = None         # "php-fpm" / "mod_php" / "php-cgi"
+    runtime: Optional[str] = None  # "php-fpm" / "mod_php" / "php-cgi"
     runtime_version: Optional[str] = None
     runtime_confidence: int = 0
     # Database (inferred from error messages)
-    database: Optional[str] = None        # "mysql" / "mariadb" / "postgres" / "sqlite"
+    database: Optional[str] = None  # "mysql" / "mariadb" / "postgres" / "sqlite"
     database_confidence: int = 0
     # Cache
-    cache_layers: List[str] = field(default_factory=list)   # ["varnish","cloudflare-cache"]
+    cache_layers: List[str] = field(
+        default_factory=list
+    )  # ["varnish","cloudflare-cache"]
     # OS
-    os_family: Optional[str] = None       # "linux" / "windows"
+    os_family: Optional[str] = None  # "linux" / "windows"
     os_confidence: int = 0
     # Framework
-    framework: Optional[str] = None       # "wordpress" / "drupal" / "joomla" / None
+    framework: Optional[str] = None  # "wordpress" / "drupal" / "joomla" / None
     framework_version: Optional[str] = None
     framework_confidence: int = 0
     # Security posture signals
@@ -107,27 +111,36 @@ class ArchitectureProfile:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "target_url":         self.target_url,
-            "target_host":        self.target_host,
-            "cdn":                {"name": self.cdn_name, "confidence": self.cdn_confidence},
-            "waf":                {"names": self.waf_names, "confidence": self.waf_confidence},
-            "origin":             {"server": self.origin_server, "version": self.origin_version,
-                                    "confidence": self.origin_confidence},
-            "runtime":            {"name": self.runtime, "version": self.runtime_version,
-                                    "confidence": self.runtime_confidence},
-            "database":           {"name": self.database, "confidence": self.database_confidence},
-            "cache_layers":       self.cache_layers,
-            "os":                 {"family": self.os_family, "confidence": self.os_confidence},
-            "framework":          {"name": self.framework, "version": self.framework_version,
-                                    "confidence": self.framework_confidence},
-            "debug_mode":         self.debug_mode,
-            "xdebug_present":     self.xdebug_present,
-            "php_expose":         self.php_expose,
-            "verbose_errors":     self.verbose_errors,
+            "target_url": self.target_url,
+            "target_host": self.target_host,
+            "cdn": {"name": self.cdn_name, "confidence": self.cdn_confidence},
+            "waf": {"names": self.waf_names, "confidence": self.waf_confidence},
+            "origin": {
+                "server": self.origin_server,
+                "version": self.origin_version,
+                "confidence": self.origin_confidence,
+            },
+            "runtime": {
+                "name": self.runtime,
+                "version": self.runtime_version,
+                "confidence": self.runtime_confidence,
+            },
+            "database": {"name": self.database, "confidence": self.database_confidence},
+            "cache_layers": self.cache_layers,
+            "os": {"family": self.os_family, "confidence": self.os_confidence},
+            "framework": {
+                "name": self.framework,
+                "version": self.framework_version,
+                "confidence": self.framework_confidence,
+            },
+            "debug_mode": self.debug_mode,
+            "xdebug_present": self.xdebug_present,
+            "php_expose": self.php_expose,
+            "verbose_errors": self.verbose_errors,
             "http_requests_used": self.http_requests_used,
             "fingerprint_time_ms": self.fingerprint_time_ms,
-            "evidence":           self.evidence,
-            "errors":             self.errors,
+            "evidence": self.evidence,
+            "errors": self.errors,
         }
 
 
@@ -136,17 +149,20 @@ class ArchitectureProfile:
 
 @dataclass
 class _Response:
-    status:   int = 0
-    headers:  Dict[str, str] = field(default_factory=dict)
-    body:     str = ""
-    url:      str = ""
+    status: int = 0
+    headers: Dict[str, str] = field(default_factory=dict)
+    body: str = ""
+    url: str = ""
     latency_ms: int = 0
-    error:    Optional[str] = None
+    error: Optional[str] = None
 
 
-def _get(url: str, timeout: float = 10.0,
-         headers: Optional[Dict[str, str]] = None,
-         http_get=None) -> _Response:
+def _get(
+    url: str,
+    timeout: float = 10.0,
+    headers: Optional[Dict[str, str]] = None,
+    http_get=None,
+) -> _Response:
     """Low-level HTTP GET. http_get injectable for tests.
 
     `http_get(url, timeout, headers) -> (status, headers_dict, body)`
@@ -154,12 +170,18 @@ def _get(url: str, timeout: float = 10.0,
     if http_get is not None:
         t0 = time.time()
         s, h, b = http_get(url, timeout, headers or {})
-        return _Response(status=s, headers={k.lower(): v for k, v in (h or {}).items()},
-                         body=b or "", url=url,
-                         latency_ms=int((time.time() - t0) * 1000))
+        return _Response(
+            status=s,
+            headers={k.lower(): v for k, v in (h or {}).items()},
+            body=b or "",
+            url=url,
+            latency_ms=int((time.time() - t0) * 1000),
+        )
     h = dict(headers or {})
-    h.setdefault("User-Agent",
-                 "Mozilla/5.0 (Macintosh) AppleWebKit/605.1 Version/17.0 Safari/605.1")
+    h.setdefault(
+        "User-Agent",
+        "Mozilla/5.0 (Macintosh) AppleWebKit/605.1 Version/17.0 Safari/605.1",
+    )
     req = urllib.request.Request(url, headers=h)
     t0 = time.time()
     try:
@@ -169,7 +191,8 @@ def _get(url: str, timeout: float = 10.0,
             return _Response(
                 status=resp.status,
                 headers={k.lower(): v for k, v in resp.headers.items()},
-                body=body, url=resp.url,
+                body=body,
+                url=resp.url,
                 latency_ms=int((time.time() - t0) * 1000),
             )
     except urllib.error.HTTPError as e:
@@ -181,12 +204,14 @@ def _get(url: str, timeout: float = 10.0,
         return _Response(
             status=e.code,
             headers={k.lower(): v for k, v in (e.headers or {}).items()},
-            body=body, url=url,
+            body=body,
+            url=url,
             latency_ms=int((time.time() - t0) * 1000),
         )
     except Exception as e:  # noqa: BLE001
-        return _Response(url=url, error=str(e),
-                         latency_ms=int((time.time() - t0) * 1000))
+        return _Response(
+            url=url, error=str(e), latency_ms=int((time.time() - t0) * 1000)
+        )
 
 
 # ── Layer detectors ──────────────────────────────────────────────
@@ -214,7 +239,9 @@ def _detect_cdn(r: _Response) -> Tuple[Optional[str], int, List[str]]:
     return (None, 0, evidence)
 
 
-def _detect_waf(r: _Response, blocked: Optional[_Response]) -> Tuple[List[str], int, List[str]]:
+def _detect_waf(
+    r: _Response, blocked: Optional[_Response]
+) -> Tuple[List[str], int, List[str]]:
     """Walks header + body of baseline and (optionally) a blocked
     response looking for WAF fingerprints."""
     names: List[str] = []
@@ -226,39 +253,50 @@ def _detect_waf(r: _Response, blocked: Optional[_Response]) -> Tuple[List[str], 
         h = res.headers
         body = (res.body or "").lower()
         # Wordfence
-        if "wfwaf-authcookie" in (h.get("set-cookie") or "").lower() or "wordfence" in body:
+        if (
+            "wfwaf-authcookie" in (h.get("set-cookie") or "").lower()
+            or "wordfence" in body
+        ):
             if "Wordfence" not in names:
-                names.append("Wordfence"); conf = max(conf, 85)
+                names.append("Wordfence")
+                conf = max(conf, 85)
                 evidence.append("Wordfence: cookie/body")
         # Sucuri
         if "x-sucuri-block" in h or "sucuri website firewall" in body:
             if "Sucuri" not in names:
-                names.append("Sucuri"); conf = max(conf, 80)
+                names.append("Sucuri")
+                conf = max(conf, 80)
                 evidence.append("Sucuri: header/body")
         # ModSecurity
         if "mod_security" in (h.get("server") or "").lower() or "mod_security" in body:
             if "ModSecurity" not in names:
-                names.append("ModSecurity"); conf = max(conf, 75)
+                names.append("ModSecurity")
+                conf = max(conf, 75)
                 evidence.append("ModSecurity: server/body")
         # Cloudflare WAF challenge page signatures
         if "attention required! | cloudflare" in body or "ray id:" in body:
             if "Cloudflare" not in names:
-                names.append("Cloudflare"); conf = max(conf, 80)
+                names.append("Cloudflare")
+                conf = max(conf, 80)
                 evidence.append("Cloudflare WAF: body challenge")
         # Imperva/Incapsula
         if "x-iinfo" in h or "incapsula" in body:
             if "Imperva/Incapsula" not in names:
-                names.append("Imperva/Incapsula"); conf = max(conf, 80)
+                names.append("Imperva/Incapsula")
+                conf = max(conf, 80)
                 evidence.append("Imperva: x-iinfo/body")
         # AWS WAF
         if res.status == 403 and "aws" in body and "request blocked" in body:
             if "AWS WAF" not in names:
-                names.append("AWS WAF"); conf = max(conf, 70)
+                names.append("AWS WAF")
+                conf = max(conf, 70)
                 evidence.append("AWS WAF: 403 + body")
     return (names, conf, evidence)
 
 
-def _detect_origin_server(r: _Response) -> Tuple[Optional[str], Optional[str], int, List[str]]:
+def _detect_origin_server(
+    r: _Response,
+) -> Tuple[Optional[str], Optional[str], int, List[str]]:
     server = r.headers.get("server") or ""
     evidence: List[str] = []
     if not server:
@@ -267,18 +305,25 @@ def _detect_origin_server(r: _Response) -> Tuple[Optional[str], Optional[str], i
     s = server.lower()
     version_match = re.search(r"([a-z-]+)[/\s]([0-9][0-9a-z.+-]*)", s)
     version = version_match.group(2) if version_match else None
-    if "nginx" in s:          return ("nginx", version, 90, evidence)
-    if "apache" in s:         return ("apache", version, 90, evidence)
-    if "litespeed" in s or "lsws" in s: return ("litespeed", version, 85, evidence)
-    if "microsoft-iis" in s or "iis" in s: return ("iis", version, 85, evidence)
-    if "caddy" in s:          return ("caddy", version, 85, evidence)
+    if "nginx" in s:
+        return ("nginx", version, 90, evidence)
+    if "apache" in s:
+        return ("apache", version, 90, evidence)
+    if "litespeed" in s or "lsws" in s:
+        return ("litespeed", version, 85, evidence)
+    if "microsoft-iis" in s or "iis" in s:
+        return ("iis", version, 85, evidence)
+    if "caddy" in s:
+        return ("caddy", version, 85, evidence)
     if "cloudflare" in s or "cloudfront" in s or "akamai" in s:
         # CDN intermediaries — origin hidden. Record as "cdn-proxied".
         return ("cdn-proxied", None, 50, evidence)
     return (server.split("/")[0].strip(), version, 60, evidence)
 
 
-def _detect_runtime(r: _Response) -> Tuple[Optional[str], Optional[str], int, List[str]]:
+def _detect_runtime(
+    r: _Response,
+) -> Tuple[Optional[str], Optional[str], int, List[str]]:
     """Detect PHP via X-Powered-By, Set-Cookie names, response behavior."""
     h = r.headers
     evidence: List[str] = []
@@ -302,14 +347,16 @@ def _detect_runtime(r: _Response) -> Tuple[Optional[str], Optional[str], int, Li
     return (None, None, 0, evidence)
 
 
-def _detect_framework(r: _Response, login_r: Optional[_Response]
-                      ) -> Tuple[Optional[str], Optional[str], int, List[str]]:
+def _detect_framework(
+    r: _Response, login_r: Optional[_Response]
+) -> Tuple[Optional[str], Optional[str], int, List[str]]:
     body = r.body or ""
     evidence: List[str] = []
     # WordPress via meta-generator.
     m = re.search(
         r"""<meta\s+name=['"]generator['"]\s+content=['"]([^'"]+)['"]""",
-        body, re.IGNORECASE,
+        body,
+        re.IGNORECASE,
     )
     if m:
         gen = m.group(1)
@@ -333,7 +380,11 @@ def _detect_framework(r: _Response, login_r: Optional[_Response]
     if "/wp-content/" in body or "/wp-includes/" in body or "wp-json" in body:
         evidence.append("body: wp-content / wp-includes / wp-json")
         return ("wordpress", None, 85, evidence)
-    if login_r and login_r.status == 200 and "wordpress" in (login_r.body or "").lower():
+    if (
+        login_r
+        and login_r.status == 200
+        and "wordpress" in (login_r.body or "").lower()
+    ):
         evidence.append("wp-login.php present")
         return ("wordpress", None, 85, evidence)
     if "sites/default/files" in body or "drupal.js" in body:
@@ -343,13 +394,14 @@ def _detect_framework(r: _Response, login_r: Optional[_Response]
     return (None, None, 0, evidence)
 
 
-def _detect_os(origin_server: Optional[str], r_root: _Response,
-               r_case_upper: Optional[_Response]) -> Tuple[Optional[str], int, List[str]]:
+def _detect_os(
+    origin_server: Optional[str], r_root: _Response, r_case_upper: Optional[_Response]
+) -> Tuple[Optional[str], int, List[str]]:
     """Linux vs Windows via:
-       - IIS in server header = Windows (high confidence)
-       - Case-sensitivity test: /WP-login.php should 404 on Linux
-         but serve WP login page on Windows
-       - X-Powered-By 'ASP.NET' = Windows
+    - IIS in server header = Windows (high confidence)
+    - Case-sensitivity test: /WP-login.php should 404 on Linux
+      but serve WP login page on Windows
+    - X-Powered-By 'ASP.NET' = Windows
     """
     evidence: List[str] = []
     if origin_server == "iis":
@@ -375,18 +427,23 @@ def _detect_cache(r: _Response) -> Tuple[List[str], List[str]]:
     evidence: List[str] = []
     h = r.headers
     if "x-varnish" in h or "varnish" in (h.get("via") or "").lower():
-        layers.append("varnish"); evidence.append("x-varnish/via")
+        layers.append("varnish")
+        evidence.append("x-varnish/via")
     if "cf-cache-status" in h:
-        layers.append("cloudflare-cache"); evidence.append("cf-cache-status")
+        layers.append("cloudflare-cache")
+        evidence.append("cf-cache-status")
     if "x-cache" in h:
         layers.append(f"x-cache: {h['x-cache'][:40]}")
         evidence.append(f"x-cache: {h['x-cache'][:40]}")
     if "x-amz-cf-id" in h:
-        layers.append("cloudfront-cache"); evidence.append("x-amz-cf-id")
+        layers.append("cloudfront-cache")
+        evidence.append("x-amz-cf-id")
     return (layers, evidence)
 
 
-def _detect_database(r_error: Optional[_Response]) -> Tuple[Optional[str], int, List[str]]:
+def _detect_database(
+    r_error: Optional[_Response],
+) -> Tuple[Optional[str], int, List[str]]:
     """Try to catch a DB error message from a malformed query.
 
     We don't fire SQLi here — we check the baseline/404 body for
@@ -398,13 +455,17 @@ def _detect_database(r_error: Optional[_Response]) -> Tuple[Optional[str], int, 
     body = (r_error.body or "").lower()
     ev: List[str] = []
     if "you have an error in your sql syntax" in body or "mysql_fetch" in body:
-        ev.append("MySQL error string"); return ("mysql", 85, ev)
+        ev.append("MySQL error string")
+        return ("mysql", 85, ev)
     if "syntax error at or near" in body or "postgresql" in body:
-        ev.append("Postgres error string"); return ("postgres", 85, ev)
+        ev.append("Postgres error string")
+        return ("postgres", 85, ev)
     if "sqlite error" in body or "sqlite_query" in body:
-        ev.append("SQLite error string"); return ("sqlite", 80, ev)
+        ev.append("SQLite error string")
+        return ("sqlite", 80, ev)
     if "microsoft ole db provider" in body or "sql server" in body:
-        ev.append("MSSQL error string"); return ("mssql", 80, ev)
+        ev.append("MSSQL error string")
+        return ("mssql", 80, ev)
     return (None, 0, [])
 
 

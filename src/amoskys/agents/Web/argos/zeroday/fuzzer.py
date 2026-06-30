@@ -62,7 +62,7 @@ def response_bucket(status: int, body: bytes, headers: Dict[str, str]) -> str:
       - same set of response headers (sorted keys)
       - same first-64-byte content hash (catches templated 404 pages)
     """
-    length_bucket = len(body) // max(1, len(body) // 20 or 1)   # ~5% bucketing
+    length_bucket = len(body) // max(1, len(body) // 20 or 1)  # ~5% bucketing
     header_keys = ",".join(sorted(h.lower() for h in headers or {}))
     prefix_hash = hashlib.sha256((body or b"")[:64]).hexdigest()[:10]
     return f"{status}|{length_bucket}|{prefix_hash}|{header_keys}"
@@ -70,35 +70,33 @@ def response_bucket(status: int, body: bytes, headers: Dict[str, str]) -> str:
 
 @dataclass
 class ResponseObservation:
-    input_repr:  str
-    bucket:      str
-    status:      int
-    body_len:    int
-    latency_ms:  int
+    input_repr: str
+    bucket: str
+    status: int
+    body_len: int
+    latency_ms: int
     header_count: int
 
 
 @dataclass
 class FuzzReport:
-    target:         str
-    inputs_fired:   int = 0
+    target: str
+    inputs_fired: int = 0
     unique_buckets: int = 0
-    buckets:        Dict[str, List[ResponseObservation]] = field(default_factory=dict)
+    buckets: Dict[str, List[ResponseObservation]] = field(default_factory=dict)
     baseline_bucket: str = ""
-    interesting:    List[ResponseObservation] = field(default_factory=list)
-    errors:         List[str] = field(default_factory=list)
+    interesting: List[ResponseObservation] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return {
-            "target":         self.target,
-            "inputs_fired":   self.inputs_fired,
+            "target": self.target,
+            "inputs_fired": self.inputs_fired,
             "unique_buckets": self.unique_buckets,
             "baseline_bucket": self.baseline_bucket,
-            "interesting":    [vars(o) for o in self.interesting[:30]],
-            "bucket_leaders": [
-                vars(obs[0]) for obs in self.buckets.values() if obs
-            ],
-            "errors":         self.errors,
+            "interesting": [vars(o) for o in self.interesting[:30]],
+            "bucket_leaders": [vars(obs[0]) for obs in self.buckets.values() if obs],
+            "errors": self.errors,
         }
 
 
@@ -112,11 +110,12 @@ class GrammarFuzzer:
     fire(params: dict, body: Optional[str]) -> (status, body_bytes,
                                                  headers_dict, latency_ms)
     """
-    target_url:        str
-    fire:              Callable[[dict, Optional[str]], Tuple[int, bytes, Dict[str, str], int]]
-    max_rounds:        int = 100
-    seed_params:       Dict[str, str] = field(default_factory=dict)
-    param_candidates:  List[str] = field(default_factory=list)
+
+    target_url: str
+    fire: Callable[[dict, Optional[str]], Tuple[int, bytes, Dict[str, str], int]]
+    max_rounds: int = 100
+    seed_params: Dict[str, str] = field(default_factory=dict)
+    param_candidates: List[str] = field(default_factory=list)
     enable_method_flip: bool = True
 
     def run(self, mutations: Iterable[str]) -> FuzzReport:
@@ -138,11 +137,16 @@ class GrammarFuzzer:
             return rep
         baseline = response_bucket(status, body, hdrs)
         rep.baseline_bucket = baseline
-        rep.buckets[baseline] = [ResponseObservation(
-            input_repr="<baseline>", bucket=baseline,
-            status=status, body_len=len(body), latency_ms=lat,
-            header_count=len(hdrs),
-        )]
+        rep.buckets[baseline] = [
+            ResponseObservation(
+                input_repr="<baseline>",
+                bucket=baseline,
+                status=status,
+                body_len=len(body),
+                latency_ms=lat,
+                header_count=len(hdrs),
+            )
+        ]
         rep.inputs_fired += 1
 
         # 2. Mutation stream.
@@ -174,15 +178,23 @@ class GrammarFuzzer:
         rep.unique_buckets = len(rep.buckets)
         return rep
 
-    def _record(self, rep: FuzzReport,
-                params: dict, status: int, body: bytes,
-                headers: Dict[str, str], latency_ms: int,
-                baseline: str) -> None:
+    def _record(
+        self,
+        rep: FuzzReport,
+        params: dict,
+        status: int,
+        body: bytes,
+        headers: Dict[str, str],
+        latency_ms: int,
+        baseline: str,
+    ) -> None:
         bucket = response_bucket(status, body, headers)
         obs = ResponseObservation(
             input_repr=urllib.parse.urlencode(params)[:200],
             bucket=bucket,
-            status=status, body_len=len(body), latency_ms=latency_ms,
+            status=status,
+            body_len=len(body),
+            latency_ms=latency_ms,
             header_count=len(headers),
         )
         rep.buckets.setdefault(bucket, []).append(obs)
@@ -196,10 +208,11 @@ class GrammarFuzzer:
 # ── Hidden-parameter discovery ────────────────────────────────────
 
 
-def discover_hidden_params(fuzzer: GrammarFuzzer,
-                           wordlist: List[str],
-                           marker_value: str = "AMSW_PROBE_MARKER_XYZ"
-                          ) -> List[str]:
+def discover_hidden_params(
+    fuzzer: GrammarFuzzer,
+    wordlist: List[str],
+    marker_value: str = "AMSW_PROBE_MARKER_XYZ",
+) -> List[str]:
     """Fire one request per wordlist entry with a marker value.
     Any param whose name the target reflects in the response OR whose
     presence changes the response bucket is a "hidden param" worth
@@ -231,19 +244,69 @@ def discover_hidden_params(fuzzer: GrammarFuzzer,
 
 HIDDEN_PARAM_WORDLIST = [
     # WP-specific.
-    "p", "page_id", "post_id", "author", "cat", "tag", "s",
-    "preview", "preview_id", "preview_nonce",
-    "user_id", "user", "uid",
-    "action", "do", "op", "operation", "cmd", "command",
-    "nonce", "_nonce", "_wpnonce", "token",
-    "callback", "cb", "jsonp",
+    "p",
+    "page_id",
+    "post_id",
+    "author",
+    "cat",
+    "tag",
+    "s",
+    "preview",
+    "preview_id",
+    "preview_nonce",
+    "user_id",
+    "user",
+    "uid",
+    "action",
+    "do",
+    "op",
+    "operation",
+    "cmd",
+    "command",
+    "nonce",
+    "_nonce",
+    "_wpnonce",
+    "token",
+    "callback",
+    "cb",
+    "jsonp",
     # Generic.
-    "id", "ID", "Id", "item_id", "itemid",
-    "debug", "test", "trace", "log",
-    "file", "filename", "path", "url", "redirect", "next", "return_to",
-    "include", "template", "view", "tmpl",
-    "sort", "order", "filter", "search", "query", "q",
-    "limit", "offset", "per_page", "page", "pg",
-    "lang", "locale", "language",
-    "format", "fmt", "output", "type",
+    "id",
+    "ID",
+    "Id",
+    "item_id",
+    "itemid",
+    "debug",
+    "test",
+    "trace",
+    "log",
+    "file",
+    "filename",
+    "path",
+    "url",
+    "redirect",
+    "next",
+    "return_to",
+    "include",
+    "template",
+    "view",
+    "tmpl",
+    "sort",
+    "order",
+    "filter",
+    "search",
+    "query",
+    "q",
+    "limit",
+    "offset",
+    "per_page",
+    "page",
+    "pg",
+    "lang",
+    "locale",
+    "language",
+    "format",
+    "fmt",
+    "output",
+    "type",
 ]

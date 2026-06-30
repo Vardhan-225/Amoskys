@@ -101,7 +101,9 @@ def main() -> int:
         from amoskys.enrichment.forensic_context import ForensicContextEnricher
 
         forensic = ForensicContextEnricher()
-        logger.info("ForensicContextEnricher initialized — cross-agent attribution active")
+        logger.info(
+            "ForensicContextEnricher initialized — cross-agent attribution active"
+        )
     except Exception as e:
         logger.warning("ForensicContextEnricher not available: %s", e)
 
@@ -184,7 +186,9 @@ def main() -> int:
             probe_calibrator=probe_cal,
             reliability_tracker=_amrdr,
         )
-        logger.info("FusionEngine initialized: %s (AMRDR + probe calibrator wired)", FUSION_DB)
+        logger.info(
+            "FusionEngine initialized: %s (AMRDR + probe calibrator wired)", FUSION_DB
+        )
     except Exception as e:
         logger.warning("FusionEngine not available: %s", e)
         fusion = None
@@ -318,9 +322,7 @@ def main() -> int:
                                     "event_outcome": "alert",
                                     "risk_score": se.risk_score,
                                     "confidence": float(attrs.get("confidence", "0.5")),
-                                    "mitre_techniques": list(
-                                        se.mitre_techniques
-                                    ),
+                                    "mitre_techniques": list(se.mitre_techniques),
                                     "collection_agent": agent,
                                     "description": attrs.get("description", ""),
                                     "raw_attributes_json": json.dumps(attrs),
@@ -363,9 +365,7 @@ def main() -> int:
                                     "path": attrs.get("path"),
                                     "sha256": attrs.get("sha256"),
                                     "probe_name": attrs.get("probe_name"),
-                                    "detection_source": attrs.get(
-                                        "detection_source"
-                                    ),
+                                    "detection_source": attrs.get("detection_source"),
                                 }
 
                                 # Score the event before storage
@@ -483,8 +483,8 @@ def main() -> int:
                                         }
                                         sigma_input = dict(event_data)
                                         cat = sigma_input.get("event_category", "")
-                                        sigma_input["event_type"] = (
-                                            _SIGMA_ALIASES.get(cat, cat)
+                                        sigma_input["event_type"] = _SIGMA_ALIASES.get(
+                                            cat, cat
                                         )
                                         sigma_matches = sigma.evaluate(sigma_input)
                                         if sigma_matches:
@@ -498,18 +498,14 @@ def main() -> int:
                                                 }.get(m.level, 0),
                                             )
                                             event_data["detection_source"] = (
-                                                event_data.get(
-                                                    "detection_source", ""
-                                                )
+                                                event_data.get("detection_source", "")
                                                 + "|sigma"
                                             )
                                             ind = event_data.get("indicators", {})
                                             if isinstance(ind, str):
                                                 ind = json.loads(ind)
                                             ind["sigma_rule_id"] = best.rule_id
-                                            ind["sigma_rule_title"] = (
-                                                best.rule_title
-                                            )
+                                            ind["sigma_rule_title"] = best.rule_title
                                             ind["sigma_level"] = best.level
                                             event_data["indicators"] = ind
                                             # Promote MITRE from sigma if richer
@@ -520,15 +516,20 @@ def main() -> int:
                                                 if isinstance(raw_mt, str):
                                                     try:
                                                         raw_mt = json.loads(raw_mt)
-                                                    except (json.JSONDecodeError, TypeError):
+                                                    except (
+                                                        json.JSONDecodeError,
+                                                        TypeError,
+                                                    ):
                                                         raw_mt = []
                                                 existing = set(
-                                                    raw_mt if isinstance(raw_mt, list) else []
+                                                    raw_mt
+                                                    if isinstance(raw_mt, list)
+                                                    else []
                                                 )
                                                 for t in best.mitre_techniques:
                                                     existing.add(t)
-                                                event_data["mitre_techniques"] = (
-                                                    list(existing)
+                                                event_data["mitre_techniques"] = list(
+                                                    existing
                                                 )
                                     except Exception:
                                         logger.debug(
@@ -583,9 +584,7 @@ def main() -> int:
                                         )
                                         fusion.add_event(view)
                                     except Exception as e:
-                                        logger.warning(
-                                            "Failed to feed fusion: %s", e
-                                        )
+                                        logger.warning("Failed to feed fusion: %s", e)
 
                             elif ev.event_type == "OBSERVATION":
                                 attrs = dict(ev.attributes)
@@ -613,7 +612,8 @@ def main() -> int:
                                 # Route observations to domain-specific tables
                                 # Enrichment for any observation with IP fields
                                 if enrichment is not None and any(
-                                    attrs.get(k) for k in ("src_ip", "dst_ip", "remote_ip")
+                                    attrs.get(k)
+                                    for k in ("src_ip", "dst_ip", "remote_ip")
                                 ):
                                     try:
                                         enrichment.enrich(attrs)
@@ -638,21 +638,29 @@ def main() -> int:
 
                                 try:
                                     if domain == "process":
-                                        store.insert_process_event({
-                                            **_base,
-                                            "pid": attrs.get("pid"),
-                                            "exe": attrs.get("exe"),
-                                            "cmdline": attrs.get("cmdline"),
-                                            "ppid": attrs.get("ppid"),
-                                            "username": attrs.get("username"),
-                                            "name": attrs.get("name", attrs.get("process_name")),
-                                            "parent_name": attrs.get("parent_name"),
-                                            "status": attrs.get("status"),
-                                            "cpu_percent": attrs.get("cpu_percent"),
-                                            "memory_percent": attrs.get("memory_percent"),
-                                            "create_time": attrs.get("create_time"),
-                                            "process_guid": attrs.get("process_guid"),
-                                        })
+                                        store.insert_process_event(
+                                            {
+                                                **_base,
+                                                "pid": attrs.get("pid"),
+                                                "exe": attrs.get("exe"),
+                                                "cmdline": attrs.get("cmdline"),
+                                                "ppid": attrs.get("ppid"),
+                                                "username": attrs.get("username"),
+                                                "name": attrs.get(
+                                                    "name", attrs.get("process_name")
+                                                ),
+                                                "parent_name": attrs.get("parent_name"),
+                                                "status": attrs.get("status"),
+                                                "cpu_percent": attrs.get("cpu_percent"),
+                                                "memory_percent": attrs.get(
+                                                    "memory_percent"
+                                                ),
+                                                "create_time": attrs.get("create_time"),
+                                                "process_guid": attrs.get(
+                                                    "process_guid"
+                                                ),
+                                            }
+                                        )
 
                                         # Populate process_genealogy for kill chain tracking
                                         _pid = attrs.get("pid")
@@ -667,13 +675,17 @@ def main() -> int:
                                                         dt.device_id,
                                                         int(_pid) if _pid else 0,
                                                         int(attrs.get("ppid") or 0),
-                                                        attrs.get("name", attrs.get("process_name")),
+                                                        attrs.get(
+                                                            "name",
+                                                            attrs.get("process_name"),
+                                                        ),
                                                         attrs.get("exe"),
                                                         attrs.get("cmdline"),
                                                         attrs.get("username"),
                                                         attrs.get("parent_name"),
                                                         attrs.get("create_time"),
-                                                        ts_ns, ts_ns,
+                                                        ts_ns,
+                                                        ts_ns,
                                                         attrs.get("process_guid"),
                                                     ),
                                                 )
@@ -683,130 +695,217 @@ def main() -> int:
                                     elif domain == "flow":
                                         # Unique ns offset per flow event —
                                         # prevents UNIQUE constraint collision
-                                        _flow_counter = getattr(store, "_flow_ns_ctr", 0) + 1
+                                        _flow_counter = (
+                                            getattr(store, "_flow_ns_ctr", 0) + 1
+                                        )
                                         store._flow_ns_ctr = _flow_counter
-                                        _flow_ts = _base["timestamp_ns"] + (_flow_counter % 1_000_000)
-                                        store.insert_flow_event({
-                                            **_base,
-                                            "timestamp_ns": _flow_ts,
-                                            "src_ip": attrs.get("src_ip"),
-                                            "dst_ip": attrs.get("dst_ip"),
-                                            "src_port": attrs.get("src_port"),
-                                            "dst_port": attrs.get("dst_port"),
-                                            "protocol": attrs.get("protocol"),
-                                            "bytes_tx": int(attrs.get("bytes_tx", 0) or 0),
-                                            "bytes_rx": int(attrs.get("bytes_rx", 0) or 0),
-                                            "pid": attrs.get("pid"),
-                                            "process_name": attrs.get("process_name"),
-                                            "conn_user": attrs.get("conn_user"),
-                                            "state": attrs.get("state"),
-                                            "geo_dst_country": attrs.get("geo_dst_country"),
-                                            "geo_dst_city": attrs.get("geo_dst_city"),
-                                            "geo_dst_latitude": attrs.get("geo_dst_latitude"),
-                                            "geo_dst_longitude": attrs.get("geo_dst_longitude"),
-                                            "asn_dst_org": attrs.get("asn_dst_org"),
-                                            "asn_dst_number": attrs.get("asn_dst_number"),
-                                            "asn_dst_network_type": attrs.get("asn_dst_network_type"),
-                                            "threat_intel_match": attrs.get("threat_intel_match", False),
-                                        })
+                                        _flow_ts = _base["timestamp_ns"] + (
+                                            _flow_counter % 1_000_000
+                                        )
+                                        store.insert_flow_event(
+                                            {
+                                                **_base,
+                                                "timestamp_ns": _flow_ts,
+                                                "src_ip": attrs.get("src_ip"),
+                                                "dst_ip": attrs.get("dst_ip"),
+                                                "src_port": attrs.get("src_port"),
+                                                "dst_port": attrs.get("dst_port"),
+                                                "protocol": attrs.get("protocol"),
+                                                "bytes_tx": int(
+                                                    attrs.get("bytes_tx", 0) or 0
+                                                ),
+                                                "bytes_rx": int(
+                                                    attrs.get("bytes_rx", 0) or 0
+                                                ),
+                                                "pid": attrs.get("pid"),
+                                                "process_name": attrs.get(
+                                                    "process_name"
+                                                ),
+                                                "conn_user": attrs.get("conn_user"),
+                                                "state": attrs.get("state"),
+                                                "geo_dst_country": attrs.get(
+                                                    "geo_dst_country"
+                                                ),
+                                                "geo_dst_city": attrs.get(
+                                                    "geo_dst_city"
+                                                ),
+                                                "geo_dst_latitude": attrs.get(
+                                                    "geo_dst_latitude"
+                                                ),
+                                                "geo_dst_longitude": attrs.get(
+                                                    "geo_dst_longitude"
+                                                ),
+                                                "asn_dst_org": attrs.get("asn_dst_org"),
+                                                "asn_dst_number": attrs.get(
+                                                    "asn_dst_number"
+                                                ),
+                                                "asn_dst_network_type": attrs.get(
+                                                    "asn_dst_network_type"
+                                                ),
+                                                "threat_intel_match": attrs.get(
+                                                    "threat_intel_match", False
+                                                ),
+                                            }
+                                        )
 
                                     elif domain == "dns":
-                                        store.insert_dns_event({
-                                            **_base,
-                                            "domain": attrs.get("domain"),
-                                            "record_type": attrs.get("record_type"),
-                                            "response_code": attrs.get("response_code"),
-                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
-                                            "event_type": attrs.get("event_type", "query"),
-                                            "process_name": attrs.get("process_name"),
-                                            "pid": attrs.get("pid"),
-                                        })
+                                        store.insert_dns_event(
+                                            {
+                                                **_base,
+                                                "domain": attrs.get("domain"),
+                                                "record_type": attrs.get("record_type"),
+                                                "response_code": attrs.get(
+                                                    "response_code"
+                                                ),
+                                                "risk_score": float(
+                                                    attrs.get("risk_score", 0) or 0
+                                                ),
+                                                "event_type": attrs.get(
+                                                    "event_type", "query"
+                                                ),
+                                                "process_name": attrs.get(
+                                                    "process_name"
+                                                ),
+                                                "pid": attrs.get("pid"),
+                                            }
+                                        )
 
                                     elif domain in ("fim", "filesystem"):
                                         _name = attrs.get("name", "")
                                         _ext = ""
                                         if _name and "." in _name:
                                             _ext = "." + _name.rsplit(".", 1)[-1]
-                                        store.insert_fim_event({
-                                            **_base,
-                                            "path": attrs.get("path"),
-                                            "file_extension": attrs.get("extension", _ext),
-                                            "change_type": attrs.get("change_type", "snapshot"),
-                                            "new_hash": attrs.get("sha256", ""),
-                                            "owner_uid": int(attrs.get("uid", 0) or 0),
-                                            "is_suid": attrs.get("is_suid", False),
-                                            "mtime": attrs.get("mtime"),
-                                            "size": int(attrs.get("size", 0) or 0),
-                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
-                                            "event_type": "file_snapshot",
-                                            "raw_attributes_json": json.dumps(attrs),
-                                        })
+                                        store.insert_fim_event(
+                                            {
+                                                **_base,
+                                                "path": attrs.get("path"),
+                                                "file_extension": attrs.get(
+                                                    "extension", _ext
+                                                ),
+                                                "change_type": attrs.get(
+                                                    "change_type", "snapshot"
+                                                ),
+                                                "new_hash": attrs.get("sha256", ""),
+                                                "owner_uid": int(
+                                                    attrs.get("uid", 0) or 0
+                                                ),
+                                                "is_suid": attrs.get("is_suid", False),
+                                                "mtime": attrs.get("mtime"),
+                                                "size": int(attrs.get("size", 0) or 0),
+                                                "risk_score": float(
+                                                    attrs.get("risk_score", 0) or 0
+                                                ),
+                                                "event_type": "file_snapshot",
+                                                "raw_attributes_json": json.dumps(
+                                                    attrs
+                                                ),
+                                            }
+                                        )
 
                                     elif domain == "persistence":
-                                        store.insert_persistence_event({
-                                            **_base,
-                                            "mechanism": attrs.get("mechanism", attrs.get("category", "")),
-                                            "path": attrs.get("path"),
-                                            "change_type": attrs.get("change_type"),
-                                            "label": attrs.get("label", attrs.get("name", "")),
-                                            "sha256": attrs.get("sha256"),
-                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
-                                        })
+                                        store.insert_persistence_event(
+                                            {
+                                                **_base,
+                                                "mechanism": attrs.get(
+                                                    "mechanism",
+                                                    attrs.get("category", ""),
+                                                ),
+                                                "path": attrs.get("path"),
+                                                "change_type": attrs.get("change_type"),
+                                                "label": attrs.get(
+                                                    "label", attrs.get("name", "")
+                                                ),
+                                                "sha256": attrs.get("sha256"),
+                                                "risk_score": float(
+                                                    attrs.get("risk_score", 0) or 0
+                                                ),
+                                            }
+                                        )
 
                                     elif domain == "peripheral":
-                                        store.insert_peripheral_event({
-                                            **_base,
-                                            "peripheral_device_id": attrs.get("device_id", ""),
-                                            "event_type": attrs.get("event_type", "DETECTED"),
-                                            "device_name": attrs.get("device_name"),
-                                            "device_type": attrs.get("device_type"),
-                                            "vendor_id": attrs.get("vendor_id"),
-                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
-                                        })
+                                        store.insert_peripheral_event(
+                                            {
+                                                **_base,
+                                                "peripheral_device_id": attrs.get(
+                                                    "device_id", ""
+                                                ),
+                                                "event_type": attrs.get(
+                                                    "event_type", "DETECTED"
+                                                ),
+                                                "device_name": attrs.get("device_name"),
+                                                "device_type": attrs.get("device_type"),
+                                                "vendor_id": attrs.get("vendor_id"),
+                                                "risk_score": float(
+                                                    attrs.get("risk_score", 0) or 0
+                                                ),
+                                            }
+                                        )
 
                                     elif domain == "auth":
-                                        store.insert_audit_event({
-                                            **_base,
-                                            "event_type": attrs.get("event_type", "auth"),
-                                            # Map auth-specific fields from collector
-                                            "pid": attrs.get("client_pid") or attrs.get("pid"),
-                                            "exe": attrs.get("client_exe") or attrs.get("exe"),
-                                            "comm": attrs.get("process", ""),
-                                            "username": attrs.get("username", ""),
-                                            "source_ip": attrs.get("source_ip", ""),
-                                            "reason": attrs.get("message", "")[:500],
-                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
-                                            "raw_attributes_json": json.dumps(
-                                                {k: v for k, v in attrs.items()
-                                                 if k not in ("message",)},
-                                                default=str,
-                                            ),
-                                        })
+                                        store.insert_audit_event(
+                                            {
+                                                **_base,
+                                                "event_type": attrs.get(
+                                                    "event_type", "auth"
+                                                ),
+                                                # Map auth-specific fields from collector
+                                                "pid": attrs.get("client_pid")
+                                                or attrs.get("pid"),
+                                                "exe": attrs.get("client_exe")
+                                                or attrs.get("exe"),
+                                                "comm": attrs.get("process", ""),
+                                                "username": attrs.get("username", ""),
+                                                "source_ip": attrs.get("source_ip", ""),
+                                                "reason": attrs.get("message", "")[
+                                                    :500
+                                                ],
+                                                "risk_score": float(
+                                                    attrs.get("risk_score", 0) or 0
+                                                ),
+                                                "raw_attributes_json": json.dumps(
+                                                    {
+                                                        k: v
+                                                        for k, v in attrs.items()
+                                                        if k not in ("message",)
+                                                    },
+                                                    default=str,
+                                                ),
+                                            }
+                                        )
 
                                     else:
                                         # Unknown domain → generic observation table
-                                        store.insert_observation_event({
-                                            "event_id": ev.event_id,
-                                            "device_id": dt.device_id,
-                                            "domain": domain,
-                                            "event_timestamp_ns": ts_ns,
-                                            "raw_attributes_json": json.dumps(attrs),
-                                        })
+                                        store.insert_observation_event(
+                                            {
+                                                "event_id": ev.event_id,
+                                                "device_id": dt.device_id,
+                                                "domain": domain,
+                                                "event_timestamp_ns": ts_ns,
+                                                "raw_attributes_json": json.dumps(
+                                                    attrs
+                                                ),
+                                            }
+                                        )
 
                                 except Exception as e:
                                     # Fallback: store in generic observations
                                     try:
-                                        store.insert_observation_event({
-                                            "event_id": ev.event_id,
-                                            "device_id": dt.device_id,
-                                            "domain": domain,
-                                            "event_timestamp_ns": ts_ns,
-                                            "raw_attributes_json": json.dumps(attrs),
-                                        })
+                                        store.insert_observation_event(
+                                            {
+                                                "event_id": ev.event_id,
+                                                "device_id": dt.device_id,
+                                                "domain": domain,
+                                                "event_timestamp_ns": ts_ns,
+                                                "raw_attributes_json": json.dumps(
+                                                    attrs
+                                                ),
+                                            }
+                                        )
                                     except Exception:
                                         logger.debug(
                                             "Failed to store %s observation: %s",
-                                            domain, e,
+                                            domain,
+                                            e,
                                         )
 
                         processed_ids.append(row_id)
@@ -902,18 +1001,24 @@ def main() -> int:
                             # Bridge fusion incidents → telemetry.db
                             for inc in incidents:
                                 try:
-                                    store.create_incident({
-                                        "title": f"[{inc.rule_name}] {inc.summary}",
-                                        "description": inc.summary,
-                                        "severity": inc.severity.name.lower()
-                                        if hasattr(inc.severity, "name")
-                                        else str(inc.severity),
-                                        "source_event_ids": inc.event_ids,
-                                        "mitre_techniques": inc.techniques,
-                                        "indicators": inc.metadata
-                                        if hasattr(inc, "metadata")
-                                        else {},
-                                    })
+                                    store.create_incident(
+                                        {
+                                            "title": f"[{inc.rule_name}] {inc.summary}",
+                                            "description": inc.summary,
+                                            "severity": (
+                                                inc.severity.name.lower()
+                                                if hasattr(inc.severity, "name")
+                                                else str(inc.severity)
+                                            ),
+                                            "source_event_ids": inc.event_ids,
+                                            "mitre_techniques": inc.techniques,
+                                            "indicators": (
+                                                inc.metadata
+                                                if hasattr(inc, "metadata")
+                                                else {}
+                                            ),
+                                        }
+                                    )
                                 except Exception:
                                     logger.debug(
                                         "Failed to bridge incident %s",
@@ -932,9 +1037,7 @@ def main() -> int:
                     deleted = store.cleanup_old_data(max_age_days=3)
                     total_deleted = sum(deleted.values())
                     if total_deleted > 0:
-                        logger.info(
-                            "Retention: cleaned %d old rows", total_deleted
-                        )
+                        logger.info("Retention: cleaned %d old rows", total_deleted)
                 except Exception:
                     logger.debug("Retention cleanup failed", exc_info=True)
 
@@ -960,7 +1063,9 @@ def main() -> int:
         # Adaptive pacing: if we hit the drain budget there is more backlog —
         # loop again almost immediately (high frame rate). If we drained less, we
         # are caught up — relax to 2s to stay cheap.
-        shutdown_event.wait(timeout=0.05 if events_this_cycle >= DRAIN_MAX_ROWS else 2.0)
+        shutdown_event.wait(
+            timeout=0.05 if events_this_cycle >= DRAIN_MAX_ROWS else 2.0
+        )
 
     # ── Shutdown: persist state so baselines survive restarts ──
     logger.info(
@@ -971,7 +1076,9 @@ def main() -> int:
     if scorer is not None:
         try:
             scorer.close()
-            logger.info("ScoringEngine state persisted (baselines, calibration, thresholds)")
+            logger.info(
+                "ScoringEngine state persisted (baselines, calibration, thresholds)"
+            )
         except Exception as e:
             logger.warning("ScoringEngine close failed: %s", e)
     if soma is not None:

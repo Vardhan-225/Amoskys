@@ -55,11 +55,11 @@ def test_wp_safe_remote_get_tainted(tmp_path):
 
 
 def test_curl_setopt_tainted_url(tmp_path):
-    src = '''<?php
+    src = """<?php
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $_POST["endpoint"]);
 curl_exec($ch);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "ssrf.curl_exec_tainted_url"
@@ -75,10 +75,10 @@ def test_file_get_contents_url_tainted(tmp_path):
 
 
 def test_dynamic_url_variable_low(tmp_path):
-    src = '''<?php
+    src = """<?php
 $url = my_builder();
 wp_remote_get($url);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     # Dynamic but not tainted — low audit signal.
     assert findings
@@ -96,10 +96,10 @@ def test_constant_url_safe(tmp_path):
 
 
 def test_curl_setopt_constant_url(tmp_path):
-    src = '''<?php
+    src = """<?php
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, "https://api.my.saas.com/v1");
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert not findings
 

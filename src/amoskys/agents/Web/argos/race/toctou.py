@@ -38,9 +38,9 @@ logger = logging.getLogger("amoskys.argos.race.toctou")
 
 @dataclass
 class TOCTOUCandidate:
-    kind: str                       # "source_pattern" or "runtime_divergence"
+    kind: str  # "source_pattern" or "runtime_divergence"
     severity: str = "medium"
-    location: str = ""              # file:line or URL
+    location: str = ""  # file:line or URL
     evidence: str = ""
     check_operation: str = ""
     use_operation: str = ""
@@ -48,11 +48,13 @@ class TOCTOUCandidate:
 
     def to_dict(self):
         return {
-            "kind": self.kind, "severity": self.severity,
-            "location": self.location, "evidence": self.evidence,
+            "kind": self.kind,
+            "severity": self.severity,
+            "location": self.location,
+            "evidence": self.evidence,
             "check_operation": self.check_operation,
-            "use_operation":   self.use_operation,
-            "metadata":        dict(self.metadata),
+            "use_operation": self.use_operation,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -65,10 +67,10 @@ class TOCTOUReport:
 
     def to_dict(self):
         return {
-            "candidates":       [c.to_dict() for c in self.candidates],
-            "files_scanned":    self.files_scanned,
+            "candidates": [c.to_dict() for c in self.candidates],
+            "files_scanned": self.files_scanned,
             "endpoints_probed": self.endpoints_probed,
-            "errors":           list(self.errors),
+            "errors": list(self.errors),
         }
 
 
@@ -77,7 +79,7 @@ class TOCTOUReport:
 
 _CHECK_PATTERNS = [
     (re.compile(r"\bget_user_by\s*\("), "get_user_by"),
-    (re.compile(r"\bget_option\s*\("),  "get_option"),
+    (re.compile(r"\bget_option\s*\("), "get_option"),
     (re.compile(r"\bwp_get_current_user\s*\("), "wp_get_current_user"),
     (re.compile(r"\$wpdb->get_row\s*\("), "wpdb->get_row"),
     (re.compile(r"\$wpdb->get_var\s*\("), "wpdb->get_var"),
@@ -105,7 +107,7 @@ _LOCK_PATTERNS = [
     re.compile(r"\bSTART\s+TRANSACTION\b", re.I),
     re.compile(r"\bBEGIN\s*;", re.I),
     re.compile(r"\bflock\s*\("),
-    re.compile(r"\bwp_cache_add\b"),     # some atomic-style cache ops
+    re.compile(r"\bwp_cache_add\b"),  # some atomic-style cache ops
 ]
 
 
@@ -131,30 +133,33 @@ def _scan_php_file(path: str, source: str) -> List[TOCTOUCandidate]:
             for m_check in check_re.finditer(body):
                 # Look for a use pattern AFTER the check, within the same function,
                 # and with no lock between
-                tail = body[m_check.end():]
+                tail = body[m_check.end() :]
                 for use_re, use_name in _USE_PATTERNS:
                     m_use = use_re.search(tail)
                     if not m_use:
                         continue
-                    between = tail[:m_use.start()]
+                    between = tail[: m_use.start()]
                     if any(lr.search(between) for lr in _LOCK_PATTERNS):
                         continue
                     # Crude line-number inference
-                    prefix = source[:m_check.start()]
+                    prefix = source[: m_check.start()]
                     line = prefix.count("\n") + 1
                     fn_name_m = re.search(r"function\s+(\w+)", header)
                     fn_name = fn_name_m.group(1) if fn_name_m else "?"
-                    cands.append(TOCTOUCandidate(
-                        kind="source_pattern", severity="medium",
-                        location=f"{path}:{line} (in fn {fn_name}())",
-                        evidence=(
-                            f"check `{check_name}` followed by `{use_name}` "
-                            f"with no lock/transaction between"
-                        ),
-                        check_operation=check_name,
-                        use_operation=use_name,
-                        metadata={"function": fn_name},
-                    ))
+                    cands.append(
+                        TOCTOUCandidate(
+                            kind="source_pattern",
+                            severity="medium",
+                            location=f"{path}:{line} (in fn {fn_name}())",
+                            evidence=(
+                                f"check `{check_name}` followed by `{use_name}` "
+                                f"with no lock/transaction between"
+                            ),
+                            check_operation=check_name,
+                            use_operation=use_name,
+                            metadata={"function": fn_name},
+                        )
+                    )
     return cands
 
 
@@ -184,10 +189,13 @@ def scan_for_toctou_candidates(plugin_dir: str, max_files: int = 200) -> TOCTOUR
 # ── Phase 2: runtime endpoint-pair analysis ───────────────────────
 
 
-def analyze_endpoint_pair(check_url: str, use_url: str,
-                           sender: Callable,
-                           sample_body: Optional[str] = None,
-                           n_probes: int = 10) -> TOCTOUCandidate:
+def analyze_endpoint_pair(
+    check_url: str,
+    use_url: str,
+    sender: Callable,
+    sample_body: Optional[str] = None,
+    n_probes: int = 10,
+) -> TOCTOUCandidate:
     """Fire `check_url` and immediately `use_url` N times.
 
     sender(url, method, headers, body, timeout)
@@ -208,7 +216,8 @@ def analyze_endpoint_pair(check_url: str, use_url: str,
             attempts += 1
         except Exception as exc:  # noqa: BLE001
             return TOCTOUCandidate(
-                kind="runtime_divergence", severity="info",
+                kind="runtime_divergence",
+                severity="info",
                 location=f"{check_url} → {use_url}",
                 evidence=f"sender raised: {exc}",
             )
@@ -228,7 +237,8 @@ def analyze_endpoint_pair(check_url: str, use_url: str,
 
 
 __all__ = [
-    "TOCTOUCandidate", "TOCTOUReport",
+    "TOCTOUCandidate",
+    "TOCTOUReport",
     "scan_for_toctou_candidates",
     "analyze_endpoint_pair",
 ]

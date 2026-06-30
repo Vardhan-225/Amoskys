@@ -26,8 +26,8 @@ from unittest.mock import patch
 import pytest
 
 from amoskys.agents.Web.argos.ast import (
-    RestAuthzScanner,
     PHPSource,
+    RestAuthzScanner,
     find_calls,
     strip_comments_and_strings,
 )
@@ -36,8 +36,8 @@ from amoskys.agents.Web.argos.corpus import PluginSource
 from amoskys.agents.Web.argos.hunt import Hunt
 from amoskys.agents.Web.argos.tools.plugin_ast import PluginASTTool
 
-
 # ── Fixture builders ───────────────────────────────────────────────
+
 
 def _make_plugin(
     tmp_path: Path,
@@ -61,6 +61,7 @@ def _make_plugin(
 
 
 # ── Base primitives ────────────────────────────────────────────────
+
 
 def test_strip_comments_masks_line_comment_preserving_length():
     src = "echo 'hi';  // this is a comment\necho 'bye';"
@@ -134,6 +135,7 @@ def test_split_top_level_ranges_stops_at_bracket_depth_zero():
 
 # ── RestAuthzScanner rules ─────────────────────────────────────────
 
+
 def test_permission_callback_missing_emits_high(tmp_path):
     php = """<?php
     add_action('rest_api_init', function() {
@@ -146,13 +148,18 @@ def test_permission_callback_missing_emits_high(tmp_path):
     plugin = _make_plugin(tmp_path, "demo", "1.0.0", {"demo.php": php})
     findings = RestAuthzScanner().scan(plugin)
 
-    hits = [f for f in findings if f.rule_id == "rest_authz.permission_callback_missing"]
+    hits = [
+        f for f in findings if f.rule_id == "rest_authz.permission_callback_missing"
+    ]
     assert len(hits) == 1
     f = hits[0]
     assert f.severity == "high"
     assert f.plugin_slug == "demo"
     assert f.plugin_version == "1.0.0"
-    assert "myplugin/v1" in f.evidence["namespace"] or f.evidence["namespace"] == "myplugin/v1"
+    assert (
+        "myplugin/v1" in f.evidence["namespace"]
+        or f.evidence["namespace"] == "myplugin/v1"
+    )
     assert f.evidence["route"] == "/data"
     assert f.cwe == "CWE-862"
 
@@ -168,7 +175,9 @@ def test_permission_callback_return_true_emits_critical(tmp_path):
     plugin = _make_plugin(tmp_path, "demo", "1.0.0", {"demo.php": php})
     findings = RestAuthzScanner().scan(plugin)
 
-    hits = [f for f in findings if f.rule_id == "rest_authz.permission_callback_return_true"]
+    hits = [
+        f for f in findings if f.rule_id == "rest_authz.permission_callback_return_true"
+    ]
     assert len(hits) == 1
     assert hits[0].severity == "critical"
     assert hits[0].cwe == "CWE-284"
@@ -185,7 +194,9 @@ def test_permission_callback_closure_always_true_emits_critical(tmp_path):
     plugin = _make_plugin(tmp_path, "demo", "1.0.0", {"demo.php": php})
     findings = RestAuthzScanner().scan(plugin)
 
-    hits = [f for f in findings if f.rule_id == "rest_authz.permission_callback_return_true"]
+    hits = [
+        f for f in findings if f.rule_id == "rest_authz.permission_callback_return_true"
+    ]
     assert len(hits) == 1
 
 
@@ -201,7 +212,9 @@ def test_permission_callback_real_check_does_not_fire(tmp_path):
     findings = RestAuthzScanner().scan(plugin)
 
     # Good authz: neither rule should fire
-    assert not any(f.rule_id.startswith("rest_authz.permission_callback") for f in findings)
+    assert not any(
+        f.rule_id.startswith("rest_authz.permission_callback") for f in findings
+    )
 
 
 def test_wp_ajax_nopriv_with_state_change_emits_high(tmp_path):
@@ -215,7 +228,9 @@ def test_wp_ajax_nopriv_with_state_change_emits_high(tmp_path):
     plugin = _make_plugin(tmp_path, "demo", "1.0.0", {"demo.php": php})
     findings = RestAuthzScanner().scan(plugin)
 
-    hits = [f for f in findings if f.rule_id == "rest_authz.wp_ajax_nopriv_state_change"]
+    hits = [
+        f for f in findings if f.rule_id == "rest_authz.wp_ajax_nopriv_state_change"
+    ]
     assert len(hits) == 1
     assert hits[0].severity == "high"
     assert "update_option" in str(hits[0].evidence["sinks_found"])
@@ -267,7 +282,9 @@ def test_scanner_resolves_array_callback(tmp_path):
     plugin = _make_plugin(tmp_path, "demo", "1.0.0", {"demo.php": php})
     findings = RestAuthzScanner().scan(plugin)
 
-    hits = [f for f in findings if f.rule_id == "rest_authz.wp_ajax_nopriv_state_change"]
+    hits = [
+        f for f in findings if f.rule_id == "rest_authz.wp_ajax_nopriv_state_change"
+    ]
     assert len(hits) == 1
 
 
@@ -292,6 +309,7 @@ def test_scanner_ignores_comments(tmp_path):
 
 # ── PluginASTTool wiring ───────────────────────────────────────────
 
+
 def test_plugin_ast_tool_set_plugins_and_run(tmp_path, monkeypatch):
     php = """<?php
     register_rest_route('demo/v1', '/data', array(
@@ -299,7 +317,9 @@ def test_plugin_ast_tool_set_plugins_and_run(tmp_path, monkeypatch):
         'permission_callback' => '__return_true',
     ));
     """
-    plugin = _make_plugin(tmp_path, "fixture-plugin", "2.0.0", {"fixture-plugin.php": php})
+    plugin = _make_plugin(
+        tmp_path, "fixture-plugin", "2.0.0", {"fixture-plugin.php": php}
+    )
 
     # Intercept corpus.fetch so it returns our fixture without network.
     class FakeCorpus:
@@ -343,13 +363,19 @@ def test_plugin_ast_tool_prime_from_wpscan():
                 "template_id": "wpscan.plugin:contact-form-7",
                 "title": "CF7 vuln",
                 "severity": "high",
-                "evidence": {"component": "plugin:contact-form-7", "installed_version": "5.9.0"},
+                "evidence": {
+                    "component": "plugin:contact-form-7",
+                    "installed_version": "5.9.0",
+                },
             },
             {
                 "template_id": "wpscan.plugin:wpforms",
                 "title": "Other",
                 "severity": "medium",
-                "evidence": {"component": "plugin:wpforms", "installed_version": "1.8.1"},
+                "evidence": {
+                    "component": "plugin:wpforms",
+                    "installed_version": "1.8.1",
+                },
             },
             {
                 # Non-plugin finding should be ignored
@@ -381,6 +407,7 @@ def test_plugin_ast_tool_empty_when_not_primed():
 
 
 # ── Hunt mode ──────────────────────────────────────────────────────
+
 
 def test_hunt_against_local_fixture(tmp_path):
     """Full hunt loop against a corpus populated with a local fixture."""
@@ -449,14 +476,20 @@ def test_hunt_deduplicates_identical_findings(tmp_path):
         report_dir=tmp_path / "hunt-reports",
     )
     result = hunt.run()
-    rule_hits = [f for f in result.findings if f.rule_id == "rest_authz.permission_callback_return_true"]
+    rule_hits = [
+        f
+        for f in result.findings
+        if f.rule_id == "rest_authz.permission_callback_return_true"
+    ]
     assert len(rule_hits) == 1, "dedup should collapse identical findings"
 
 
 # ── Helper ─────────────────────────────────────────────────────────
 
+
 def _write_tmp(content: str, tmp_subpath: str = "t.php") -> Path:
     import tempfile
+
     tmp_dir = Path(tempfile.mkdtemp(prefix="argos-ast-test-"))
     path = tmp_dir / tmp_subpath
     path.write_text(content)

@@ -32,7 +32,6 @@ from amoskys.agents.Web.argos.tools import (
     WPScanTool,
 )
 
-
 TOOL_REGISTRY = {
     # Recon
     "subfinder": lambda: SubfinderTool(),
@@ -50,16 +49,20 @@ TOOL_REGISTRY = {
     # Preset bundles
     "recon": lambda: [SubfinderTool(), NmapTool(), HTTPXTool()],
     "wp-full": lambda: [
-        HTTPXTool(), WPScanTool(),
-        NucleiTool(category="cves"), NucleiTool(category="exposures"),
+        HTTPXTool(),
+        WPScanTool(),
+        NucleiTool(category="cves"),
+        NucleiTool(category="exposures"),
         NucleiTool(category="misconfiguration"),
     ],
     # The full-stack WP bundle: fingerprint -> AST analysis of installed
     # plugins -> public-CVE match. This is the default for client pentests.
     "wp-full-ast": lambda: [
-        HTTPXTool(), WPScanTool(),
+        HTTPXTool(),
+        WPScanTool(),
         PluginASTTool(),
-        NucleiTool(category="cves"), NucleiTool(category="exposures"),
+        NucleiTool(category="cves"),
+        NucleiTool(category="exposures"),
         NucleiTool(category="misconfiguration"),
     ],
 }
@@ -68,11 +71,16 @@ TOOL_REGISTRY = {
 def cmd_report(args: argparse.Namespace) -> int:
     """Render an existing engagement JSON as HTML/PDF."""
     import json as _json
+
     from amoskys.agents.Web.argos.engine import (
-        EngagementResult, Scope, Phase, Finding, Severity
+        EngagementResult,
+        Finding,
+        Phase,
+        Scope,
+        Severity,
     )
-    from amoskys.agents.Web.argos.tools.base import ToolResult
     from amoskys.agents.Web.argos.report import ReportRenderer
+    from amoskys.agents.Web.argos.tools.base import ToolResult
 
     report_path = Path(args.engagement_json)
     if not report_path.exists():
@@ -86,20 +94,28 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     def _reify_finding(f: dict) -> Finding:
         return Finding(
-            finding_id=f["finding_id"], tool=f["tool"],
-            template_id=f.get("template_id"), target=f["target"],
-            severity=Severity(f["severity"]), title=f["title"],
-            description=f.get("description", ""), evidence=f.get("evidence") or {},
-            cwe=f.get("cwe"), cvss=f.get("cvss"),
+            finding_id=f["finding_id"],
+            tool=f["tool"],
+            template_id=f.get("template_id"),
+            target=f["target"],
+            severity=Severity(f["severity"]),
+            title=f["title"],
+            description=f.get("description", ""),
+            evidence=f.get("evidence") or {},
+            cwe=f.get("cwe"),
+            cvss=f.get("cvss"),
             references=f.get("references") or [],
             mitre_techniques=f.get("mitre_techniques") or [],
             detected_at_ns=f.get("detected_at_ns") or 0,
         )
+
     findings = [_reify_finding(f) for f in data.get("findings", [])]
 
     tool_outputs = {}
     for name, tr in data.get("tool_outputs", {}).items():
-        tool_outputs[name] = ToolResult(**{k: v for k, v in tr.items() if k in ToolResult.__dataclass_fields__})
+        tool_outputs[name] = ToolResult(
+            **{k: v for k, v in tr.items() if k in ToolResult.__dataclass_fields__}
+        )
 
     result = EngagementResult(
         engagement_id=data["engagement_id"],
@@ -129,7 +145,10 @@ def cmd_report(args: argparse.Namespace) -> int:
             pdf_path.write_bytes(pdf_bytes)
             print(f"[argos report] PDF  → {pdf_path}")
         except Exception as e:  # noqa: BLE001
-            print(f"[argos report] PDF render failed: {type(e).__name__}: {e}", file=sys.stderr)
+            print(
+                f"[argos report] PDF render failed: {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
             print("[argos report] (HTML-only output)")
             return 1
     return 0
@@ -141,7 +160,10 @@ def cmd_scan(args: argparse.Namespace) -> int:
     for name in tool_names:
         builder = TOOL_REGISTRY.get(name)
         if not builder:
-            print(f"error: unknown tool '{name}'. available: {list(TOOL_REGISTRY)}", file=sys.stderr)
+            print(
+                f"error: unknown tool '{name}'. available: {list(TOOL_REGISTRY)}",
+                file=sys.stderr,
+            )
             return 2
         result = builder()
         # Preset bundles return a list; individual tools return one instance
@@ -179,14 +201,16 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"  errors: {len(result.errors)}")
         for e in result.errors:
             print(f"    - {e}")
-    print(f"\n[argos] report written to: {report_dir}/argos-{result.engagement_id}.json")
+    print(
+        f"\n[argos] report written to: {report_dir}/argos-{result.engagement_id}.json"
+    )
     return 0 if not result.errors else 1
 
 
 def _customer_service(args: argparse.Namespace):
     """Construct the CustomerService with a DB initialized at --db or default path."""
-    from amoskys.agents.Web.argos.storage import AssetsDB
     from amoskys.agents.Web.argos.customer import CustomerService
+    from amoskys.agents.Web.argos.storage import AssetsDB
 
     db_path = Path(getattr(args, "db", None) or Path.home() / ".argos" / "customer.db")
     db = AssetsDB(db_path)
@@ -278,7 +302,9 @@ def _resolve_operator(args: argparse.Namespace, db, required_role):
         raise SystemExit(2)
 
     try:
-        service.authorize(op.operator_id, required_role, action=getattr(args, "cmd", ""))
+        service.authorize(
+            op.operator_id, required_role, action=getattr(args, "cmd", "")
+        )
     except AgreementNotAcceptedError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(3)
@@ -328,9 +354,13 @@ def cmd_operator_register(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    print(f"[argos operator] registered {op.email} (id={op.operator_id}, role={op.role.value})")
+    print(
+        f"[argos operator] registered {op.email} (id={op.operator_id}, role={op.role.value})"
+    )
     if args.accept_agreement:
-        print(f"[argos operator] agreement {CURRENT_AGREEMENT_VERSION} accepted + recorded")
+        print(
+            f"[argos operator] agreement {CURRENT_AGREEMENT_VERSION} accepted + recorded"
+        )
     else:
         print(f"[argos operator] agreement NOT YET accepted. Run:")
         print(f"  argos operator accept --operator {op.email}")
@@ -407,9 +437,11 @@ def cmd_operator_whoami(args: argparse.Namespace) -> int:
     print(f"  id:             {who.operator.operator_id}")
     print(f"  role:           {who.operator.role.value}")
     print(f"  active:         {'yes' if who.operator.is_active else 'no'}")
-    print(f"  agreement:      v={who.agreement_version_seen or '(none)'} "
-          f"current={CURRENT_AGREEMENT_VERSION} "
-          f"accepted_current={'yes' if who.agreement_current else 'NO — run accept'}")
+    print(
+        f"  agreement:      v={who.agreement_version_seen or '(none)'} "
+        f"current={CURRENT_AGREEMENT_VERSION} "
+        f"accepted_current={'yes' if who.agreement_current else 'NO — run accept'}"
+    )
     return 0
 
 
@@ -429,8 +461,10 @@ def cmd_operator_list(args: argparse.Namespace) -> int:
     print(f"{'operator_id':<38} {'email':<30} {'role':<10} {'active'}")
     print("-" * 92)
     for op in ops:
-        print(f"{op.operator_id:<38} {op.email[:29]:<30} {op.role.value:<10} "
-              f"{'yes' if op.is_active else 'no'}")
+        print(
+            f"{op.operator_id:<38} {op.email[:29]:<30} {op.role.value:<10} "
+            f"{'yes' if op.is_active else 'no'}"
+        )
     return 0
 
 
@@ -459,7 +493,10 @@ def cmd_customer_list(args: argparse.Namespace) -> int:
 
 
 def cmd_customer_recon(args: argparse.Namespace) -> int:
-    from amoskys.agents.Web.argos.customer import ConsentNotVerifiedError, CustomerNotFoundError
+    from amoskys.agents.Web.argos.customer import (
+        ConsentNotVerifiedError,
+        CustomerNotFoundError,
+    )
 
     service, _db = _customer_service(args)
     try:
@@ -512,8 +549,10 @@ def cmd_customer_scan(args: argparse.Namespace) -> int:
     print(f"[argos customer scan] queue {queue.queue_id}")
     print(f"[argos customer scan] operator: {op.email} (role={op.role.value})")
     print(f"[argos customer scan] tool_bundle: {queue.tool_bundle}")
-    print(f"[argos customer scan] jobs queued: {progress_pre.total} "
-          f"(skipped_pre_run: {progress_pre.skipped})")
+    print(
+        f"[argos customer scan] jobs queued: {progress_pre.total} "
+        f"(skipped_pre_run: {progress_pre.skipped})"
+    )
     print(f"[argos customer scan] running synchronously...")
 
     if args.dry_run:
@@ -531,8 +570,10 @@ def cmd_customer_scan(args: argparse.Namespace) -> int:
     print()
     print(progress.render())
     print()
-    print(f"[argos customer scan] inspect with: "
-          f"argos customer scan-status {queue.queue_id}")
+    print(
+        f"[argos customer scan] inspect with: "
+        f"argos customer scan-status {queue.queue_id}"
+    )
     return 0 if progress.failed == 0 else 1
 
 
@@ -556,8 +597,10 @@ def cmd_customer_report(args: argparse.Namespace) -> int:
 
     print(f"[argos customer report] queue:         {report.queue.queue_id}")
     print(f"[argos customer report] customer:      {report.customer.name}")
-    print(f"[argos customer report] findings:      {report.total_findings} "
-          f"(critical+high: {report.critical_plus_high})")
+    print(
+        f"[argos customer report] findings:      {report.total_findings} "
+        f"(critical+high: {report.critical_plus_high})"
+    )
     print(f"[argos customer report] HTML:          {result.html_path}")
     if result.pdf_path:
         print(f"[argos customer report] PDF:           {result.pdf_path}")
@@ -688,7 +731,9 @@ def cmd_hunt(args: argparse.Namespace) -> int:
     if slugs:
         print(f"[argos hunt] slugs: {slugs}")
     if args.top:
-        print(f"[argos hunt] top-n by installs: n={args.top} min_installs={args.min_installs}")
+        print(
+            f"[argos hunt] top-n by installs: n={args.top} min_installs={args.min_installs}"
+        )
     print(f"[argos hunt] limit: {hunt.limit}")
     print(f"[argos hunt] scanners: {[s.scanner_id for s in hunt.scanners]}")
     print(f"[argos hunt] working...")
@@ -724,7 +769,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-dns-verify",
         action="store_true",
         help="DEV/LAB ONLY: skip the DNS-TXT ownership verification step. "
-             "Never use this for customer engagements.",
+        "Never use this for customer engagements.",
     )
     scan.set_defaults(func=cmd_scan)
 
@@ -764,20 +809,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--operator",
         default=None,
         help="operator email or id (overrides ARGOS_OPERATOR env var). "
-             "Required — hunt mode is restricted to registered AMOSKYS operators.",
+        "Required — hunt mode is restricted to registered AMOSKYS operators.",
     )
     hunt.add_argument(
         "--db",
         default=None,
         help="path to operator DB (default: ~/.argos/customer.db). "
-             "Used to authorize and audit the hunt.",
+        "Used to authorize and audit the hunt.",
     )
     hunt.set_defaults(func=cmd_hunt)
 
-    report = sub.add_parser("report", help="render an engagement JSON as branded HTML + PDF")
-    report.add_argument("engagement_json", help="path to the argos-<uuid>.json engagement report")
-    report.add_argument("--out-dir", default=".", help="where to write the rendered files")
-    report.add_argument("--html-only", action="store_true", help="skip PDF render (HTML only)")
+    report = sub.add_parser(
+        "report", help="render an engagement JSON as branded HTML + PDF"
+    )
+    report.add_argument(
+        "engagement_json", help="path to the argos-<uuid>.json engagement report"
+    )
+    report.add_argument(
+        "--out-dir", default=".", help="where to write the rendered files"
+    )
+    report.add_argument(
+        "--html-only", action="store_true", help="skip PDF render (HTML only)"
+    )
     report.set_defaults(func=cmd_report)
 
     # ── customer subcommands ────────────────────────────────────────
@@ -796,8 +849,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     enroll = customer_sub.add_parser("enroll", help="enroll a new customer")
     enroll.add_argument("--name", required=True, help="customer display name")
-    enroll.add_argument("--seed", required=True,
-                        help="starting domain or IP (e.g., acme.com)")
+    enroll.add_argument(
+        "--seed", required=True, help="starting domain or IP (e.g., acme.com)"
+    )
     enroll.add_argument(
         "--consent-method",
         choices=["dns_txt", "email", "signed_contract", "lab_self"],
@@ -807,8 +861,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--artifact-ref",
         default=None,
         help="required for email/signed_contract methods. Format: TYPE=VALUE "
-             "(e.g. docusign_envelope=abc123, contract_number=PS-2026-042, "
-             "email_message_id=<foo@bar>)",
+        "(e.g. docusign_envelope=abc123, contract_number=PS-2026-042, "
+        "email_message_id=<foo@bar>)",
     )
     _add_db_arg(enroll)
     enroll.set_defaults(func=cmd_customer_enroll)
@@ -845,7 +899,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan = customer_sub.add_parser(
         "scan",
         help="queue + run Engagements across every in-scope surface asset "
-             "(requires authorized operator, analyst+)",
+        "(requires authorized operator, analyst+)",
     )
     scan.add_argument("customer_id")
     scan.add_argument(
@@ -867,7 +921,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="create the queue + jobs but don't execute — useful for reviewing "
-             "which assets are in-scope before spending probe budget",
+        "which assets are in-scope before spending probe budget",
     )
     _add_db_arg(scan)
     scan.set_defaults(func=cmd_customer_scan)
@@ -886,11 +940,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cust_report.add_argument("queue_id")
     cust_report.add_argument(
-        "--out-dir", default=None,
+        "--out-dir",
+        default=None,
         help="where to write the report (default: ~/.argos/customer-reports)",
     )
     cust_report.add_argument(
-        "--html-only", action="store_true",
+        "--html-only",
+        action="store_true",
         help="skip PDF render (useful when WeasyPrint isn't installed)",
     )
     _add_db_arg(cust_report)
@@ -924,7 +980,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     op_accept.add_argument("--operator", required=True, help="email or operator id")
     op_accept.add_argument(
-        "--yes", action="store_true",
+        "--yes",
+        action="store_true",
         help="skip interactive 'I AGREE' prompt (for scripted onboarding)",
     )
     _add_db_arg(op_accept)
@@ -934,7 +991,8 @@ def build_parser() -> argparse.ArgumentParser:
         "whoami", help="show the current operator + agreement status"
     )
     op_whoami.add_argument(
-        "--operator", default=None,
+        "--operator",
+        default=None,
         help="email or id; defaults to $ARGOS_OPERATOR",
     )
     _add_db_arg(op_whoami)
@@ -942,7 +1000,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     op_list = operator_sub.add_parser("list", help="list registered operators")
     op_list.add_argument(
-        "--include-disabled", action="store_true",
+        "--include-disabled",
+        action="store_true",
         help="include disabled operators in the listing",
     )
     _add_db_arg(op_list)

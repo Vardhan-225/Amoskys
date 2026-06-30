@@ -303,10 +303,12 @@ class MacOSDNSCollector:
             proc = subprocess.Popen(
                 [
                     "tcpdump",
-                    "-i", "any",
-                    "-nn",           # no name resolution
-                    "-l",            # line-buffered
-                    "-c", "50",      # max packets (enough for one burst)
+                    "-i",
+                    "any",
+                    "-nn",  # no name resolution
+                    "-l",  # line-buffered
+                    "-c",
+                    "50",  # max packets (enough for one burst)
                     "udp port 53 and not src port 53",  # outbound queries only
                 ],
                 stdout=subprocess.PIPE,

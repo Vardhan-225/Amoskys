@@ -28,8 +28,8 @@ from amoskys.agents.Web.argos.race.single_packet import (
     SinglePacketProbe,
     SinglePacketReport,
     build_coupon_race,
-    build_registration_race,
     build_parallel_purchase_race,
+    build_registration_race,
     execute_single_packet,
 )
 from amoskys.agents.Web.argos.race.toctou import (
@@ -40,9 +40,14 @@ from amoskys.agents.Web.argos.race.toctou import (
 )
 
 __all__ = [
-    "SinglePacketProbe", "SinglePacketReport",
-    "build_coupon_race", "build_registration_race", "build_parallel_purchase_race",
+    "SinglePacketProbe",
+    "SinglePacketReport",
+    "build_coupon_race",
+    "build_registration_race",
+    "build_parallel_purchase_race",
     "execute_single_packet",
-    "TOCTOUCandidate", "TOCTOUReport",
-    "analyze_endpoint_pair", "scan_for_toctou_candidates",
+    "TOCTOUCandidate",
+    "TOCTOUReport",
+    "analyze_endpoint_pair",
+    "scan_for_toctou_candidates",
 ]

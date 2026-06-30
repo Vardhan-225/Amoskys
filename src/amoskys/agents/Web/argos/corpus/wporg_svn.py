@@ -62,11 +62,13 @@ MAX_ZIP_BYTES = 200 * 1024 * 1024
 
 # ── Exceptions ─────────────────────────────────────────────────────
 
+
 class WPOrgCorpusError(RuntimeError):
     """Anything that goes wrong fetching or unpacking a plugin."""
 
 
 # ── Data ───────────────────────────────────────────────────────────
+
 
 @dataclass
 class PluginSource:
@@ -80,7 +82,7 @@ class PluginSource:
     slug: str
     version: str
     extracted_root: Path  # the /extracted/<slug>/<version>/ dir
-    plugin_root: Path     # where the actual plugin code lives (strip one level if wrapped)
+    plugin_root: Path  # where the actual plugin code lives (strip one level if wrapped)
     active_installs: Optional[int] = None
     fetched_at_ns: int = field(default_factory=lambda: int(time.time() * 1e9))
 
@@ -99,6 +101,7 @@ class PluginSource:
 
 
 # ── Core ───────────────────────────────────────────────────────────
+
 
 class WPOrgCorpus:
     """Fetcher + cache manager for wordpress.org plugin source.
@@ -141,7 +144,9 @@ class WPOrgCorpus:
             version = self._resolve_latest_version(slug)
 
         extract_root = self.extracted_dir / slug / version
-        plugin_root = self._plugin_root_within(extract_root) if extract_root.exists() else None
+        plugin_root = (
+            self._plugin_root_within(extract_root) if extract_root.exists() else None
+        )
 
         if plugin_root is None:
             zip_path = self._download_zip(slug, version)
@@ -158,7 +163,9 @@ class WPOrgCorpus:
             active_installs=self._lookup_active_installs(slug),
         )
 
-    def iter_top(self, n: int = 100, min_installs: int = 1000) -> Iterator[PluginSource]:
+    def iter_top(
+        self, n: int = 100, min_installs: int = 1000
+    ) -> Iterator[PluginSource]:
         """Yield the top-n plugins by active-install count, fetched lazily.
 
         Uses the cached wp.org API response if fresh (<24h); otherwise
@@ -300,7 +307,9 @@ class WPOrgCorpus:
                 f"{'version may not exist' if e.code == 404 else e.reason}"
             ) from e
         except urllib.error.URLError as e:
-            raise WPOrgCorpusError(f"download failed for {slug}@{version}: {e.reason}") from e
+            raise WPOrgCorpusError(
+                f"download failed for {slug}@{version}: {e.reason}"
+            ) from e
 
         # Write atomically so a partial file never appears cached.
         tmp = zip_path.with_suffix(".zip.partial")
@@ -316,7 +325,9 @@ class WPOrgCorpus:
         # Extract to a temp sibling, then atomic-rename. Avoids leaving a
         # half-extracted tree if we crash partway through.
         target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=target.parent, prefix=f".{version}.extract.") as td:
+        with tempfile.TemporaryDirectory(
+            dir=target.parent, prefix=f".{version}.extract."
+        ) as td:
             tmp_root = Path(td)
             try:
                 with zipfile.ZipFile(zip_path) as zf:

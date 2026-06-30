@@ -7,8 +7,8 @@ import time
 import uuid
 from typing import Optional
 
-from ..db import query, query_one, execute, scalar
 from ..config import cfg
+from ..db import execute, query, query_one, scalar
 from ..server import mcp
 
 
@@ -21,16 +21,27 @@ def _queue_response(
 ) -> dict:
     """Queue a high-priority response command."""
     from .agent import _ensure_commands_table
+
     _ensure_commands_table()
     cmd_id = uuid.uuid4().hex[:16]
     now = time.time()
 
-    execute("""
+    execute(
+        """
         INSERT INTO device_commands (id, device_id, command_type, payload,
                                      priority, created_at, expires_at, source)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'igris_response')
-    """, (cmd_id, device_id, command_type, json.dumps(payload),
-          priority, now, now + ttl))
+    """,
+        (
+            cmd_id,
+            device_id,
+            command_type,
+            json.dumps(payload),
+            priority,
+            now,
+            now + ttl,
+        ),
+    )
 
     return {
         "command_id": cmd_id,
@@ -58,7 +69,8 @@ def respond_isolate_device(device_id: str, reason: str) -> dict:
         return {"error": f"Device {device_id} not found"}
 
     result = _queue_response(
-        device_id, "ISOLATE",
+        device_id,
+        "ISOLATE",
         {"reason": reason, "allow_amoskys": True},
         priority=0,  # Highest possible
         ttl=3600,
@@ -81,8 +93,11 @@ def respond_unisolate_device(device_id: str) -> dict:
         return {"error": f"Device {device_id} not found"}
 
     return _queue_response(
-        device_id, "UNISOLATE", {"reason": "manual_release"},
-        priority=0, ttl=3600,
+        device_id,
+        "UNISOLATE",
+        {"reason": "manual_release"},
+        priority=0,
+        ttl=3600,
     )
 
 
@@ -100,7 +115,8 @@ def respond_kill_process(device_id: str, pid: int, reason: str) -> dict:
         return {"error": f"Device {device_id} not found"}
 
     result = _queue_response(
-        device_id, "KILL_PROCESS",
+        device_id,
+        "KILL_PROCESS",
         {"pid": pid, "reason": reason, "signal": "SIGKILL"},
         priority=1,
     )
@@ -109,7 +125,9 @@ def respond_kill_process(device_id: str, pid: int, reason: str) -> dict:
 
 
 @mcp.tool()
-def respond_block_ip(device_id: str, ip: str, reason: str, duration_minutes: int = 60) -> dict:
+def respond_block_ip(
+    device_id: str, ip: str, reason: str, duration_minutes: int = 60
+) -> dict:
     """Block an IP address on a device's firewall.
 
     Args:
@@ -124,7 +142,8 @@ def respond_block_ip(device_id: str, ip: str, reason: str, duration_minutes: int
         results = []
         for d in devices:
             r = _queue_response(
-                d["device_id"], "BLOCK_IP",
+                d["device_id"],
+                "BLOCK_IP",
                 {"ip": ip, "reason": reason, "duration_s": duration_minutes * 60},
                 priority=1,
             )
@@ -140,7 +159,8 @@ def respond_block_ip(device_id: str, ip: str, reason: str, duration_minutes: int
         return {"error": f"Device {device_id} not found"}
 
     return _queue_response(
-        device_id, "BLOCK_IP",
+        device_id,
+        "BLOCK_IP",
         {"ip": ip, "reason": reason, "duration_s": duration_minutes * 60},
         priority=1,
     )
@@ -160,7 +180,8 @@ def respond_block_domain(device_id: str, domain: str, reason: str) -> dict:
         results = []
         for d in devices:
             r = _queue_response(
-                d["device_id"], "BLOCK_DOMAIN",
+                d["device_id"],
+                "BLOCK_DOMAIN",
                 {"domain": domain, "reason": reason},
                 priority=1,
             )
@@ -172,7 +193,8 @@ def respond_block_domain(device_id: str, domain: str, reason: str) -> dict:
         }
 
     return _queue_response(
-        device_id, "BLOCK_DOMAIN",
+        device_id,
+        "BLOCK_DOMAIN",
         {"domain": domain, "reason": reason},
         priority=1,
     )
@@ -192,7 +214,8 @@ def respond_quarantine_file(device_id: str, path: str, reason: str) -> dict:
         return {"error": f"Device {device_id} not found"}
 
     return _queue_response(
-        device_id, "QUARANTINE_FILE",
+        device_id,
+        "QUARANTINE_FILE",
         {"path": path, "reason": reason},
         priority=1,
     )
@@ -216,14 +239,22 @@ def respond_create_incident(
         mitre_techniques: List of MITRE technique IDs (optional)
     """
     now = time.time()
-    execute("""
+    execute(
+        """
         INSERT INTO fleet_incidents (severity, title, description, device_ids,
                                      mitre_techniques, status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
-    """, (severity, title, description,
-          json.dumps(device_ids),
-          json.dumps(mitre_techniques or []),
-          now, now))
+    """,
+        (
+            severity,
+            title,
+            description,
+            json.dumps(device_ids),
+            json.dumps(mitre_techniques or []),
+            now,
+            now,
+        ),
+    )
 
     return {
         "action": "INCIDENT_CREATED",
@@ -266,7 +297,9 @@ def respond_update_incident(
     if description:
         old_desc = incident.get("description", "")
         updates.append("description = ?")
-        params.append(f"{old_desc}\n\n[UPDATE {time.strftime('%Y-%m-%d %H:%M')}] {description}")
+        params.append(
+            f"{old_desc}\n\n[UPDATE {time.strftime('%Y-%m-%d %H:%M')}] {description}"
+        )
 
     updates.append("updated_at = ?")
     params.append(time.time())
@@ -274,6 +307,7 @@ def respond_update_incident(
 
     if updates:
         from ..db import write_conn
+
         with write_conn() as conn:
             conn.execute(
                 f"UPDATE fleet_incidents SET {', '.join(updates)} WHERE id = ?",

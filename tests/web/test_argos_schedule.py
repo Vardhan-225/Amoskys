@@ -11,8 +11,8 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
 from pathlib import Path
+from typing import Any, Dict, List
 
 import pytest
 
@@ -35,7 +35,6 @@ from amoskys.agents.Web.argos.storage import (
     ScanQueue,
     SurfaceAsset,
 )
-
 
 # ── Fixtures ───────────────────────────────────────────────────────
 
@@ -71,10 +70,15 @@ def customer_with_surface(db):
 
     # Populate surface: seed + 3 in-scope subdomains + 1 out-of-scope + 2 IPs
     def _upsert(kind, value, source="test", confidence=0.9):
-        db.upsert_asset(SurfaceAsset.new(
-            customer_id=cid, kind=kind, value=value,
-            source=source, confidence=confidence,
-        ))
+        db.upsert_asset(
+            SurfaceAsset.new(
+                customer_id=cid,
+                kind=kind,
+                value=value,
+                source=source,
+                confidence=confidence,
+            )
+        )
 
     _upsert(AssetKind.DOMAIN, "acme.com")
     _upsert(AssetKind.SUBDOMAIN, "www.acme.com")
@@ -198,15 +202,23 @@ class _StubRunner(EngagementRunner):
         if asset_value in self.plan:
             return self.plan[asset_value]
         # Default: clean scan, no findings, no errors
-        return {"engagement_id": f"eng-{asset_value}", "findings_count": 0, "errors": []}
+        return {
+            "engagement_id": f"eng-{asset_value}",
+            "findings_count": 0,
+            "errors": [],
+        }
 
 
-def test_run_next_transitions_job_to_complete(
-    db, operator, customer_with_surface
-):
-    runner = _StubRunner(plan={
-        "api.acme.com": {"engagement_id": "eng-api", "findings_count": 3, "errors": []},
-    })
+def test_run_next_transitions_job_to_complete(db, operator, customer_with_surface):
+    runner = _StubRunner(
+        plan={
+            "api.acme.com": {
+                "engagement_id": "eng-api",
+                "findings_count": 3,
+                "errors": [],
+            },
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
 
@@ -218,15 +230,19 @@ def test_run_next_transitions_job_to_complete(
     assert len(runner.calls) == 1
 
 
-def test_run_all_processes_every_pending_job(
-    db, operator, customer_with_surface
-):
-    runner = _StubRunner(plan={
-        "api.acme.com":     {"engagement_id": "e1", "findings_count": 2, "errors": []},
-        "staging.acme.com": {"engagement_id": "e2", "findings_count": 5, "errors": []},
-        "www.acme.com":     {"engagement_id": "e3", "findings_count": 0, "errors": []},
-        "acme.com":         {"engagement_id": "e4", "findings_count": 1, "errors": []},
-    })
+def test_run_all_processes_every_pending_job(db, operator, customer_with_surface):
+    runner = _StubRunner(
+        plan={
+            "api.acme.com": {"engagement_id": "e1", "findings_count": 2, "errors": []},
+            "staging.acme.com": {
+                "engagement_id": "e2",
+                "findings_count": 5,
+                "errors": [],
+            },
+            "www.acme.com": {"engagement_id": "e3", "findings_count": 0, "errors": []},
+            "acme.com": {"engagement_id": "e4", "findings_count": 1, "errors": []},
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
 
@@ -267,12 +283,20 @@ def test_runner_errors_with_zero_findings_marked_failed(
 ):
     """If runner reports errors + 0 findings → failed (partial-success
     with findings stays 'complete')."""
-    runner = _StubRunner(plan={
-        "api.acme.com": {"engagement_id": None, "findings_count": 0,
-                         "errors": ["nuclei timed out"]},
-        "www.acme.com": {"engagement_id": "e2", "findings_count": 3,
-                         "errors": ["wpscan partial"]},  # partial
-    })
+    runner = _StubRunner(
+        plan={
+            "api.acme.com": {
+                "engagement_id": None,
+                "findings_count": 0,
+                "errors": ["nuclei timed out"],
+            },
+            "www.acme.com": {
+                "engagement_id": "e2",
+                "findings_count": 3,
+                "errors": ["wpscan partial"],
+            },  # partial
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -281,22 +305,20 @@ def test_runner_errors_with_zero_findings_marked_failed(
     api = [j for j in jobs if j.asset_value == "api.acme.com"][0]
     www = [j for j in jobs if j.asset_value == "www.acme.com"][0]
     assert api.status == "failed"
-    assert www.status == "complete"   # partial success with findings
+    assert www.status == "complete"  # partial success with findings
 
 
 # ── Progress + reporting ───────────────────────────────────────────
 
 
-def test_progress_reflects_live_queue_state(
-    db, operator, customer_with_surface
-):
+def test_progress_reflects_live_queue_state(db, operator, customer_with_surface):
     scheduler = ScanScheduler(db=db, operator=operator, runner=_StubRunner({}))
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
 
     before = scheduler.progress(queue.queue_id)
     assert before.total == 5
-    assert before.pending == 4   # 4 in-scope
-    assert before.skipped == 1   # 1 out-of-scope
+    assert before.pending == 4  # 4 in-scope
+    assert before.skipped == 1  # 1 out-of-scope
 
     scheduler.run_all(queue.queue_id)
     after = scheduler.progress(queue.queue_id)
@@ -304,13 +326,13 @@ def test_progress_reflects_live_queue_state(
     assert after.pending == 0
 
 
-def test_queue_complete_records_final_audit(
-    db, operator, customer_with_surface
-):
-    runner = _StubRunner(plan={
-        "acme.com":     {"engagement_id": "e1", "findings_count": 1, "errors": []},
-        "api.acme.com": {"engagement_id": "e2", "findings_count": 2, "errors": []},
-    })
+def test_queue_complete_records_final_audit(db, operator, customer_with_surface):
+    runner = _StubRunner(
+        plan={
+            "acme.com": {"engagement_id": "e1", "findings_count": 1, "errors": []},
+            "api.acme.com": {"engagement_id": "e2", "findings_count": 2, "errors": []},
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -319,7 +341,7 @@ def test_queue_complete_records_final_audit(
     actions = [e.action for e in entries]
     assert "scan_queue_create" in actions
     assert "scan_queue_complete" in actions
-    assert actions.count("scan_job_start") == 4   # 4 in-scope jobs
+    assert actions.count("scan_job_start") == 4  # 4 in-scope jobs
     assert actions.count("scan_job_complete") == 4
 
     # Every schedule audit entry tagged with our operator
@@ -352,14 +374,17 @@ def test_full_flow_enroll_recon_queue_scan_report(tmp_path):
     # 1. Register + authorize an operator
     op_svc = OperatorService(db)
     op = op_svc.register(
-        email="ops@amoskys.com", name="Ops",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="ops@amoskys.com",
+        name="Ops",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
 
     # 2. Enroll a lab customer (consent auto-verified)
     cust_svc = CustomerService(db)
     enrollment = cust_svc.enroll(
-        name="LabCorp", seed="lab.example.com",
+        name="LabCorp",
+        seed="lab.example.com",
         consent_method=ConsentMethod.LAB_SELF,
     )
     cid = enrollment.customer.customer_id
@@ -367,17 +392,36 @@ def test_full_flow_enroll_recon_queue_scan_report(tmp_path):
     # 3. Seed a surface directly (simulating what recon would produce)
     for value in ("lab.example.com", "api.lab.example.com", "www.lab.example.com"):
         kind = AssetKind.DOMAIN if value == "lab.example.com" else AssetKind.SUBDOMAIN
-        db.upsert_asset(SurfaceAsset.new(
-            customer_id=cid, kind=kind, value=value,
-            source="fake", confidence=0.9,
-        ))
+        db.upsert_asset(
+            SurfaceAsset.new(
+                customer_id=cid,
+                kind=kind,
+                value=value,
+                source="fake",
+                confidence=0.9,
+            )
+        )
 
     # 4. Queue + run scans via a mock runner
-    runner = _StubRunner(plan={
-        "lab.example.com":       {"engagement_id": "e1", "findings_count": 1, "errors": []},
-        "api.lab.example.com":   {"engagement_id": "e2", "findings_count": 4, "errors": []},
-        "www.lab.example.com":   {"engagement_id": "e3", "findings_count": 0, "errors": []},
-    })
+    runner = _StubRunner(
+        plan={
+            "lab.example.com": {
+                "engagement_id": "e1",
+                "findings_count": 1,
+                "errors": [],
+            },
+            "api.lab.example.com": {
+                "engagement_id": "e2",
+                "findings_count": 4,
+                "errors": [],
+            },
+            "www.lab.example.com": {
+                "engagement_id": "e3",
+                "findings_count": 0,
+                "errors": [],
+            },
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=op, runner=runner)
     queue = scheduler.queue_surface(cid)
     progress = scheduler.run_all(queue.queue_id)

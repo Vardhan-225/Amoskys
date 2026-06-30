@@ -111,38 +111,44 @@ def device_info():
     if _os.environ.get("AMOSKYS_OPS_SERVER"):
         try:
             from .routes_command_center import _ops_get
+
             data = _ops_get("/api/v1/devices")
             if data and data.get("devices"):
                 dev = data["devices"][0]  # First device
-                return jsonify({
-                    "status": "success",
-                    "system": {
-                        "hostname": dev.get("hostname", ""),
-                        "platform": f"{dev.get('os', '')} {dev.get('arch', '')}",
-                        "system": dev.get("os", ""),
-                        "release": dev.get("os_version", ""),
-                        "architecture": [dev.get("arch", "")],
-                        "processor": dev.get("arch", ""),
-                    },
-                })
+                return jsonify(
+                    {
+                        "status": "success",
+                        "system": {
+                            "hostname": dev.get("hostname", ""),
+                            "platform": f"{dev.get('os', '')} {dev.get('arch', '')}",
+                            "system": dev.get("os", ""),
+                            "release": dev.get("os_version", ""),
+                            "architecture": [dev.get("arch", "")],
+                            "processor": dev.get("arch", ""),
+                        },
+                    }
+                )
         except Exception:
             pass
 
     # Local fallback
     import platform as _platform
     import socket as _socket
+
     try:
-        return jsonify({
-            "status": "success",
-            "system": {
-                "hostname": _socket.gethostname(),
-                "platform": _platform.platform(),
-                "system": _platform.system(),
-                "release": _platform.release(),
-                "architecture": list(_platform.architecture()),
-                "processor": _platform.processor(),
-            },
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "system": {
+                    "hostname": _socket.gethostname(),
+                    "platform": _platform.platform(),
+                    "system": _platform.system(),
+                    "release": _platform.release(),
+                    "architecture": list(_platform.architecture()),
+                    "processor": _platform.processor(),
+                },
+            }
+        )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -158,21 +164,49 @@ def live_metrics():
     # Fleet mode: don't read server psutil, use telemetry-derived metrics
     if _os.environ.get("AMOSKYS_OPS_SERVER"):
         from .telemetry_bridge import get_telemetry_store
+
         store = get_telemetry_store()
         try:
-            event_count = store.db.execute("SELECT COUNT(*) FROM security_events").fetchone()[0] if store else 0
-            return jsonify({
-                "status": "success",
-                "metrics": {
-                    "cpu": {"percent": 0, "count": 0, "cores": 0, "status": "healthy"},
-                    "memory": {"percent": 0, "used_gb": 0, "total_gb": 0, "available_gb": 0, "status": "healthy"},
-                    "disk": {"percent": 0, "used_gb": 0, "total_gb": 0, "status": "healthy"},
-                    "network": {"bytes_sent_gb": 0, "bytes_recv_gb": 0},
-                    "amoskys": {"rss_mb": 0, "cpu_percent": 0, "threads": 0, "uptime_seconds": 0},
-                },
-                "event_count": event_count,
-                "fleet_mode": True,
-            })
+            event_count = (
+                store.db.execute("SELECT COUNT(*) FROM security_events").fetchone()[0]
+                if store
+                else 0
+            )
+            return jsonify(
+                {
+                    "status": "success",
+                    "metrics": {
+                        "cpu": {
+                            "percent": 0,
+                            "count": 0,
+                            "cores": 0,
+                            "status": "healthy",
+                        },
+                        "memory": {
+                            "percent": 0,
+                            "used_gb": 0,
+                            "total_gb": 0,
+                            "available_gb": 0,
+                            "status": "healthy",
+                        },
+                        "disk": {
+                            "percent": 0,
+                            "used_gb": 0,
+                            "total_gb": 0,
+                            "status": "healthy",
+                        },
+                        "network": {"bytes_sent_gb": 0, "bytes_recv_gb": 0},
+                        "amoskys": {
+                            "rss_mb": 0,
+                            "cpu_percent": 0,
+                            "threads": 0,
+                            "uptime_seconds": 0,
+                        },
+                    },
+                    "event_count": event_count,
+                    "fleet_mode": True,
+                }
+            )
         except Exception:
             pass
 

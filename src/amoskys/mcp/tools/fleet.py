@@ -6,9 +6,8 @@ import json
 import time
 from typing import Optional
 
-from ..db import query, query_one, scalar, hours_ago_ns, hours_ago_epoch
+from ..db import hours_ago_epoch, hours_ago_ns, query, query_one, scalar
 from ..server import mcp
-
 
 # ── Tools ──────────────────────────────────────────────────────────
 
@@ -19,14 +18,16 @@ def fleet_list_devices() -> dict:
 
     Returns a fleet roster — every device IGRIS can see.
     """
-    devices = query("""
+    devices = query(
+        """
         SELECT d.device_id, d.hostname, d.os, d.os_version, d.arch,
                d.agent_version, d.status, d.last_seen, d.first_seen,
                d.public_ip,
                (SELECT COUNT(*) FROM security_events WHERE device_id = d.device_id) as event_count
         FROM devices d
         ORDER BY d.last_seen DESC
-    """)
+    """
+    )
     now = time.time()
     for d in devices:
         age = now - (d.get("last_seen") or 0)
@@ -42,38 +43,45 @@ def fleet_device_detail(device_id: str) -> dict:
     Args:
         device_id: The device identifier (SHA256 of hardware serial)
     """
-    device = query_one(
-        "SELECT * FROM devices WHERE device_id = ?", (device_id,)
-    )
+    device = query_one("SELECT * FROM devices WHERE device_id = ?", (device_id,))
     if not device:
         return {"error": f"Device {device_id} not found"}
 
     # Event breakdown by category
-    categories = query("""
+    categories = query(
+        """
         SELECT event_category, COUNT(*) as count,
                AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk
         FROM security_events
         WHERE device_id = ? AND timestamp_ns > ?
         GROUP BY event_category ORDER BY count DESC
-    """, (device_id, hours_ago_ns(24)))
+    """,
+        (device_id, hours_ago_ns(24)),
+    )
 
     # Agent activity
-    agents = query("""
+    agents = query(
+        """
         SELECT collection_agent, COUNT(*) as events,
                MAX(timestamp_ns) as last_event_ns
         FROM security_events
         WHERE device_id = ? AND timestamp_ns > ?
         GROUP BY collection_agent ORDER BY events DESC
-    """, (device_id, hours_ago_ns(24)))
+    """,
+        (device_id, hours_ago_ns(24)),
+    )
 
     # Recent high-risk events
-    high_risk = query("""
+    high_risk = query(
+        """
         SELECT event_id, event_category, event_action, risk_score,
                mitre_techniques, description, collection_agent, timestamp_dt
         FROM security_events
         WHERE device_id = ? AND risk_score >= 0.5
         ORDER BY timestamp_ns DESC LIMIT 20
-    """, (device_id,))
+    """,
+        (device_id,),
+    )
 
     return {
         "device": device,
@@ -92,37 +100,55 @@ def fleet_status() -> dict:
     total = scalar("SELECT COUNT(*) FROM devices") or 0
     now = time.time()
 
-    online = scalar(
-        "SELECT COUNT(*) FROM devices WHERE last_seen > ?",
-        (now - 120,),
-    ) or 0
+    online = (
+        scalar(
+            "SELECT COUNT(*) FROM devices WHERE last_seen > ?",
+            (now - 120,),
+        )
+        or 0
+    )
 
-    events_24h = scalar(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-        (hours_ago_ns(24),),
-    ) or 0
+    events_24h = (
+        scalar(
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
+            (hours_ago_ns(24),),
+        )
+        or 0
+    )
 
-    high_risk_24h = scalar(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.7",
-        (hours_ago_ns(24),),
-    ) or 0
+    high_risk_24h = (
+        scalar(
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.7",
+            (hours_ago_ns(24),),
+        )
+        or 0
+    )
 
-    critical_events = scalar(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.9",
-        (hours_ago_ns(24),),
-    ) or 0
+    critical_events = (
+        scalar(
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.9",
+            (hours_ago_ns(24),),
+        )
+        or 0
+    )
 
-    incidents_24h = scalar(
-        "SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
-        (hours_ago_epoch(24),),
-    ) or 0
+    incidents_24h = (
+        scalar(
+            "SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
+            (hours_ago_epoch(24),),
+        )
+        or 0
+    )
 
     # MITRE technique diversity
-    mitre_raw = query("""
+    mitre_raw = query(
+        """
         SELECT DISTINCT mitre_techniques FROM security_events
         WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
               AND mitre_techniques != '' AND mitre_techniques != '[]'
-    """, (hours_ago_ns(24),))
+    """,
+        (hours_ago_ns(24),),
+    )
     techniques = set()
     for row in mitre_raw:
         raw = row.get("mitre_techniques", "")
@@ -135,7 +161,8 @@ def fleet_status() -> dict:
                     techniques.add(raw.split(",")[0].strip())
 
     # Per-device summaries
-    per_device = query("""
+    per_device = query(
+        """
         SELECT d.device_id, d.hostname, d.status,
                COUNT(se.id) as event_count,
                MAX(se.risk_score) as max_risk,
@@ -145,7 +172,9 @@ def fleet_status() -> dict:
             AND se.timestamp_ns > ?
         GROUP BY d.device_id
         ORDER BY max_risk DESC NULLS LAST
-    """, (hours_ago_ns(24),))
+    """,
+        (hours_ago_ns(24),),
+    )
 
     return {
         "fleet": {
@@ -172,7 +201,8 @@ def fleet_device_agents(device_id: str, hours: int = 24) -> dict:
         device_id: Target device
         hours:     Lookback window (default 24)
     """
-    agents = query("""
+    agents = query(
+        """
         SELECT collection_agent,
                COUNT(*) as events,
                AVG(risk_score) as avg_risk,
@@ -183,7 +213,9 @@ def fleet_device_agents(device_id: str, hours: int = 24) -> dict:
         WHERE device_id = ? AND timestamp_ns > ?
         GROUP BY collection_agent
         ORDER BY events DESC
-    """, (device_id, hours_ago_ns(hours)))
+    """,
+        (device_id, hours_ago_ns(hours)),
+    )
 
     now_ns = int(time.time() * 1e9)
     for a in agents:

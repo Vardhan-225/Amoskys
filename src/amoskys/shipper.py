@@ -48,9 +48,9 @@ logger = logging.getLogger("amoskys.shipper")
 
 # ── Configuration ──────────────────────────────────────────────────
 
-SHIP_INTERVAL_S = 10          # Ship every 10 seconds
-BATCH_SIZE = 200              # Max events per POST
-REGISTER_INTERVAL_S = 300     # Re-register every 5 minutes (heartbeat)
+SHIP_INTERVAL_S = 10  # Ship every 10 seconds
+BATCH_SIZE = 200  # Max events per POST
+REGISTER_INTERVAL_S = 300  # Re-register every 5 minutes (heartbeat)
 CONNECT_TIMEOUT_S = 10
 READ_TIMEOUT_S = 30
 
@@ -58,14 +58,15 @@ READ_TIMEOUT_S = 30
 @dataclass
 class ShipperConfig:
     """Shipper configuration, loaded from environment."""
-    server_url: str = ""           # e.g. https://ops.amoskys.com
-    api_key: str = ""              # Device API key (assigned on registration)
-    deploy_token: str = ""         # One-time deployment token (used on first register)
-    org_id: str = ""               # Organization ID (links device to user's org)
-    device_id: str = ""            # Unique device identifier
+
+    server_url: str = ""  # e.g. https://ops.amoskys.com
+    api_key: str = ""  # Device API key (assigned on registration)
+    deploy_token: str = ""  # One-time deployment token (used on first register)
+    org_id: str = ""  # Organization ID (links device to user's org)
+    device_id: str = ""  # Unique device identifier
     telemetry_db: str = "data/telemetry.db"
     cursor_db: str = "data/shipper_cursor.db"
-    config_file: str = ""          # Path to amoskys.env (for persisting API key)
+    config_file: str = ""  # Path to amoskys.env (for persisting API key)
     enabled: bool = False
 
     @classmethod
@@ -92,7 +93,9 @@ class ShipperConfig:
 
         # Config file for persisting API key after first registration
         amoskys_home = os.getenv("AMOSKYS_HOME", "")
-        config_file = os.path.join(amoskys_home, "config", "amoskys.env") if amoskys_home else ""
+        config_file = (
+            os.path.join(amoskys_home, "config", "amoskys.env") if amoskys_home else ""
+        )
 
         return cls(
             server_url=server,
@@ -120,11 +123,14 @@ def _get_hostname() -> str:
     """
     if platform.system() == "Darwin":
         import subprocess
+
         for cmd in ["ComputerName", "LocalHostName"]:
             try:
                 result = subprocess.run(
                     ["scutil", "--get", cmd],
-                    capture_output=True, text=True, timeout=3,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
                 )
                 name = result.stdout.strip()
                 if name and len(name) > 1:
@@ -134,6 +140,7 @@ def _get_hostname() -> str:
 
     # Linux / fallback
     import socket
+
     name = socket.gethostname()
     if name and name != "localhost":
         return name
@@ -151,9 +158,12 @@ def _generate_device_id() -> str:
     if platform.system() == "Darwin":
         try:
             import subprocess
+
             result = subprocess.run(
                 ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             for line in result.stdout.split("\n"):
                 if "IOPlatformSerialNumber" in line:
@@ -182,6 +192,7 @@ def _generate_device_id() -> str:
 
 
 # ── Cursor Store ───────────────────────────────────────────────────
+
 
 class CursorStore:
     """Tracks last-shipped row ID per table in a tiny SQLite DB."""
@@ -226,79 +237,178 @@ class CursorStore:
 SHIP_TABLES = {
     "security_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "event_category", "event_action", "event_outcome",
-            "risk_score", "confidence", "mitre_techniques",
-            "geometric_score", "temporal_score", "behavioral_score",
-            "final_classification", "description", "indicators",
-            "collection_agent", "enrichment_status", "threat_intel_match",
-            "geo_src_country", "geo_src_city", "geo_src_latitude",
-            "geo_src_longitude", "asn_src_org", "asn_src_number",
-            "asn_src_network_type", "event_timestamp_ns",
-            "event_id", "remote_ip", "remote_port",
-            "process_name", "pid", "exe", "cmdline",
-            "username", "protocol", "domain", "path", "sha256",
-            "probe_name", "detection_source",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "event_category",
+            "event_action",
+            "event_outcome",
+            "risk_score",
+            "confidence",
+            "mitre_techniques",
+            "geometric_score",
+            "temporal_score",
+            "behavioral_score",
+            "final_classification",
+            "description",
+            "indicators",
+            "collection_agent",
+            "enrichment_status",
+            "threat_intel_match",
+            "geo_src_country",
+            "geo_src_city",
+            "geo_src_latitude",
+            "geo_src_longitude",
+            "asn_src_org",
+            "asn_src_number",
+            "asn_src_network_type",
+            "event_timestamp_ns",
+            "event_id",
+            "remote_ip",
+            "remote_port",
+            "process_name",
+            "pid",
+            "exe",
+            "cmdline",
+            "username",
+            "protocol",
+            "domain",
+            "path",
+            "sha256",
+            "probe_name",
+            "detection_source",
         ],
     },
     "process_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "pid", "exe", "cmdline", "ppid", "username", "name",
-            "parent_name", "status", "cpu_percent", "memory_percent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "pid",
+            "exe",
+            "cmdline",
+            "ppid",
+            "username",
+            "name",
+            "parent_name",
+            "status",
+            "cpu_percent",
+            "memory_percent",
             "collection_agent",
         ],
     },
     "flow_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "src_ip", "dst_ip", "src_port", "dst_port", "protocol",
-            "bytes_tx", "bytes_rx", "pid", "process_name",
-            "geo_dst_latitude", "geo_dst_longitude", "geo_dst_country",
-            "geo_dst_city", "asn_dst_org", "threat_intel_match",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "src_ip",
+            "dst_ip",
+            "src_port",
+            "dst_port",
+            "protocol",
+            "bytes_tx",
+            "bytes_rx",
+            "pid",
+            "process_name",
+            "geo_dst_latitude",
+            "geo_dst_longitude",
+            "geo_dst_country",
+            "geo_dst_city",
+            "asn_dst_org",
+            "threat_intel_match",
             "collection_agent",
         ],
     },
     "dns_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "domain", "record_type", "response_code", "risk_score",
-            "process_name", "collection_agent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "domain",
+            "record_type",
+            "response_code",
+            "risk_score",
+            "process_name",
+            "collection_agent",
         ],
     },
     "persistence_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "mechanism", "path", "change_type", "label",
-            "sha256", "risk_score", "collection_agent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "mechanism",
+            "path",
+            "change_type",
+            "label",
+            "sha256",
+            "risk_score",
+            "collection_agent",
         ],
     },
     "fim_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "path", "file_extension", "change_type", "new_hash",
-            "owner_uid", "is_suid", "mtime", "size",
-            "risk_score", "event_type", "collection_agent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "path",
+            "file_extension",
+            "change_type",
+            "new_hash",
+            "owner_uid",
+            "is_suid",
+            "mtime",
+            "size",
+            "risk_score",
+            "event_type",
+            "collection_agent",
         ],
     },
     "audit_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "event_type", "pid", "ppid", "uid", "username",
-            "risk_score", "collection_agent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "event_type",
+            "pid",
+            "ppid",
+            "uid",
+            "username",
+            "risk_score",
+            "collection_agent",
         ],
     },
     "observation_events": {
         "columns": [
-            "id", "event_id", "device_id", "domain",
-            "event_timestamp_ns", "raw_attributes_json",
+            "id",
+            "event_id",
+            "device_id",
+            "domain",
+            "event_timestamp_ns",
+            "raw_attributes_json",
         ],
     },
     "peripheral_events": {
         "columns": [
-            "id", "timestamp_ns", "timestamp_dt", "device_id",
-            "peripheral_device_id", "event_type", "device_name",
-            "device_type", "vendor_id", "risk_score", "collection_agent",
+            "id",
+            "timestamp_ns",
+            "timestamp_dt",
+            "device_id",
+            "peripheral_device_id",
+            "event_type",
+            "device_name",
+            "device_type",
+            "vendor_id",
+            "risk_score",
+            "collection_agent",
         ],
     },
 }
@@ -319,11 +429,13 @@ class TelemetryShipper:
         self.cursors = CursorStore(config.cursor_db)
         self._session = requests.Session()
         self._session.verify = False  # Ops server may use self-signed cert
-        self._session.headers.update({
-            "Content-Type": "application/json",
-            "X-Device-ID": config.device_id,
-            "User-Agent": "AMOSKYS-Agent/0.9.1",
-        })
+        self._session.headers.update(
+            {
+                "Content-Type": "application/json",
+                "X-Device-ID": config.device_id,
+                "User-Agent": "AMOSKYS-Agent/0.9.1",
+            }
+        )
         if config.api_key:
             self._session.headers["Authorization"] = f"Bearer {config.api_key}"
 
@@ -433,18 +545,24 @@ class TelemetryShipper:
                     self._session.headers["Authorization"] = f"Bearer {server_key}"
                     self._persist_api_key(server_key)
                     self.config.deploy_token = ""
-                    logger.info("API key updated (device=%s)", self.config.device_id[:8])
+                    logger.info(
+                        "API key updated (device=%s)", self.config.device_id[:8]
+                    )
                 elif server_key and not self.config.api_key:
                     self.config.api_key = server_key
                     self._session.headers["Authorization"] = f"Bearer {server_key}"
                     self._persist_api_key(server_key)
                     self.config.deploy_token = ""
-                    logger.info("Registered with API key (device=%s)", self.config.device_id[:8])
+                    logger.info(
+                        "Registered with API key (device=%s)", self.config.device_id[:8]
+                    )
                 self._registered = True
                 if not server_key:
                     logger.debug("Heartbeat OK (device=%s)", self.config.device_id[:8])
             else:
-                logger.warning("Registration failed: %d %s", resp.status_code, resp.text[:200])
+                logger.warning(
+                    "Registration failed: %d %s", resp.status_code, resp.text[:200]
+                )
 
         except requests.ConnectionError:
             logger.debug("Command Center unreachable — will retry")
@@ -464,8 +582,11 @@ class TelemetryShipper:
             lines = []
             if os.path.exists(config_file):
                 with open(config_file) as f:
-                    lines = [ln for ln in f.readlines()
-                             if not ln.strip().startswith("AMOSKYS_API_KEY=")]
+                    lines = [
+                        ln
+                        for ln in f.readlines()
+                        if not ln.strip().startswith("AMOSKYS_API_KEY=")
+                    ]
             # Append new key
             lines.append(f"AMOSKYS_API_KEY={api_key}\n")
             with open(config_file, "w") as f:
@@ -554,14 +675,19 @@ class TelemetryShipper:
                 self._stats["last_ship_time"] = time.time()
                 logger.info(
                     "Shipped %d %s events (id %d→%d)",
-                    len(events), table, last_id, max_id,
+                    len(events),
+                    table,
+                    last_id,
+                    max_id,
                 )
             else:
                 self._stats["failed"] += len(events)
                 self._stats["last_error"] = f"{resp.status_code}: {resp.text[:100]}"
                 logger.warning(
                     "Ship %s failed: %d %s",
-                    table, resp.status_code, resp.text[:200],
+                    table,
+                    resp.status_code,
+                    resp.text[:200],
                 )
 
         except requests.ConnectionError:
@@ -570,7 +696,6 @@ class TelemetryShipper:
             self._stats["failed"] += len(events)
             self._stats["last_error"] = str(e)
             logger.warning("Ship error: %s", e)
-
 
     # ── Command Polling (MCP → Device) ──────────────────────────
 
@@ -628,7 +753,9 @@ class TelemetryShipper:
             elif cmd_type == "STOP_AGENT":
                 return self._cmd_agent_lifecycle("stop", payload.get("agent_name", ""))
             elif cmd_type == "RESTART_AGENT":
-                return self._cmd_agent_lifecycle("restart", payload.get("agent_name", ""))
+                return self._cmd_agent_lifecycle(
+                    "restart", payload.get("agent_name", "")
+                )
             elif cmd_type == "COLLECT_NOW":
                 return self._cmd_collect_now()
             elif cmd_type == "UPDATE_CONFIG":
@@ -656,10 +783,13 @@ class TelemetryShipper:
         if not agent_name:
             return {"success": False, "error": "No agent_name provided"}
         import subprocess
+
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "amoskys.launcher", action, "--agents-only"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
                 env={**os.environ, "AMOSKYS_AGENT": agent_name},
             )
             return {
@@ -673,10 +803,13 @@ class TelemetryShipper:
     def _cmd_collect_now(self) -> dict:
         """Trigger immediate data collection."""
         import subprocess
+
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "amoskys.launcher", "collect"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             return {
                 "success": result.returncode == 0,
@@ -731,16 +864,19 @@ class TelemetryShipper:
             return {"success": False, "error": "No IP provided"}
 
         import subprocess
+
         if platform.system() == "Darwin":
             # macOS: use pf
-            rule = f'block drop from {ip} to any\nblock drop from any to {ip}\n'
+            rule = f"block drop from {ip} to any\nblock drop from any to {ip}\n"
             anchor_file = Path("/tmp/amoskys_block.rules")
             # Append rule
             with open(anchor_file, "a") as f:
                 f.write(rule)
             result = subprocess.run(
                 ["sudo", "pfctl", "-a", "amoskys", "-f", str(anchor_file)],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return {
                 "success": result.returncode == 0,
@@ -751,7 +887,9 @@ class TelemetryShipper:
             # Linux: use iptables
             result = subprocess.run(
                 ["sudo", "iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return {
                 "success": result.returncode == 0,
@@ -770,9 +908,13 @@ class TelemetryShipper:
                 f.write(hosts_line)
             # Flush DNS cache
             import subprocess
+
             if platform.system() == "Darwin":
-                subprocess.run(["sudo", "dscacheutil", "-flushcache"],
-                               capture_output=True, timeout=5)
+                subprocess.run(
+                    ["sudo", "dscacheutil", "-flushcache"],
+                    capture_output=True,
+                    timeout=5,
+                )
             return {"success": True, "output": f"Sinkholed {domain}"}
         except PermissionError:
             return {"success": False, "error": "Need root to modify /etc/hosts"}
@@ -780,6 +922,7 @@ class TelemetryShipper:
     def _cmd_isolate(self, payload: dict) -> dict:
         """Network-isolate this device (allow only AMOSKYS traffic)."""
         import subprocess
+
         server_ip = self.config.server_url.split("://")[-1].split(":")[0]
         if platform.system() == "Darwin":
             rules = (
@@ -789,9 +932,17 @@ class TelemetryShipper:
             )
             Path("/tmp/amoskys_isolate.rules").write_text(rules)
             result = subprocess.run(
-                ["sudo", "pfctl", "-a", "amoskys_isolate", "-f",
-                 "/tmp/amoskys_isolate.rules"],
-                capture_output=True, text=True, timeout=10,
+                [
+                    "sudo",
+                    "pfctl",
+                    "-a",
+                    "amoskys_isolate",
+                    "-f",
+                    "/tmp/amoskys_isolate.rules",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return {
                 "success": result.returncode == 0,
@@ -802,10 +953,13 @@ class TelemetryShipper:
     def _cmd_unisolate(self) -> dict:
         """Remove network isolation."""
         import subprocess
+
         if platform.system() == "Darwin":
             result = subprocess.run(
                 ["sudo", "pfctl", "-a", "amoskys_isolate", "-F", "all"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return {
                 "success": result.returncode == 0,
@@ -825,6 +979,7 @@ class TelemetryShipper:
         quarantine_dir.mkdir(parents=True, exist_ok=True)
         dst = quarantine_dir / f"{src.name}.{int(time.time())}"
         import shutil
+
         shutil.move(str(src), str(dst))
         os.chmod(str(dst), 0o000)  # Remove all permissions
         return {
@@ -834,6 +989,7 @@ class TelemetryShipper:
 
 
 # ── Standalone mode ────────────────────────────────────────────────
+
 
 def main():
     """Run shipper standalone (for testing)."""
@@ -863,4 +1019,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

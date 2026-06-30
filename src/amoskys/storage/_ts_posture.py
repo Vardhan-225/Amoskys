@@ -144,7 +144,9 @@ class PostureMixin:
                     domain = _AGENT_TO_DOMAIN.get(agent, "observations")
                     agent_max = r[1] or 0.0
                     agent_avg = r[2] or 0.0
-                    existing = domain_risks.get(domain, {"max_risk": 0.0, "avg_risk": 0.0})
+                    existing = domain_risks.get(
+                        domain, {"max_risk": 0.0, "avg_risk": 0.0}
+                    )
                     domain_risks[domain] = {
                         "max_risk": round(max(existing["max_risk"], agent_max), 3),
                         "avg_risk": round(max(existing["avg_risk"], agent_avg), 3),

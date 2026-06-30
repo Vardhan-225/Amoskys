@@ -57,11 +57,11 @@ class RateLimitFinding:
 
     def to_dict(self):
         return {
-            "technique":     self.technique,
-            "severity":      self.severity,
-            "evidence":      self.evidence,
+            "technique": self.technique,
+            "severity": self.severity,
+            "evidence": self.evidence,
             "bypass_recipe": self.bypass_recipe,
-            "metadata":      dict(self.metadata),
+            "metadata": dict(self.metadata),
         }
 
 
@@ -76,12 +76,12 @@ class RateLimitReport:
 
     def to_dict(self):
         return {
-            "target":          self.target,
-            "limit_requests":  self.limit_requests,
-            "limit_window_s":  self.limit_window_s,
+            "target": self.target,
+            "limit_requests": self.limit_requests,
+            "limit_window_s": self.limit_window_s,
             "limit_dimension": self.limit_dimension,
-            "findings":        [f.to_dict() for f in self.findings],
-            "errors":          list(self.errors),
+            "findings": [f.to_dict() for f in self.findings],
+            "errors": list(self.errors),
         }
 
 
@@ -105,25 +105,28 @@ def _rotation_headers_iter(n: int, mode: str = "xff") -> Iterable[Dict[str, str]
     for _ in range(n):
         ip = _random_ip() if mode == "test-net" else _random_residential_like_ip()
         yield {
-            "X-Forwarded-For":     ip,
-            "X-Real-IP":           ip,
-            "X-Originating-IP":    ip,
-            "X-Client-IP":         ip,
-            "X-Remote-IP":         ip,
-            "X-Remote-Addr":       ip,
-            "Forwarded":           f"for={ip}",
+            "X-Forwarded-For": ip,
+            "X-Real-IP": ip,
+            "X-Originating-IP": ip,
+            "X-Client-IP": ip,
+            "X-Remote-IP": ip,
+            "X-Remote-Addr": ip,
+            "Forwarded": f"for={ip}",
         }
 
 
 # ── Probe: threshold discovery ────────────────────────────────────
 
 
-def probe_ratelimit(target_url: str, endpoint: str,
-                     method: str = "POST",
-                     sample_body: Optional[str] = None,
-                     max_requests: int = 60,
-                     request_interval_s: float = 0.5,
-                     sender: Optional[Callable] = None) -> RateLimitReport:
+def probe_ratelimit(
+    target_url: str,
+    endpoint: str,
+    method: str = "POST",
+    sample_body: Optional[str] = None,
+    max_requests: int = 60,
+    request_interval_s: float = 0.5,
+    sender: Optional[Callable] = None,
+) -> RateLimitReport:
     """Discover rate-limit threshold by hammering from a single IP.
 
     sender(url, method, headers, body, timeout) -> (status, headers, body, elapsed_ms)
@@ -141,7 +144,8 @@ def probe_ratelimit(target_url: str, endpoint: str,
     for i in range(max_requests):
         try:
             status, hdrs, _body, _elapsed = sender(
-                f"{target_url}{endpoint}", method, {}, sample_body, 5.0)
+                f"{target_url}{endpoint}", method, {}, sample_body, 5.0
+            )
         except Exception as exc:  # noqa: BLE001
             report.errors.append(f"request {i} failed: {exc}")
             break
@@ -156,7 +160,9 @@ def probe_ratelimit(target_url: str, endpoint: str,
                 pass
         if "x-ratelimit-reset" in hdrs_lower:
             try:
-                report.limit_window_s = int(hdrs_lower["x-ratelimit-reset"]) - int(time.time())
+                report.limit_window_s = int(hdrs_lower["x-ratelimit-reset"]) - int(
+                    time.time()
+                )
             except ValueError:
                 pass
 
@@ -168,52 +174,67 @@ def probe_ratelimit(target_url: str, endpoint: str,
             ev = f"429 after {i + 1} requests in ~{elapsed:.1f}s"
             if retry:
                 ev += f"; Retry-After: {retry}"
-            report.findings.append(RateLimitFinding(
-                technique="ratelimit_threshold", severity="info",
-                evidence=ev,
-                metadata={"hit_at_request": i + 1, "retry_after": retry},
-            ))
+            report.findings.append(
+                RateLimitFinding(
+                    technique="ratelimit_threshold",
+                    severity="info",
+                    evidence=ev,
+                    metadata={"hit_at_request": i + 1, "retry_after": retry},
+                )
+            )
             return report
 
         time.sleep(request_interval_s)
 
     # No 429 in max_requests — likely no limit or much higher
-    report.findings.append(RateLimitFinding(
-        technique="ratelimit_threshold", severity="info",
-        evidence=f"no 429 observed across {max_requests} requests — limit absent or ≥ {max_requests}",
-        metadata={"statuses_seen": list(set(statuses))},
-    ))
+    report.findings.append(
+        RateLimitFinding(
+            technique="ratelimit_threshold",
+            severity="info",
+            evidence=f"no 429 observed across {max_requests} requests — limit absent or ≥ {max_requests}",
+            metadata={"statuses_seen": list(set(statuses))},
+        )
+    )
     return report
 
 
 # ── Bypass 1: header rotation ─────────────────────────────────────
 
 
-def bypass_header_rotation(target_url: str, endpoint: str,
-                            confirmed_limit_requests: int = 10,
-                            attempt_count: int = 40,
-                            ip_mode: str = "test-net",
-                            method: str = "POST",
-                            sample_body: Optional[str] = None,
-                            sender: Optional[Callable] = None) -> RateLimitFinding:
+def bypass_header_rotation(
+    target_url: str,
+    endpoint: str,
+    confirmed_limit_requests: int = 10,
+    attempt_count: int = 40,
+    ip_mode: str = "test-net",
+    method: str = "POST",
+    sample_body: Optional[str] = None,
+    sender: Optional[Callable] = None,
+) -> RateLimitFinding:
     """Retry attempt_count times, rotating XFF-family headers each call.
 
     Counts non-429 successful requests; if we beat the baseline
     limit, rotation bypasses it.
     """
     if sender is None:
-        return RateLimitFinding(technique="bypass_header_rotation", severity="info",
-                                evidence="no sender supplied")
+        return RateLimitFinding(
+            technique="bypass_header_rotation",
+            severity="info",
+            evidence="no sender supplied",
+        )
     success = 0
     throttled = 0
     for headers in _rotation_headers_iter(attempt_count, mode=ip_mode):
         try:
             status, _h, _b, _e = sender(
-                f"{target_url}{endpoint}", method, headers, sample_body, 5.0)
+                f"{target_url}{endpoint}", method, headers, sample_body, 5.0
+            )
         except Exception as exc:  # noqa: BLE001
             return RateLimitFinding(
-                technique="bypass_header_rotation", severity="info",
-                evidence=f"sender raised: {exc}")
+                technique="bypass_header_rotation",
+                severity="info",
+                evidence=f"sender raised: {exc}",
+            )
         if status == 429:
             throttled += 1
         else:
@@ -223,16 +244,26 @@ def bypass_header_rotation(target_url: str, endpoint: str,
     return RateLimitFinding(
         technique="bypass_header_rotation",
         severity="high" if beat else "info",
-        evidence=(f"{success}/{attempt_count} non-429 with rotating XFF — "
-                  f"{'BYPASSED' if beat else 'did not exceed'} baseline limit "
-                  f"of {confirmed_limit_requests}"),
+        evidence=(
+            f"{success}/{attempt_count} non-429 with rotating XFF — "
+            f"{'BYPASSED' if beat else 'did not exceed'} baseline limit "
+            f"of {confirmed_limit_requests}"
+        ),
         bypass_recipe=(
-            "Rotate X-Forwarded-For, X-Real-IP, X-Originating-IP, X-Client-IP, "
-            "Forwarded headers per request. The backend trusts these for rate-"
-            "limit attribution, so each fresh IP gets its own bucket."
-        ) if beat else "",
-        metadata={"success": success, "throttled": throttled,
-                  "attempts": attempt_count, "bypassed": beat},
+            (
+                "Rotate X-Forwarded-For, X-Real-IP, X-Originating-IP, X-Client-IP, "
+                "Forwarded headers per request. The backend trusts these for rate-"
+                "limit attribution, so each fresh IP gets its own bucket."
+            )
+            if beat
+            else ""
+        ),
+        metadata={
+            "success": success,
+            "throttled": throttled,
+            "attempts": attempt_count,
+            "bypassed": beat,
+        },
     )
 
 
@@ -243,20 +274,25 @@ def bypass_case_variation(endpoint: str) -> RateLimitFinding:
     """Generate case + path-shape variants of a URL suitable for
     retry bypass against literal-path-keyed rate limiters."""
     base = endpoint.rstrip("/")
-    variants = list(dict.fromkeys([
-        base,
-        base.upper(),
-        base.lower(),
-        base + "/",
-        base + "//",
-        base + "/.",
-        base + "/%2e",
-        base.replace("/", "//", 1),
-        base + ";x=1",
-        base + "?x=" + "".join(random.choices(string.ascii_lowercase, k=6)),
-    ]))
+    variants = list(
+        dict.fromkeys(
+            [
+                base,
+                base.upper(),
+                base.lower(),
+                base + "/",
+                base + "//",
+                base + "/.",
+                base + "/%2e",
+                base.replace("/", "//", 1),
+                base + ";x=1",
+                base + "?x=" + "".join(random.choices(string.ascii_lowercase, k=6)),
+            ]
+        )
+    )
     return RateLimitFinding(
-        technique="bypass_case_variation", severity="medium",
+        technique="bypass_case_variation",
+        severity="medium",
         evidence=f"{len(variants)} URL-shape variants generated for retry rotation",
         bypass_recipe=(
             "Cycle through these URL variants; literal-path-keyed limiters "
@@ -270,8 +306,9 @@ def bypass_case_variation(endpoint: str) -> RateLimitFinding:
 # ── Bypass 3: parameter pollution ─────────────────────────────────
 
 
-def bypass_param_pollution(endpoint: str, param_name: str,
-                            values: List[str]) -> RateLimitFinding:
+def bypass_param_pollution(
+    endpoint: str, param_name: str, values: List[str]
+) -> RateLimitFinding:
     """Build HPP variants for a given parameter.
 
     For `param_name="user"` and values=["a","b","c"]:
@@ -282,11 +319,15 @@ def bypass_param_pollution(endpoint: str, param_name: str,
     bypass.
     """
     if not values:
-        return RateLimitFinding(technique="bypass_param_pollution", severity="info",
-                                evidence="no values supplied")
+        return RateLimitFinding(
+            technique="bypass_param_pollution",
+            severity="info",
+            evidence="no values supplied",
+        )
     pollution_string = "&".join(f"{param_name}={v}" for v in values)
     return RateLimitFinding(
-        technique="bypass_param_pollution", severity="medium",
+        technique="bypass_param_pollution",
+        severity="medium",
         evidence=f"HPP recipe for '{param_name}' with {len(values)} values",
         bypass_recipe=(
             f"Append query string '{pollution_string}'. If the rate-limiter "
@@ -298,7 +339,8 @@ def bypass_param_pollution(endpoint: str, param_name: str,
 
 
 __all__ = [
-    "RateLimitFinding", "RateLimitReport",
+    "RateLimitFinding",
+    "RateLimitReport",
     "probe_ratelimit",
     "bypass_header_rotation",
     "bypass_case_variation",

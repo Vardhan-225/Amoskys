@@ -51,6 +51,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from amoskys.agents.Web.argos.ast.base import _match_close  # noqa: E402
 from amoskys.agents.Web.argos.ast.base import (
     ASTFinding,
     ASTScanner,
@@ -59,7 +60,6 @@ from amoskys.agents.Web.argos.ast.base import (
     find_calls,
     strip_comments_and_strings,
 )
-from amoskys.agents.Web.argos.ast.base import _match_close  # noqa: E402
 
 # ── State-changing sink signatures ─────────────────────────────────
 #
@@ -84,7 +84,7 @@ _STATE_CHANGING_SINKS = [
     r"\bwp_mail\s*\(",
     r"->(?:insert|update|delete|query|replace)\s*\(",  # $wpdb->...
     r"\bfile_put_contents\s*\(",
-    r"\bfopen\s*\([^,]+,\s*['\"][wax]",                # fopen for write
+    r"\bfopen\s*\([^,]+,\s*['\"][wax]",  # fopen for write
     r"\bmove_uploaded_file\s*\(",
     r"\bunlink\s*\(",
     r"\brmdir\s*\(",
@@ -145,9 +145,7 @@ class RestAuthzScanner(ASTScanner):
 
     # ── register_rest_route rules ──────────────────────────────────
 
-    def _scan_register_rest_route(
-        self, source: PHPSource, plugin
-    ) -> List[ASTFinding]:
+    def _scan_register_rest_route(self, source: PHPSource, plugin) -> List[ASTFinding]:
         out: List[ASTFinding] = []
         for call in find_calls(source, "register_rest_route"):
             # register_rest_route( namespace, route, args [, override] )
@@ -162,74 +160,80 @@ class RestAuthzScanner(ASTScanner):
             callback = pair_map.get("callback", "?")
 
             if perm is None:
-                out.append(self._finding(
-                    plugin, source, call,
-                    rule_id="rest_authz.permission_callback_missing",
-                    severity="high",
-                    title=f"REST route {ns_str}/{route_str} missing permission_callback",
-                    description=(
-                        "This call to register_rest_route() does not set a "
-                        "permission_callback. WordPress emits a _doing_it_wrong "
-                        "notice but still exposes the route to unauthenticated "
-                        "requests. Any state-changing logic in the handler "
-                        "executes for any caller."
-                    ),
-                    recommendation=(
-                        "Add an explicit permission_callback. Example:\n"
-                        "    'permission_callback' => function() {\n"
-                        "        return current_user_can('edit_posts');\n"
-                        "    }"
-                    ),
-                    cwe="CWE-862",
-                    mitre_techniques=["T1190"],
-                    references=[
-                        "https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/#permission-callback",
-                    ],
-                    evidence={
-                        "namespace": ns_str,
-                        "route": route_str,
-                        "methods": methods,
-                        "callback": callback,
-                    },
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call,
+                        rule_id="rest_authz.permission_callback_missing",
+                        severity="high",
+                        title=f"REST route {ns_str}/{route_str} missing permission_callback",
+                        description=(
+                            "This call to register_rest_route() does not set a "
+                            "permission_callback. WordPress emits a _doing_it_wrong "
+                            "notice but still exposes the route to unauthenticated "
+                            "requests. Any state-changing logic in the handler "
+                            "executes for any caller."
+                        ),
+                        recommendation=(
+                            "Add an explicit permission_callback. Example:\n"
+                            "    'permission_callback' => function() {\n"
+                            "        return current_user_can('edit_posts');\n"
+                            "    }"
+                        ),
+                        cwe="CWE-862",
+                        mitre_techniques=["T1190"],
+                        references=[
+                            "https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/#permission-callback",
+                        ],
+                        evidence={
+                            "namespace": ns_str,
+                            "route": route_str,
+                            "methods": methods,
+                            "callback": callback,
+                        },
+                    )
+                )
             elif _is_permissive_callback(perm):
-                out.append(self._finding(
-                    plugin, source, call,
-                    rule_id="rest_authz.permission_callback_return_true",
-                    severity="critical",
-                    title=f"REST route {ns_str}/{route_str} explicitly public (permission_callback always true)",
-                    description=(
-                        "The permission_callback unconditionally returns true. "
-                        "This route is intentionally unauthenticated. If the "
-                        "handler performs data mutation or reads sensitive state, "
-                        "any internet caller can trigger it."
-                    ),
-                    recommendation=(
-                        "If the route genuinely must be public, ensure the "
-                        "handler validates and sanitizes all input and performs "
-                        "no privileged actions. Otherwise replace __return_true "
-                        "with a real capability check (current_user_can)."
-                    ),
-                    cwe="CWE-284",
-                    mitre_techniques=["T1190"],
-                    references=[
-                        "https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/#permission-callback",
-                    ],
-                    evidence={
-                        "namespace": ns_str,
-                        "route": route_str,
-                        "methods": methods,
-                        "callback": callback,
-                        "permission_callback": perm,
-                    },
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call,
+                        rule_id="rest_authz.permission_callback_return_true",
+                        severity="critical",
+                        title=f"REST route {ns_str}/{route_str} explicitly public (permission_callback always true)",
+                        description=(
+                            "The permission_callback unconditionally returns true. "
+                            "This route is intentionally unauthenticated. If the "
+                            "handler performs data mutation or reads sensitive state, "
+                            "any internet caller can trigger it."
+                        ),
+                        recommendation=(
+                            "If the route genuinely must be public, ensure the "
+                            "handler validates and sanitizes all input and performs "
+                            "no privileged actions. Otherwise replace __return_true "
+                            "with a real capability check (current_user_can)."
+                        ),
+                        cwe="CWE-284",
+                        mitre_techniques=["T1190"],
+                        references=[
+                            "https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/#permission-callback",
+                        ],
+                        evidence={
+                            "namespace": ns_str,
+                            "route": route_str,
+                            "methods": methods,
+                            "callback": callback,
+                            "permission_callback": perm,
+                        },
+                    )
+                )
         return out
 
     # ── add_action('wp_ajax_*') rules ──────────────────────────────
 
-    def _scan_wp_ajax_actions(
-        self, source: PHPSource, plugin
-    ) -> List[ASTFinding]:
+    def _scan_wp_ajax_actions(self, source: PHPSource, plugin) -> List[ASTFinding]:
         out: List[ASTFinding] = []
         for call in find_calls(source, "add_action"):
             hook = _strip_quotes_safe(call.arg(0)) if call.arg(0) else ""
@@ -237,7 +241,9 @@ class RestAuthzScanner(ASTScanner):
                 continue
             callback_raw = call.arg(1) or ""
             is_nopriv = hook.startswith("wp_ajax_nopriv_")
-            action = hook[len("wp_ajax_nopriv_") :] if is_nopriv else hook[len("wp_ajax_") :]
+            action = (
+                hook[len("wp_ajax_nopriv_") :] if is_nopriv else hook[len("wp_ajax_") :]
+            )
 
             # Try to resolve the callback body in this file.
             body = _resolve_callback_body(source, callback_raw)
@@ -246,71 +252,79 @@ class RestAuthzScanner(ASTScanner):
             state_changes = _STATE_CHANGING_RE.findall(body) if body else []
 
             if is_nopriv and state_changes and not has_authz:
-                out.append(self._finding(
-                    plugin, source, call,
-                    rule_id="rest_authz.wp_ajax_nopriv_state_change",
-                    severity="high",
-                    title=f"Unauthenticated AJAX action '{action}' performs state changes without checks",
-                    description=(
-                        "The wp_ajax_nopriv_* hook exposes this handler to "
-                        "unauthenticated callers. The callback body contains "
-                        f"{len(state_changes)} state-changing call(s) "
-                        "(update_option, $wpdb->insert, etc.) and no nonce or "
-                        "capability check. Any visitor can trigger the mutation."
-                    ),
-                    recommendation=(
-                        "Either move the action to the authenticated hook "
-                        "(wp_ajax_<action>) and require a valid nonce via "
-                        "check_ajax_referer(), or for intentional public "
-                        "handlers, ensure they are idempotent, rate-limited, "
-                        "and never mutate shared state on behalf of the caller."
-                    ),
-                    cwe="CWE-862",
-                    mitre_techniques=["T1190"],
-                    references=[
-                        "https://codex.wordpress.org/AJAX_in_Plugins",
-                        "https://developer.wordpress.org/reference/functions/check_ajax_referer/",
-                    ],
-                    evidence={
-                        "hook": hook,
-                        "action": action,
-                        "callback": callback_raw,
-                        "sinks_found": list({s for s in state_changes}),
-                        "authz_checks_found": False,
-                    },
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call,
+                        rule_id="rest_authz.wp_ajax_nopriv_state_change",
+                        severity="high",
+                        title=f"Unauthenticated AJAX action '{action}' performs state changes without checks",
+                        description=(
+                            "The wp_ajax_nopriv_* hook exposes this handler to "
+                            "unauthenticated callers. The callback body contains "
+                            f"{len(state_changes)} state-changing call(s) "
+                            "(update_option, $wpdb->insert, etc.) and no nonce or "
+                            "capability check. Any visitor can trigger the mutation."
+                        ),
+                        recommendation=(
+                            "Either move the action to the authenticated hook "
+                            "(wp_ajax_<action>) and require a valid nonce via "
+                            "check_ajax_referer(), or for intentional public "
+                            "handlers, ensure they are idempotent, rate-limited, "
+                            "and never mutate shared state on behalf of the caller."
+                        ),
+                        cwe="CWE-862",
+                        mitre_techniques=["T1190"],
+                        references=[
+                            "https://codex.wordpress.org/AJAX_in_Plugins",
+                            "https://developer.wordpress.org/reference/functions/check_ajax_referer/",
+                        ],
+                        evidence={
+                            "hook": hook,
+                            "action": action,
+                            "callback": callback_raw,
+                            "sinks_found": list({s for s in state_changes}),
+                            "authz_checks_found": False,
+                        },
+                    )
+                )
             elif not is_nopriv and state_changes and not has_authz:
-                out.append(self._finding(
-                    plugin, source, call,
-                    rule_id="rest_authz.wp_ajax_missing_nonce",
-                    severity="medium",
-                    title=f"Authenticated AJAX action '{action}' missing nonce/capability check",
-                    description=(
-                        "The wp_ajax_* hook requires authentication but the "
-                        "callback does not verify a nonce or capability. "
-                        "Authenticated users (including low-privilege accounts) "
-                        "can trigger state-changing actions via CSRF or direct "
-                        "forged requests."
-                    ),
-                    recommendation=(
-                        "Add check_ajax_referer('<nonce-name>') at the top of "
-                        "the handler and, where relevant, current_user_can() "
-                        "for the specific capability the action requires."
-                    ),
-                    cwe="CWE-352",
-                    mitre_techniques=["T1190"],
-                    references=[
-                        "https://developer.wordpress.org/reference/functions/check_ajax_referer/",
-                        "https://developer.wordpress.org/reference/functions/wp_verify_nonce/",
-                    ],
-                    evidence={
-                        "hook": hook,
-                        "action": action,
-                        "callback": callback_raw,
-                        "sinks_found": list({s for s in state_changes}),
-                        "authz_checks_found": False,
-                    },
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call,
+                        rule_id="rest_authz.wp_ajax_missing_nonce",
+                        severity="medium",
+                        title=f"Authenticated AJAX action '{action}' missing nonce/capability check",
+                        description=(
+                            "The wp_ajax_* hook requires authentication but the "
+                            "callback does not verify a nonce or capability. "
+                            "Authenticated users (including low-privilege accounts) "
+                            "can trigger state-changing actions via CSRF or direct "
+                            "forged requests."
+                        ),
+                        recommendation=(
+                            "Add check_ajax_referer('<nonce-name>') at the top of "
+                            "the handler and, where relevant, current_user_can() "
+                            "for the specific capability the action requires."
+                        ),
+                        cwe="CWE-352",
+                        mitre_techniques=["T1190"],
+                        references=[
+                            "https://developer.wordpress.org/reference/functions/check_ajax_referer/",
+                            "https://developer.wordpress.org/reference/functions/wp_verify_nonce/",
+                        ],
+                        evidence={
+                            "hook": hook,
+                            "action": action,
+                            "callback": callback_raw,
+                            "sinks_found": list({s for s in state_changes}),
+                            "authz_checks_found": False,
+                        },
+                    )
+                )
         return out
 
     # ── helpers ────────────────────────────────────────────────────

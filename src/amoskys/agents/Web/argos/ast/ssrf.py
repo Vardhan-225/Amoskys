@@ -74,9 +74,15 @@ def _looks_like_url(text: str) -> bool:
     """Heuristic — does this argument text refer to something URL-shaped?"""
     if re.search(r"""['"]https?://""", text):
         return True
-    if re.search(r"\$_(GET|POST|REQUEST|COOKIE)\s*\[\s*['\"][^'\"]*(url|uri|endpoint|href|target|remote|addr|host)[^'\"]*['\"]\s*\]", text, re.IGNORECASE):
+    if re.search(
+        r"\$_(GET|POST|REQUEST|COOKIE)\s*\[\s*['\"][^'\"]*(url|uri|endpoint|href|target|remote|addr|host)[^'\"]*['\"]\s*\]",
+        text,
+        re.IGNORECASE,
+    ):
         return True
-    if re.search(r"\$(url|uri|endpoint|href|target|link|remote|host|addr)\b", text, re.IGNORECASE):
+    if re.search(
+        r"\$(url|uri|endpoint|href|target|link|remote|host|addr)\b", text, re.IGNORECASE
+    ):
         return True
     return False
 
@@ -106,49 +112,64 @@ class SsrfScanner(ASTScanner):
             for call in find_calls(source, fn):
                 arg0 = call.arg(0) or ""
                 if _has_taint(arg0):
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="ssrf.wp_remote_request_tainted",
-                        severity="critical",
-                        title=f"{fn}() called with a request-sourced URL",
-                        description=(
-                            f"{fn}() emits an outbound HTTP request to a URL "
-                            f"derived directly from a PHP request global. The "
-                            f"attacker chooses the destination — AWS metadata "
-                            f"(169.254.169.254), internal services on loopback, "
-                            f"Redis on a private IP, internal admin panels. "
-                            f"This is the canonical SSRF pattern."
-                        ),
-                        recommendation=(
-                            "Validate the destination host against an allow-"
-                            "list before calling the HTTP helper. Use "
-                            "wp_http_validate_url() as a minimum, but prefer "
-                            "an explicit list of hostnames your plugin needs."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="ssrf.wp_remote_request_tainted",
+                            severity="critical",
+                            title=f"{fn}() called with a request-sourced URL",
+                            description=(
+                                f"{fn}() emits an outbound HTTP request to a URL "
+                                f"derived directly from a PHP request global. The "
+                                f"attacker chooses the destination — AWS metadata "
+                                f"(169.254.169.254), internal services on loopback, "
+                                f"Redis on a private IP, internal admin panels. "
+                                f"This is the canonical SSRF pattern."
+                            ),
+                            recommendation=(
+                                "Validate the destination host against an allow-"
+                                "list before calling the HTTP helper. Use "
+                                "wp_http_validate_url() as a minimum, but prefer "
+                                "an explicit list of hostnames your plugin needs."
+                            ),
+                        )
+                    )
                     continue
                 # Dynamic, non-tainted arg 0 → low (audit signal).
-                if arg0 and not _looks_like_url(arg0) and not arg0.startswith("'") and not arg0.startswith('"'):
+                if (
+                    arg0
+                    and not _looks_like_url(arg0)
+                    and not arg0.startswith("'")
+                    and not arg0.startswith('"')
+                ):
                     continue
                 if arg0.startswith("$") or "(" in arg0:
                     # Dynamic — we don't know its source.
-                    out.append(self._finding(
-                        plugin, source, call.line, arg0,
-                        rule_id="ssrf.no_url_allowlist",
-                        severity="low",
-                        title=f"{fn}() called with a dynamic URL variable",
-                        description=(
-                            f"{fn}() takes its URL from a variable. We don't "
-                            f"see a preceding parse_url/host-allowlist pattern. "
-                            f"This is a lint-level audit signal — the call is "
-                            f"safe if the upstream is trusted, but worth a look."
-                        ),
-                        recommendation=(
-                            "Validate the host before calling, or use "
-                            "wp_http_validate_url() to block private-range "
-                            "targets."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            arg0,
+                            rule_id="ssrf.no_url_allowlist",
+                            severity="low",
+                            title=f"{fn}() called with a dynamic URL variable",
+                            description=(
+                                f"{fn}() takes its URL from a variable. We don't "
+                                f"see a preceding parse_url/host-allowlist pattern. "
+                                f"This is a lint-level audit signal — the call is "
+                                f"safe if the upstream is trusted, but worth a look."
+                            ),
+                            recommendation=(
+                                "Validate the host before calling, or use "
+                                "wp_http_validate_url() to block private-range "
+                                "targets."
+                            ),
+                        )
+                    )
         return out
 
     def _scan_raw_remote(self, source, plugin):
@@ -162,25 +183,30 @@ class SsrfScanner(ASTScanner):
                 # local file path.
                 if not _looks_like_url(arg0):
                     continue
-                out.append(self._finding(
-                    plugin, source, call.line, arg0,
-                    rule_id="ssrf.file_get_contents_remote_tainted",
-                    severity="high",
-                    title=f"{fn}() with tainted URL-shaped argument",
-                    description=(
-                        f"{fn}() is called with a value derived from a PHP "
-                        f"request global that textually looks like a URL. "
-                        f"PHP's filesystem functions will happily follow "
-                        f"http:// and https:// wrappers unless "
-                        f"allow_url_fopen is disabled — which most shared "
-                        f"hosts leave on."
-                    ),
-                    recommendation=(
-                        "Migrate to wp_remote_get() with explicit host "
-                        "validation, or use a strict URL allow-list before "
-                        "calling."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        arg0,
+                        rule_id="ssrf.file_get_contents_remote_tainted",
+                        severity="high",
+                        title=f"{fn}() with tainted URL-shaped argument",
+                        description=(
+                            f"{fn}() is called with a value derived from a PHP "
+                            f"request global that textually looks like a URL. "
+                            f"PHP's filesystem functions will happily follow "
+                            f"http:// and https:// wrappers unless "
+                            f"allow_url_fopen is disabled — which most shared "
+                            f"hosts leave on."
+                        ),
+                        recommendation=(
+                            "Migrate to wp_remote_get() with explicit host "
+                            "validation, or use a strict URL allow-list before "
+                            "calling."
+                        ),
+                    )
+                )
         return out
 
     def _scan_curl_setopt(self, source, plugin):
@@ -192,28 +218,41 @@ class SsrfScanner(ASTScanner):
             arg2 = call.arg(2) or ""
             if not _has_taint(arg2):
                 continue
-            out.append(self._finding(
-                plugin, source, call.line, arg2,
-                rule_id="ssrf.curl_exec_tainted_url",
-                severity="critical",
-                title="curl_setopt(CURLOPT_URL, ...) with request-sourced value",
-                description=(
-                    "The URL a cURL handle will hit is assigned directly "
-                    "from a PHP request global. A subsequent curl_exec "
-                    "will follow attacker-chosen destinations — the "
-                    "classic SSRF pattern via the low-level HTTP API."
-                ),
-                recommendation=(
-                    "Whitelist the host before assignment. If the plugin "
-                    "really needs free-form URLs, install an allow-list "
-                    "of host prefixes and reject anything else."
-                ),
-            ))
+            out.append(
+                self._finding(
+                    plugin,
+                    source,
+                    call.line,
+                    arg2,
+                    rule_id="ssrf.curl_exec_tainted_url",
+                    severity="critical",
+                    title="curl_setopt(CURLOPT_URL, ...) with request-sourced value",
+                    description=(
+                        "The URL a cURL handle will hit is assigned directly "
+                        "from a PHP request global. A subsequent curl_exec "
+                        "will follow attacker-chosen destinations — the "
+                        "classic SSRF pattern via the low-level HTTP API."
+                    ),
+                    recommendation=(
+                        "Whitelist the host before assignment. If the plugin "
+                        "really needs free-form URLs, install an allow-list "
+                        "of host prefixes and reject anything else."
+                    ),
+                )
+            )
         return out
 
     def _finding(
-        self, plugin, source, line, arg_text,
-        rule_id, severity, title, description, recommendation="",
+        self,
+        plugin,
+        source,
+        line,
+        arg_text,
+        rule_id,
+        severity,
+        title,
+        description,
+        recommendation="",
     ) -> ASTFinding:
         snippet = arg_text.strip().replace("\n", " ")[:240]
         return ASTFinding(

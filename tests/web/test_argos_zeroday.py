@@ -12,11 +12,14 @@ import pytest
 from amoskys.agents.Web.argos.ast.base import ASTFinding
 from amoskys.agents.Web.argos.zeroday import (
     ALL_POLYGLOTS,
-    FuzzReport, GrammarFuzzer,
     HIDDEN_PARAM_WORDLIST,
-    PatchDiffReport, PatchedFinding,
+    FuzzReport,
+    GrammarFuzzer,
+    PatchDiffReport,
+    PatchedFinding,
     Polyglot,
-    TaintFinding, TaintScanner,
+    TaintFinding,
+    TaintScanner,
     ZeroDayReport,
     all_polyglots,
     diff_plugin_versions,
@@ -25,7 +28,6 @@ from amoskys.agents.Web.argos.zeroday import (
     polyglots_for_context,
     response_bucket,
 )
-
 
 # ──────────────────────────────────────────────────────────────────
 # Fake plugin infrastructure for tests
@@ -43,8 +45,7 @@ class _FakePlugin:
         return iter(self.files)
 
 
-def _mk_plugin(tmp_path: Path, slug: str, version: str,
-               files: dict) -> _FakePlugin:
+def _mk_plugin(tmp_path: Path, slug: str, version: str, files: dict) -> _FakePlugin:
     """Build a fake plugin with the given {relpath: content} files."""
     base = tmp_path / slug / version
     base.mkdir(parents=True, exist_ok=True)
@@ -54,8 +55,7 @@ def _mk_plugin(tmp_path: Path, slug: str, version: str,
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(body, encoding="utf-8")
         created.append(p)
-    return _FakePlugin(slug=slug, version=version,
-                       plugin_root=base, files=created)
+    return _FakePlugin(slug=slug, version=version, plugin_root=base, files=created)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -74,25 +74,37 @@ def test_patch_diff_empty_when_versions_identical(tmp_path):
 
 def test_patch_diff_detects_patch_that_removes_sqli(tmp_path):
     from amoskys.agents.Web.argos.ast import SqlInjectionScanner
+
     # Old: SQLi exists. New: sanitizer added.
-    old = _mk_plugin(tmp_path / "o", "acme", "1.0", {
-        "ajax.php": """<?php
+    old = _mk_plugin(
+        tmp_path / "o",
+        "acme",
+        "1.0",
+        {
+            "ajax.php": """<?php
 function do_lookup() {
     global $wpdb;
     $id = $_POST['id'];
     $wpdb->query("SELECT * FROM t WHERE id = $id");
 }
-"""})
-    new = _mk_plugin(tmp_path / "n", "acme", "1.1", {
-        "ajax.php": """<?php
+"""
+        },
+    )
+    new = _mk_plugin(
+        tmp_path / "n",
+        "acme",
+        "1.1",
+        {
+            "ajax.php": """<?php
 function do_lookup() {
     global $wpdb;
     $id = intval($_POST['id']);
     $wpdb->query($wpdb->prepare("SELECT * FROM t WHERE id = %d", $id));
 }
-"""})
-    rep = diff_plugin_versions(old, new,
-                               scanner_classes={"sql": SqlInjectionScanner})
+"""
+        },
+    )
+    rep = diff_plugin_versions(old, new, scanner_classes={"sql": SqlInjectionScanner})
     # files_changed should include ajax.php; at least one patched finding.
     assert "ajax.php" in rep.files_changed
     assert len(rep.patched_findings) >= 1
@@ -104,12 +116,14 @@ function do_lookup() {
 
 def test_patch_diff_ignores_non_security_changes(tmp_path):
     from amoskys.agents.Web.argos.ast import SqlInjectionScanner
-    old = _mk_plugin(tmp_path / "o", "acme", "1.0", {
-        "main.php": "<?php echo 'version 1.0'; ?>"})
-    new = _mk_plugin(tmp_path / "n", "acme", "1.1", {
-        "main.php": "<?php echo 'version 1.1'; ?>"})
-    rep = diff_plugin_versions(old, new,
-                               scanner_classes={"sql": SqlInjectionScanner})
+
+    old = _mk_plugin(
+        tmp_path / "o", "acme", "1.0", {"main.php": "<?php echo 'version 1.0'; ?>"}
+    )
+    new = _mk_plugin(
+        tmp_path / "n", "acme", "1.1", {"main.php": "<?php echo 'version 1.1'; ?>"}
+    )
+    rep = diff_plugin_versions(old, new, scanner_classes={"sql": SqlInjectionScanner})
     # Change is non-security; the _is_security_relevant_diff heuristic
     # shouldn't flag it.
     assert rep.patched_findings == []
@@ -117,6 +131,7 @@ def test_patch_diff_ignores_non_security_changes(tmp_path):
 
 def test_patch_diff_finding_preserves_when_bug_still_present(tmp_path):
     from amoskys.agents.Web.argos.ast import SqlInjectionScanner
+
     # Same vuln in both versions but unrelated code changed around it.
     vuln_body = """<?php
 function do_lookup() {
@@ -125,16 +140,25 @@ function do_lookup() {
     $wpdb->query("SELECT * FROM t WHERE id = $id");
 }
 """
-    old = _mk_plugin(tmp_path / "o", "acme", "1.0", {
-        "ajax.php": vuln_body,
-        "other.php": "<?php // old comment\n",
-    })
-    new = _mk_plugin(tmp_path / "n", "acme", "1.1", {
-        "ajax.php": vuln_body,
-        "other.php": "<?php // new comment\n",
-    })
-    rep = diff_plugin_versions(old, new,
-                               scanner_classes={"sql": SqlInjectionScanner})
+    old = _mk_plugin(
+        tmp_path / "o",
+        "acme",
+        "1.0",
+        {
+            "ajax.php": vuln_body,
+            "other.php": "<?php // old comment\n",
+        },
+    )
+    new = _mk_plugin(
+        tmp_path / "n",
+        "acme",
+        "1.1",
+        {
+            "ajax.php": vuln_body,
+            "other.php": "<?php // new comment\n",
+        },
+    )
+    rep = diff_plugin_versions(old, new, scanner_classes={"sql": SqlInjectionScanner})
     # Vuln unchanged → no patched finding (even though another file changed).
     assert rep.patched_findings == []
 
@@ -145,11 +169,17 @@ function do_lookup() {
 
 
 def test_taint_finds_direct_sqli(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $id = $_POST['id'];
 $wpdb->query("SELECT * FROM t WHERE id = $id");
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert findings
     f = findings[0]
@@ -163,24 +193,36 @@ $wpdb->query("SELECT * FROM t WHERE id = $id");
 
 
 def test_taint_finds_multi_hop_sqli(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $raw = $_POST['id'];
 $id = $raw;
 $query = $id;
 $wpdb->query("SELECT * FROM t WHERE id = $query");
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert findings
     assert any(f.rule_id == "taint.sqli" for f in findings)
 
 
 def test_taint_sanitizer_clears_taint(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $id = intval($_POST['id']);
 $wpdb->query("SELECT * FROM t WHERE id = $id");
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     # With intval sanitizer in the assignment, severity should be
     # "medium" not "critical" (we mark sanitized flows as medium).
@@ -193,62 +235,98 @@ $wpdb->query("SELECT * FROM t WHERE id = $id");
 
 
 def test_taint_finds_rce(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $cmd = $_GET['cmd'];
 system($cmd);
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert any(f.rule_id == "taint.rce" for f in findings)
 
 
 def test_taint_finds_file_op(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $path = $_POST['file'];
 $contents = file_get_contents($path);
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert any(f.rule_id == "taint.file_op" for f in findings)
 
 
 def test_taint_finds_poi(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $data = $_COOKIE['state'];
 $obj = unserialize($data);
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert any(f.rule_id == "taint.poi" for f in findings)
 
 
 def test_taint_finds_reflected_xss(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $name = $_GET['name'];
 echo $name;
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert any(f.rule_id == "taint.xss_reflected" for f in findings)
 
 
 def test_taint_respects_prepare_wrapper(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $id = $_POST['id'];
 $wpdb->query($wpdb->prepare("SELECT * FROM t WHERE id = %d", $id));
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     # prepare() wraps the taint, no sqli finding.
     assert not any(f.rule_id == "taint.sqli" for f in findings)
 
 
 def test_taint_preserves_escape_for_xss(tmp_path):
-    plugin = _mk_plugin(tmp_path / "x", "x", "1",  {
-        "a.php": """<?php
+    plugin = _mk_plugin(
+        tmp_path / "x",
+        "x",
+        "1",
+        {
+            "a.php": """<?php
 $name = $_GET['name'];
 echo esc_html($name);
-"""})
+"""
+        },
+    )
     findings = TaintScanner().scan(plugin)
     assert not any(f.rule_id == "taint.xss_reflected" for f in findings)
 
@@ -278,6 +356,7 @@ def test_response_bucket_differs_on_body_hash():
 
 def test_fuzzer_separates_baseline_from_interesting():
     """Simulate a target where a specific mutation causes a 500."""
+
     def fake_fire(params: dict, body):
         if params.get("q") == "BAD":
             return 500, b"Fatal error", {"x-fatal": "1"}, 10
@@ -298,8 +377,12 @@ def test_fuzzer_separates_baseline_from_interesting():
 def test_fuzzer_records_errors_gracefully():
     def fire_that_raises(params, body):
         raise RuntimeError("network down")
+
     fuzzer = GrammarFuzzer(
-        target_url="x", fire=fire_that_raises, seed_params={"q": "x"}, max_rounds=10,
+        target_url="x",
+        fire=fire_that_raises,
+        seed_params={"q": "x"},
+        max_rounds=10,
     )
     rep = fuzzer.run(["a", "b"])
     assert rep.errors
@@ -313,11 +396,14 @@ def test_discover_hidden_params_flags_reflective_params():
         return 200, response_body, {}, 1
 
     fuzzer = GrammarFuzzer(
-        target_url="x", fire=fake_fire,
-        seed_params={"q": "base"}, max_rounds=50,
+        target_url="x",
+        fire=fake_fire,
+        seed_params={"q": "base"},
+        max_rounds=50,
     )
     found = discover_hidden_params(
-        fuzzer, wordlist=["callback", "debug", "unused"],
+        fuzzer,
+        wordlist=["callback", "debug", "unused"],
     )
     assert "callback" in found
     assert "debug" in found
@@ -363,8 +449,14 @@ def test_polyglots_for_context_empty_returns_all():
 def test_polyglot_payloads_never_contain_destructive():
     for p in all_polyglots():
         up = p.payload.upper()
-        for bad in ("DROP TABLE", "DELETE FROM", "TRUNCATE", "RM -RF",
-                    "MKFS", "DD IF="):
+        for bad in (
+            "DROP TABLE",
+            "DELETE FROM",
+            "TRUNCATE",
+            "RM -RF",
+            "MKFS",
+            "DD IF=",
+        ):
             assert bad not in up, f"destructive in {p.name}"
 
 
@@ -387,22 +479,34 @@ class _FakeCorpus:
 
 
 def test_hunt_produces_full_report(tmp_path):
-    old = _mk_plugin(tmp_path / "o", "acme", "1.0", {
-        "ajax.php": """<?php
+    old = _mk_plugin(
+        tmp_path / "o",
+        "acme",
+        "1.0",
+        {
+            "ajax.php": """<?php
 function do_lookup() {
     global $wpdb;
     $id = $_POST['id'];
     $wpdb->query("SELECT * FROM t WHERE id = $id");
 }
-"""})
-    new = _mk_plugin(tmp_path / "n", "acme", "1.1", {
-        "ajax.php": """<?php
+"""
+        },
+    )
+    new = _mk_plugin(
+        tmp_path / "n",
+        "acme",
+        "1.1",
+        {
+            "ajax.php": """<?php
 function do_lookup() {
     global $wpdb;
     $id = intval($_POST['id']);
     $wpdb->query($wpdb->prepare("SELECT * FROM t WHERE id = %d", $id));
 }
-"""})
+"""
+        },
+    )
     corpus = _FakeCorpus(old, new)
     rep = hunt("acme", "1.0", "1.1", corpus=corpus)
 

@@ -271,7 +271,11 @@ class OperatorService:
                 f"Run: argos operator accept --operator {op.email}"
             )
         if _ROLE_RANK[op.role] < _ROLE_RANK[required_role]:
-            self._audit_denial(op, action, f"role_insufficient:has={op.role.value} needs={required_role.value}")
+            self._audit_denial(
+                op,
+                action,
+                f"role_insufficient:has={op.role.value} needs={required_role.value}",
+            )
             raise InsufficientRoleError(
                 f"operator {op.email!r} role={op.role.value!r} cannot run "
                 f"action requiring role={required_role.value!r}"

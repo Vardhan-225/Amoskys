@@ -116,6 +116,7 @@ def resend_verification():
 def setup():
     """Redirect to the new onboarding flow."""
     from flask import redirect
+
     return redirect("/dashboard/setup")
 
 

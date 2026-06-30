@@ -14,7 +14,6 @@ from amoskys.agents.Web.argos.precision import (
     synthesize_probe,
 )
 
-
 # ──────────────────────────────────────────────────────────────────
 # payload_synth.synthesize_probe
 # ──────────────────────────────────────────────────────────────────
@@ -23,15 +22,15 @@ from amoskys.agents.Web.argos.precision import (
 def _f(scanner, rule_id, **kw):
     """Build a fake AST finding dict."""
     base = {
-        "scanner":        scanner,
-        "rule_id":        rule_id,
-        "severity":       "high",
-        "plugin_slug":    "test-plug",
+        "scanner": scanner,
+        "rule_id": rule_id,
+        "severity": "high",
+        "plugin_slug": "test-plug",
         "plugin_version": "1.2.3",
-        "file_path":      "includes/ajax.php",
-        "line":           42,
-        "title":          "test",
-        "cwe":            "CWE-89",
+        "file_path": "includes/ajax.php",
+        "line": 42,
+        "title": "test",
+        "cwe": "CWE-89",
     }
     base.update(kw)
     return base
@@ -42,8 +41,10 @@ def test_unknown_scanner_returns_none():
 
 
 def test_unknown_rule_for_known_scanner_returns_none():
-    assert synthesize_probe(_f("sql_injection", "sql.nonexistent_rule"),
-                             "https://t.com") is None
+    assert (
+        synthesize_probe(_f("sql_injection", "sql.nonexistent_rule"), "https://t.com")
+        is None
+    )
 
 
 def test_sqli_probe_uses_sleep_timing():
@@ -68,8 +69,7 @@ def test_sqli_probe_for_prepare_with_interp():
 
 
 def test_file_upload_probe_is_inert_gif():
-    f = _f("file_upload", "upload.move_uploaded_file_tainted_dest",
-           cwe="CWE-434")
+    f = _f("file_upload", "upload.move_uploaded_file_tainted_dest", cwe="CWE-434")
     probe = synthesize_probe(f, "https://t.com")
     assert probe is not None
     assert probe.method == "POST"
@@ -87,6 +87,7 @@ def test_file_upload_probe_is_inert_gif():
 
 def test_poi_probe_is_inert_stdclass():
     import urllib.parse
+
     f = _f("poi", "poi.unserialize_on_request", cwe="CWE-502")
     probe = synthesize_probe(f, "https://t.com")
     assert probe is not None
@@ -95,8 +96,13 @@ def test_poi_probe_is_inert_stdclass():
     body = urllib.parse.unquote(probe.body or "")
     assert 'O:8:"stdClass"' in body
     # Must NOT reference any known gadget classes.
-    for danger in ("PharData", "SimpleXMLElement", "SplFileObject",
-                   "WP_Error", "SplFileInfo"):
+    for danger in (
+        "PharData",
+        "SimpleXMLElement",
+        "SplFileObject",
+        "WP_Error",
+        "SplFileInfo",
+    ):
         assert danger not in body
     assert "aegis.request.poi_payload" in probe.expected_aegis_events
 
@@ -118,8 +124,11 @@ def test_ssrf_probe_uses_canary_not_metadata():
     probe = synthesize_probe(f, "https://t.com")
     assert probe is not None
     # Must NOT probe AWS/GCP/metadata directly.
-    for danger in ("169.254.169.254", "metadata.google.internal",
-                   "metadata.amazonaws.com"):
+    for danger in (
+        "169.254.169.254",
+        "metadata.google.internal",
+        "metadata.amazonaws.com",
+    ):
         assert danger not in probe.url
     # Must reference a canary host.
     assert "canary" in probe.url
@@ -136,10 +145,8 @@ def test_rest_authz_probe_is_enum_first():
 
 
 def test_probe_carries_unique_finding_id():
-    f1 = _f("sql_injection", "sql.interpolation_in_query",
-            file_path="a.php", line=1)
-    f2 = _f("sql_injection", "sql.interpolation_in_query",
-            file_path="b.php", line=2)
+    f1 = _f("sql_injection", "sql.interpolation_in_query", file_path="a.php", line=1)
+    f2 = _f("sql_injection", "sql.interpolation_in_query", file_path="b.php", line=2)
     p1 = synthesize_probe(f1, "https://t.com")
     p2 = synthesize_probe(f2, "https://t.com")
     assert p1.finding_id != p2.finding_id
@@ -164,8 +171,11 @@ def test_schedule_is_strictly_ascending():
 
 def test_schedule_respects_min_gap():
     s = low_slow_schedule(
-        probe_count=6, min_gap_hours=3.0, gap_stddev_hr=0.0,
-        seed=1, max_span_days=30,
+        probe_count=6,
+        min_gap_hours=3.0,
+        gap_stddev_hr=0.0,
+        seed=1,
+        max_span_days=30,
     )
     for i in range(1, len(s.probe_times)):
         delta = (s.probe_times[i] - s.probe_times[i - 1]).total_seconds()
@@ -174,8 +184,12 @@ def test_schedule_respects_min_gap():
 
 
 def test_schedule_all_in_biz_hours_default_tz():
-    tz = TargetTimezone(tz_name="America/New_York", biz_start_hour=8,
-                        biz_end_hour=18, biz_days=(0, 1, 2, 3, 4))
+    tz = TargetTimezone(
+        tz_name="America/New_York",
+        biz_start_hour=8,
+        biz_end_hour=18,
+        biz_days=(0, 1, 2, 3, 4),
+    )
     s = low_slow_schedule(probe_count=10, tz=tz, seed=7, max_span_days=30)
     try:
         from zoneinfo import ZoneInfo
@@ -189,14 +203,12 @@ def test_schedule_all_in_biz_hours_default_tz():
 
 
 def test_schedule_deterministic_with_seed():
-    start = datetime.datetime(2026, 4, 20, 12, 0, 0,
-                              tzinfo=datetime.timezone.utc)
-    a = low_slow_schedule(probe_count=5, seed=123, max_span_days=30,
-                          start_at=start)
-    b = low_slow_schedule(probe_count=5, seed=123, max_span_days=30,
-                          start_at=start)
-    assert [t.isoformat() for t in a.probe_times] == \
-           [t.isoformat() for t in b.probe_times]
+    start = datetime.datetime(2026, 4, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    a = low_slow_schedule(probe_count=5, seed=123, max_span_days=30, start_at=start)
+    b = low_slow_schedule(probe_count=5, seed=123, max_span_days=30, start_at=start)
+    assert [t.isoformat() for t in a.probe_times] == [
+        t.isoformat() for t in b.probe_times
+    ]
 
 
 def test_schedule_notes_when_span_too_tight():
@@ -244,16 +256,16 @@ def test_plan_records_tier_per_probe():
 
 def test_plan_encodes_intel_dependency():
     # A non-intel probe should depend on the intel probe on the SAME plugin.
-    intel = _make_probe("rest_authz.wp_ajax_nopriv_state_change", "P1",
-                        slug="foo")
+    intel = _make_probe("rest_authz.wp_ajax_nopriv_state_change", "P1", slug="foo")
     # Actually that's confirm.active — let's use a pure intel one.
-    intel = _make_probe("rest_authz.permission_callback_missing", "P1",
-                        slug="foo")
+    intel = _make_probe("rest_authz.permission_callback_missing", "P1", slug="foo")
     # Hmm — "permission_callback_missing" isn't in our _tier_for explicit
     # check. Let me use a rule we know is intel.enum:
     intel = PayloadProbe(
         source_rule_id="rest_authz.permission_callback_missing",
-        plugin_slug="foo", plugin_version="1", finding_id="P1",
+        plugin_slug="foo",
+        plugin_version="1",
+        finding_id="P1",
         url="x",
     )
     active = _make_probe("sql.interpolation_in_query", "P2", slug="foo")
@@ -268,8 +280,8 @@ def test_plan_excludes_escalate_by_default():
     # flag passes through.
     probes = [_make_probe("sql.interpolation_in_query", "P1")]
     plan_default = build_precision_plan("x", probes, include_escalate=False)
-    plan_yes     = build_precision_plan("x", probes, include_escalate=True)
-    assert len(plan_default.probes) == len(plan_yes.probes)   # same here
+    plan_yes = build_precision_plan("x", probes, include_escalate=True)
+    assert len(plan_default.probes) == len(plan_yes.probes)  # same here
 
 
 def test_plan_deterministic_ordering_within_tier():
@@ -309,6 +321,7 @@ class _FakePlugin:
 class _FakeSQLiScanner:
     def scan(self, plugin):
         from amoskys.agents.Web.argos.ast.base import ASTFinding
+
         return [
             ASTFinding(
                 scanner="sql_injection",
@@ -369,13 +382,15 @@ def test_run_precision_schedule_has_all_probe_times():
     corpus = _FakeCorpus()
     scanners = {"sql_injection": _FakeSQLiScanner}
     eng = run_precision(
-        "https://t.com", consent_token="tk",
+        "https://t.com",
+        consent_token="tk",
         plugin_inventory=[
             {"slug": "a", "version": "1"},
             {"slug": "b", "version": "1"},
             {"slug": "c", "version": "1"},
         ],
-        corpus=corpus, scanner_registry=scanners,
+        corpus=corpus,
+        scanner_registry=scanners,
     )
     assert eng.plan is not None
     assert len(eng.plan.probes) == 3

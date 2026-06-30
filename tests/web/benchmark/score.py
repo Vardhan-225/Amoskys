@@ -50,7 +50,6 @@ if str(_here.parents[2] / "src") not in sys.path:
 
 from tests.web.benchmark.wp_cve_corpus import BENCHMARK_CORPUS, BenchmarkCVE
 
-
 # ── Offense runner ────────────────────────────────────────────────
 
 
@@ -65,13 +64,14 @@ def run_offense(only_class: Optional[str] = None) -> Dict:
         SqlInjectionScanner,
         SsrfScanner,
     )
+
     scanner_map = {
-        "rest_authz":    RestAuthzScanner,
+        "rest_authz": RestAuthzScanner,
         "sql_injection": SqlInjectionScanner,
-        "file_upload":   FileUploadScanner,
-        "poi":           PoiScanner,
-        "csrf":          CsrfScanner,
-        "ssrf":          SsrfScanner,
+        "file_upload": FileUploadScanner,
+        "poi": PoiScanner,
+        "csrf": CsrfScanner,
+        "ssrf": SsrfScanner,
     }
 
     try:
@@ -93,13 +93,13 @@ def run_offense(only_class: Optional[str] = None) -> Dict:
         per_class[cve.vuln_class]["total"] += 1
 
         row = {
-            "slug":          cve.slug,
-            "version":       cve.version,
-            "cve":           cve.cve,
-            "vuln_class":    cve.vuln_class,
+            "slug": cve.slug,
+            "version": cve.version,
+            "cve": cve.cve,
+            "vuln_class": cve.vuln_class,
             "rule_expected": cve.rule_expected,
-            "hit":           False,
-            "error":         None,
+            "hit": False,
+            "error": None,
             "findings_count": 0,
         }
 
@@ -126,18 +126,21 @@ def run_offense(only_class: Optional[str] = None) -> Dict:
 
     score_pct = 100 * detected / total if total else 0
     per_class_pct = {
-        k: {"hits": v["hits"], "total": v["total"],
-            "pct": round(100 * v["hits"] / v["total"], 1) if v["total"] else 0}
+        k: {
+            "hits": v["hits"],
+            "total": v["total"],
+            "pct": round(100 * v["hits"] / v["total"], 1) if v["total"] else 0,
+        }
         for k, v in per_class.items()
     }
 
     return {
-        "mode":     "offense",
-        "total":    total,
+        "mode": "offense",
+        "total": total,
         "detected": detected,
         "score_pct": round(score_pct, 1),
         "per_class": per_class_pct,
-        "details":  details,
+        "details": details,
         "generated_at": time.time(),
     }
 
@@ -159,32 +162,49 @@ def run_defense(ssh_key: str, lab_host: str = "lab.amoskys.com") -> Dict:
         {
             "name": "poi_object",
             "expected_event": "aegis.request.poi_payload",
-            "curl": ["-X", "POST", f"https://{lab_host}/", "-d",
-                     'q=O%3A8%3A%22stdClass%22%3A0%3A%7B%7D'],
+            "curl": [
+                "-X",
+                "POST",
+                f"https://{lab_host}/",
+                "-d",
+                "q=O%3A8%3A%22stdClass%22%3A0%3A%7B%7D",
+            ],
         },
         {
             "name": "csrf_no_referer",
             "expected_event": "aegis.csrf.suspicious_request",
-            "curl": ["-X", "POST", f"https://{lab_host}/wp-admin/admin-ajax.php",
-                     "-d", "action=myplug_update&v=1"],
+            "curl": [
+                "-X",
+                "POST",
+                f"https://{lab_host}/wp-admin/admin-ajax.php",
+                "-d",
+                "action=myplug_update&v=1",
+            ],
         },
     ]
 
     results = []
     for probe in probes:
         t_start = time.time()
-        subprocess.run(["curl", "-s", "-o", "/dev/null"] + probe["curl"],
-                       timeout=10)
+        subprocess.run(["curl", "-s", "-o", "/dev/null"] + probe["curl"], timeout=10)
         # Wait up to 3s for the event to land, poll every 200ms.
         detected = False
         latency_ms = None
         for _ in range(15):
             r = subprocess.run(
-                ["ssh", "-i", ssh_key, "-o", "StrictHostKeyChecking=no",
-                 f"ubuntu@{lab_host}",
-                 f"sudo tail -50 /var/www/html/wp-content/uploads/amoskys-aegis/events.jsonl "
-                 f"| grep -c {probe['expected_event']}"],
-                capture_output=True, text=True, timeout=5,
+                [
+                    "ssh",
+                    "-i",
+                    ssh_key,
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"ubuntu@{lab_host}",
+                    f"sudo tail -50 /var/www/html/wp-content/uploads/amoskys-aegis/events.jsonl "
+                    f"| grep -c {probe['expected_event']}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             count = int(r.stdout.strip() or 0)
             if count > 0:
@@ -192,12 +212,14 @@ def run_defense(ssh_key: str, lab_host: str = "lab.amoskys.com") -> Dict:
                 latency_ms = int((time.time() - t_start) * 1000)
                 break
             time.sleep(0.2)
-        results.append({
-            "probe": probe["name"],
-            "expected_event": probe["expected_event"],
-            "detected": detected,
-            "latency_ms": latency_ms,
-        })
+        results.append(
+            {
+                "probe": probe["name"],
+                "expected_event": probe["expected_event"],
+                "detected": detected,
+                "latency_ms": latency_ms,
+            }
+        )
 
     detected = sum(1 for r in results if r["detected"])
     total = len(results)
@@ -205,13 +227,13 @@ def run_defense(ssh_key: str, lab_host: str = "lab.amoskys.com") -> Dict:
     p50 = sorted(latencies)[len(latencies) // 2] if latencies else None
 
     return {
-        "mode":          "defense",
-        "probe_total":   total,
-        "probe_hits":    detected,
+        "mode": "defense",
+        "probe_total": total,
+        "probe_hits": detected,
         "detection_rate_pct": round(100 * detected / total, 1) if total else 0,
-        "mttd_ms_p50":   p50,
-        "results":       results,
-        "generated_at":  time.time(),
+        "mttd_ms_p50": p50,
+        "results": results,
+        "generated_at": time.time(),
     }
 
 
@@ -220,16 +242,23 @@ def run_defense(ssh_key: str, lab_host: str = "lab.amoskys.com") -> Dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--live", action="store_true",
-                        help="also run live defense benchmark against lab")
-    parser.add_argument("--ssh-key",
-                        default="/Users/athanneeru/.ssh/amoskys-lab-key.pem",
-                        help="SSH key for lab access (defense mode)")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="also run live defense benchmark against lab",
+    )
+    parser.add_argument(
+        "--ssh-key",
+        default="/Users/athanneeru/.ssh/amoskys-lab-key.pem",
+        help="SSH key for lab access (defense mode)",
+    )
     parser.add_argument("--lab-host", default="lab.amoskys.com")
-    parser.add_argument("--only-class", default=None,
-                        help="Filter offense corpus to one vuln_class")
-    parser.add_argument("--json", action="store_true",
-                        help="emit pure JSON (no human summary)")
+    parser.add_argument(
+        "--only-class", default=None, help="Filter offense corpus to one vuln_class"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="emit pure JSON (no human summary)"
+    )
     args = parser.parse_args()
 
     out: Dict = {}
@@ -256,9 +285,11 @@ def main():
     print("Per-CVE:")
     for d in o["details"]:
         status = "✓" if d["hit"] else ("✗" if not d["error"] else "ERR")
-        print(f"  [{status}] {d['cve']:20s}  {d['slug']}@{d['version']}"
-              f"   → {d['rule_expected']}"
-              + (f"  (error: {d['error']})" if d["error"] else ""))
+        print(
+            f"  [{status}] {d['cve']:20s}  {d['slug']}@{d['version']}"
+            f"   → {d['rule_expected']}"
+            + (f"  (error: {d['error']})" if d["error"] else "")
+        )
 
     if "defense" in out:
         d = out["defense"]
@@ -271,9 +302,12 @@ def main():
         print(f"MTTD p50:     {d['mttd_ms_p50']} ms")
         for r in d["results"]:
             tag = "✓" if r["detected"] else "✗"
-            print(f"  [{tag}] {r['probe']:22s} → {r['expected_event']}"
-                  f"   ({r['latency_ms']} ms)" if r["detected"] else
-                  f"  [{tag}] {r['probe']:22s} → NOT DETECTED")
+            print(
+                f"  [{tag}] {r['probe']:22s} → {r['expected_event']}"
+                f"   ({r['latency_ms']} ms)"
+                if r["detected"]
+                else f"  [{tag}] {r['probe']:22s} → NOT DETECTED"
+            )
 
 
 if __name__ == "__main__":

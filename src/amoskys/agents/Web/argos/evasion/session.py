@@ -51,9 +51,9 @@ from amoskys.agents.Web.argos.legitimacy import UserAgentPool
 
 @dataclass
 class SessionResponse:
-    status:   int
-    headers:  Dict[str, str]
-    body:     bytes
+    status: int
+    headers: Dict[str, str]
+    body: bytes
     latency_ms: int
 
 
@@ -70,13 +70,15 @@ class StealthSession:
     Not thread-safe. One session = one origin = one attacker identity.
     """
 
-    def __init__(self,
-                 host: str,
-                 scheme: str = "https",
-                 port: Optional[int] = None,
-                 timeout: float = 20.0,
-                 ua_pool: Optional[UserAgentPool] = None,
-                 referer_base: Optional[str] = None):
+    def __init__(
+        self,
+        host: str,
+        scheme: str = "https",
+        port: Optional[int] = None,
+        timeout: float = 20.0,
+        ua_pool: Optional[UserAgentPool] = None,
+        referer_base: Optional[str] = None,
+    ):
         self.host = host
         self.scheme = scheme
         self.port = port or (443 if scheme == "https" else 80)
@@ -96,11 +98,16 @@ class StealthSession:
         if self.scheme == "https":
             ctx = ssl.create_default_context()
             self._conn = http.client.HTTPSConnection(
-                self.host, self.port, timeout=self.timeout, context=ctx,
+                self.host,
+                self.port,
+                timeout=self.timeout,
+                context=ctx,
             )
         else:
             self._conn = http.client.HTTPConnection(
-                self.host, self.port, timeout=self.timeout,
+                self.host,
+                self.port,
+                timeout=self.timeout,
             )
         return self._conn
 
@@ -114,10 +121,14 @@ class StealthSession:
 
     # ── Request ───────────────────────────────────────────────────
 
-    def _request(self, method: str, path: str,
-                 body: Optional[str] = None,
-                 extra_headers: Optional[Dict[str, str]] = None,
-                 retries: int = 1) -> SessionResponse:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        body: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        retries: int = 1,
+    ) -> SessionResponse:
         """Internal request primitive. Rebuilds connection on errors."""
         full_url = f"{self.scheme}://{self.host}{path}"
         headers = self._base_headers(full_url)
@@ -126,9 +137,7 @@ class StealthSession:
         if body is not None and "Content-Length" not in headers:
             headers["Content-Length"] = str(len(body))
         if self._cookies:
-            headers["Cookie"] = "; ".join(
-                f"{k}={v}" for k, v in self._cookies.items()
-            )
+            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in self._cookies.items())
 
         t0 = time.time()
         for attempt in range(retries + 1):
@@ -147,9 +156,11 @@ class StealthSession:
                     body=body_bytes,
                     latency_ms=int((time.time() - t0) * 1000),
                 )
-            except (http.client.RemoteDisconnected,
-                    http.client.BadStatusLine,
-                    ConnectionError) as e:
+            except (
+                http.client.RemoteDisconnected,
+                http.client.BadStatusLine,
+                ConnectionError,
+            ) as e:
                 # Server closed the keep-alive; reconnect and retry once.
                 self.close()
                 if attempt >= retries:
@@ -157,12 +168,14 @@ class StealthSession:
         # Unreachable under normal control flow.
         raise RuntimeError("session request failed after retries")
 
-    def get(self, path: str,
-            extra_headers: Optional[Dict[str, str]] = None) -> SessionResponse:
+    def get(
+        self, path: str, extra_headers: Optional[Dict[str, str]] = None
+    ) -> SessionResponse:
         return self._request("GET", path, body=None, extra_headers=extra_headers)
 
-    def post(self, path: str, body: str,
-             extra_headers: Optional[Dict[str, str]] = None) -> SessionResponse:
+    def post(
+        self, path: str, body: str, extra_headers: Optional[Dict[str, str]] = None
+    ) -> SessionResponse:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         if extra_headers:
             headers.update(extra_headers)
@@ -264,9 +277,9 @@ class StealthSession:
 class session_for:
     """Context-manager idiom:
 
-        with session_for("example.com") as s:
-            s.warmup()
-            r = s.get("/wp-json/")
+    with session_for("example.com") as s:
+        s.warmup()
+        r = s.get("/wp-json/")
     """
 
     def __init__(self, host: str, **kw):

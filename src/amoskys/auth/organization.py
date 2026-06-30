@@ -43,16 +43,16 @@ __all__ = [
 class OrgType(str, enum.Enum):
     """Organization type — determined by email domain on signup."""
 
-    INDIVIDUAL = "individual"   # Personal email (gmail, outlook, etc.)
-    ENTERPRISE = "enterprise"   # Company email domain (@company.com)
+    INDIVIDUAL = "individual"  # Personal email (gmail, outlook, etc.)
+    ENTERPRISE = "enterprise"  # Company email domain (@company.com)
 
 
 class OrgTier(str, enum.Enum):
     """Organization subscription tier."""
 
-    FREE = "free"               # Individual: up to 3 devices
-    PRO = "pro"                 # Individual: up to 10 devices
-    ENTERPRISE = "enterprise"   # Enterprise: unlimited devices, IAM, SLA
+    FREE = "free"  # Individual: up to 3 devices
+    PRO = "pro"  # Individual: up to 10 devices
+    ENTERPRISE = "enterprise"  # Enterprise: unlimited devices, IAM, SLA
 
 
 class OrgRole(str, enum.Enum):
@@ -244,62 +244,64 @@ class OrgMembership(TimestampMixin, Base):
 
 # Personal email providers — users with these domains get INDIVIDUAL orgs.
 # Everything else is treated as a potential enterprise domain.
-PERSONAL_DOMAINS: frozenset[str] = frozenset({
-    # Google
-    "gmail.com",
-    "googlemail.com",
-    # Microsoft
-    "outlook.com",
-    "hotmail.com",
-    "live.com",
-    "msn.com",
-    # Yahoo
-    "yahoo.com",
-    "yahoo.co.uk",
-    "yahoo.co.in",
-    "ymail.com",
-    "rocketmail.com",
-    # Apple
-    "icloud.com",
-    "me.com",
-    "mac.com",
-    # Privacy-focused
-    "protonmail.com",
-    "proton.me",
-    "tutanota.com",
-    "tutamail.com",
-    # Other major providers
-    "aol.com",
-    "zoho.com",
-    "mail.com",
-    "gmx.com",
-    "gmx.net",
-    "yandex.com",
-    "yandex.ru",
-    "fastmail.com",
-    "hushmail.com",
-    # Regional
-    "qq.com",
-    "163.com",
-    "126.com",
-    "naver.com",
-    "daum.net",
-    "rediffmail.com",
-    "web.de",
-    "t-online.de",
-    "laposte.net",
-    "free.fr",
-    "libero.it",
-    # ISP-based
-    "comcast.net",
-    "verizon.net",
-    "att.net",
-    "sbcglobal.net",
-    "cox.net",
-    "charter.net",
-    "earthlink.net",
-    "optonline.net",
-})
+PERSONAL_DOMAINS: frozenset[str] = frozenset(
+    {
+        # Google
+        "gmail.com",
+        "googlemail.com",
+        # Microsoft
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "msn.com",
+        # Yahoo
+        "yahoo.com",
+        "yahoo.co.uk",
+        "yahoo.co.in",
+        "ymail.com",
+        "rocketmail.com",
+        # Apple
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        # Privacy-focused
+        "protonmail.com",
+        "proton.me",
+        "tutanota.com",
+        "tutamail.com",
+        # Other major providers
+        "aol.com",
+        "zoho.com",
+        "mail.com",
+        "gmx.com",
+        "gmx.net",
+        "yandex.com",
+        "yandex.ru",
+        "fastmail.com",
+        "hushmail.com",
+        # Regional
+        "qq.com",
+        "163.com",
+        "126.com",
+        "naver.com",
+        "daum.net",
+        "rediffmail.com",
+        "web.de",
+        "t-online.de",
+        "laposte.net",
+        "free.fr",
+        "libero.it",
+        # ISP-based
+        "comcast.net",
+        "verizon.net",
+        "att.net",
+        "sbcglobal.net",
+        "cox.net",
+        "charter.net",
+        "earthlink.net",
+        "optonline.net",
+    }
+)
 
 
 def classify_email_domain(email: str) -> tuple[str, OrgType]:
@@ -330,6 +332,7 @@ def generate_org_slug(name: str, domain: str | None = None) -> str:
         URL-safe slug like "amoskys-com" or "akash-a1b2c3"
     """
     import re
+
     if domain:
         # Enterprise: use domain as slug base
         slug = domain.replace(".", "-")

@@ -96,6 +96,7 @@ def get_telemetry_store() -> Optional["TelemetryStore"]:
 
 def _start_fleet_sync():
     """Start a background thread that syncs telemetry from the ops server."""
+
     def sync_loop():
         logger.info("Fleet sync started: %s → %s", _OPS_SERVER, _CACHE_DB_PATH)
         while True:
@@ -144,6 +145,7 @@ def _sync_from_ops():
     # Use the real TelemetryStore schema to create all tables
     try:
         from amoskys.storage._ts_schema import SCHEMA
+
         db.executescript(SCHEMA)
     except Exception:
         # Fallback: create minimal tables
@@ -186,7 +188,9 @@ def _sync_from_ops():
                     old.db.close()
                 except Exception:
                     pass
-        logger.info("Fleet sync: %d total rows synced across %d tables", total, len(bulk))
+        logger.info(
+            "Fleet sync: %d total rows synced across %d tables", total, len(bulk)
+        )
 
 
 def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
@@ -215,6 +219,7 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
             if "timestamp_ns" in row and "timestamp_dt" not in row:
                 try:
                     from datetime import datetime, timezone
+
                     ts = row["timestamp_ns"] / 1e9
                     row["timestamp_dt"] = datetime.fromtimestamp(
                         ts, tz=timezone.utc
@@ -228,9 +233,7 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
         col_info = cursor.fetchall()
         existing_cols = {r[1] for r in col_info}
         # Map of NOT NULL columns → default values (skip 'id' which is autoincrement)
-        notnull_cols = {
-            r[1] for r in col_info if r[3] == 1 and r[1] != "id"
-        }
+        notnull_cols = {r[1] for r in col_info if r[3] == 1 and r[1] != "id"}
     except Exception:
         return 0
 

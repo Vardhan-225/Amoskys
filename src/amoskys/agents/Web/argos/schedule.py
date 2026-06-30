@@ -93,6 +93,7 @@ class OutOfScopeAssetError(ValueError):
 @dataclass
 class QueueProgress:
     """Live snapshot of a running queue — what's done, pending, failed."""
+
     queue_id: str
     customer_id: str
     operator_id: str
@@ -184,19 +185,25 @@ class EngagementRunner:
         # couple to the Finding class shape.
         finding_dicts: List[Dict[str, Any]] = []
         for f in result.findings:
-            finding_dicts.append({
-                "template_id": f.template_id,
-                "severity": f.severity.value if hasattr(f.severity, "value") else str(f.severity),
-                "title": f.title,
-                "description": f.description,
-                "tool": f.tool,
-                "cwe": f.cwe,
-                "cvss": f.cvss,
-                "references": list(f.references or []),
-                "mitre_techniques": list(f.mitre_techniques or []),
-                "evidence": dict(f.evidence or {}),
-                "detected_at_ns": f.detected_at_ns,
-            })
+            finding_dicts.append(
+                {
+                    "template_id": f.template_id,
+                    "severity": (
+                        f.severity.value
+                        if hasattr(f.severity, "value")
+                        else str(f.severity)
+                    ),
+                    "title": f.title,
+                    "description": f.description,
+                    "tool": f.tool,
+                    "cwe": f.cwe,
+                    "cvss": f.cvss,
+                    "references": list(f.references or []),
+                    "mitre_techniques": list(f.mitre_techniques or []),
+                    "evidence": dict(f.evidence or {}),
+                    "detected_at_ns": f.detected_at_ns,
+                }
+            )
 
         return {
             "engagement_id": result.engagement_id,

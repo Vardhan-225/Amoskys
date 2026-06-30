@@ -59,9 +59,9 @@ from typing import Any, Dict, List, Optional
 
 from ..server import mcp
 
-
-_HUNT_LOG_DIR = Path(os.environ.get("AMOSKYS_HUNT_LOG_DIR",
-                                     str(Path.home() / "amoskys" / "hunt-logs")))
+_HUNT_LOG_DIR = Path(
+    os.environ.get("AMOSKYS_HUNT_LOG_DIR", str(Path.home() / "amoskys" / "hunt-logs"))
+)
 _HUNT_JOURNAL = _HUNT_LOG_DIR / "journal.jsonl"
 
 
@@ -104,24 +104,27 @@ def _run(cmd: List[str], timeout: int = 900) -> Dict[str, Any]:
     t0 = time.time()
     try:
         r = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return {
-            "ok":         r.returncode == 0,
-            "exit_code":  r.returncode,
-            "stdout":     r.stdout,
-            "stderr":     r.stderr,
+            "ok": r.returncode == 0,
+            "exit_code": r.returncode,
+            "stdout": r.stdout,
+            "stderr": r.stderr,
             "duration_s": round(time.time() - t0, 2),
-            "cmd":        cmd,
+            "cmd": cmd,
         }
     except subprocess.TimeoutExpired as e:
         return {
-            "ok":         False,
-            "error":      f"timeout after {timeout}s",
-            "stdout":     (e.stdout or b"").decode(errors="replace"),
-            "stderr":     (e.stderr or b"").decode(errors="replace"),
+            "ok": False,
+            "error": f"timeout after {timeout}s",
+            "stdout": (e.stdout or b"").decode(errors="replace"),
+            "stderr": (e.stderr or b"").decode(errors="replace"),
             "duration_s": round(time.time() - t0, 2),
-            "cmd":        cmd,
+            "cmd": cmd,
         }
 
 
@@ -148,7 +151,7 @@ def _stdout_excerpt(raw: Dict[str, Any], max_chars: int = 4000) -> str:
     out = raw.get("stdout", "") or ""
     if len(out) <= max_chars:
         return out
-    head, tail = out[: max_chars // 2], out[-max_chars // 2:]
+    head, tail = out[: max_chars // 2], out[-max_chars // 2 :]
     return head + f"\n... [TRUNCATED {len(out) - max_chars} chars] ...\n" + tail
 
 
@@ -156,12 +159,14 @@ def _stdout_excerpt(raw: Dict[str, Any], max_chars: int = 4000) -> str:
 
 
 @mcp.tool()
-def kali_wpscan(target_url: str,
-                consent_verified: bool = False,
-                detection_mode: str = "mixed",
-                enumerate_plugins: bool = True,
-                enumerate_users: bool = False,
-                api_token: Optional[str] = None) -> dict:
+def kali_wpscan(
+    target_url: str,
+    consent_verified: bool = False,
+    detection_mode: str = "mixed",
+    enumerate_plugins: bool = True,
+    enumerate_users: bool = False,
+    api_token: Optional[str] = None,
+) -> dict:
     """Run wpscan against a WordPress target.
 
     REQUIRES CONSENT. wpscan sends wordpress-attack-shaped HTTP to the
@@ -184,11 +189,16 @@ def kali_wpscan(target_url: str,
         return {"ok": False, "error": err, "tool": "wpscan"}
 
     cmd = [
-        "wpscan", "--url", target_url,
-        "--detection-mode", detection_mode,
-        "--format", "json",
+        "wpscan",
+        "--url",
+        target_url,
+        "--detection-mode",
+        detection_mode,
+        "--format",
+        "json",
         "--no-banner",
-        "--throttle", "2000",  # ms between requests
+        "--throttle",
+        "2000",  # ms between requests
         "--random-user-agent",
     ]
     enum_bits = []
@@ -216,15 +226,17 @@ def kali_wpscan(target_url: str,
             core_vulns = core.get("vulnerabilities") or []
             vuln_count += len(core_vulns)
             for v in core_vulns:
-                findings.append({
-                    "rule_id":  "wpscan.core_vuln",
-                    "severity": "high",
-                    "title":    v.get("title") or "Core vulnerability",
-                    "evidence": {
-                        "cve_ids":  v.get("references", {}).get("cve", []),
-                        "fixed_in": v.get("fixed_in"),
-                    },
-                })
+                findings.append(
+                    {
+                        "rule_id": "wpscan.core_vuln",
+                        "severity": "high",
+                        "title": v.get("title") or "Core vulnerability",
+                        "evidence": {
+                            "cve_ids": v.get("references", {}).get("cve", []),
+                            "fixed_in": v.get("fixed_in"),
+                        },
+                    }
+                )
             # Plugin enumeration + per-plugin vulns.
             plugins = data.get("plugins") or {}
             plugin_count = len(plugins)
@@ -232,53 +244,66 @@ def kali_wpscan(target_url: str,
                 vulns = info.get("vulnerabilities") or []
                 vuln_count += len(vulns)
                 for v in vulns:
-                    findings.append({
-                        "rule_id":  "wpscan.plugin_vuln",
-                        "severity": _sev_from_cvss(v),
-                        "title":    f"{slug}: {v.get('title')}",
-                        "evidence": {
-                            "slug":     slug,
-                            "version":  (info.get("version") or {}).get("number"),
-                            "cve_ids":  v.get("references", {}).get("cve", []),
-                            "fixed_in": v.get("fixed_in"),
-                        },
-                    })
+                    findings.append(
+                        {
+                            "rule_id": "wpscan.plugin_vuln",
+                            "severity": _sev_from_cvss(v),
+                            "title": f"{slug}: {v.get('title')}",
+                            "evidence": {
+                                "slug": slug,
+                                "version": (info.get("version") or {}).get("number"),
+                                "cve_ids": v.get("references", {}).get("cve", []),
+                                "fixed_in": v.get("fixed_in"),
+                            },
+                        }
+                    )
             # Theme vulns.
             themes = data.get("main_theme") or {}
             if themes:
                 for v in themes.get("vulnerabilities") or []:
                     vuln_count += 1
-                    findings.append({
-                        "rule_id":  "wpscan.theme_vuln",
-                        "severity": _sev_from_cvss(v),
-                        "title":    f"theme: {v.get('title')}",
-                        "evidence": {"fixed_in": v.get("fixed_in")},
-                    })
+                    findings.append(
+                        {
+                            "rule_id": "wpscan.theme_vuln",
+                            "severity": _sev_from_cvss(v),
+                            "title": f"theme: {v.get('title')}",
+                            "evidence": {"fixed_in": v.get("fixed_in")},
+                        }
+                    )
     except json.JSONDecodeError:
         # wpscan may have emitted partial JSON on timeout; still log.
-        findings.append({
-            "rule_id":  "wpscan.parse_error",
-            "severity": "info",
-            "title":    "wpscan output was not valid JSON",
-            "evidence": {"head": (raw.get("stdout", "") or "")[:400]},
-        })
+        findings.append(
+            {
+                "rule_id": "wpscan.parse_error",
+                "severity": "info",
+                "title": "wpscan output was not valid JSON",
+                "evidence": {"head": (raw.get("stdout", "") or "")[:400]},
+            }
+        )
 
     summary = {
-        "ok":              raw.get("ok", False),
-        "tool":            "wpscan",
-        "target":          target_url,
-        "duration_s":      raw.get("duration_s"),
-        "exit_code":       raw.get("exit_code"),
-        "plugin_count":    plugin_count,
-        "vuln_count":      vuln_count,
-        "finding_count":   len(findings),
-        "findings":        findings[:50],
-        "stdout_excerpt":  _stdout_excerpt(raw),
-        "full_log_path":   log_path,
+        "ok": raw.get("ok", False),
+        "tool": "wpscan",
+        "target": target_url,
+        "duration_s": raw.get("duration_s"),
+        "exit_code": raw.get("exit_code"),
+        "plugin_count": plugin_count,
+        "vuln_count": vuln_count,
+        "finding_count": len(findings),
+        "findings": findings[:50],
+        "stdout_excerpt": _stdout_excerpt(raw),
+        "full_log_path": log_path,
     }
-    _hunt_log({"tool": "wpscan", "target": target_url,
-               "findings": len(findings), "vulns": vuln_count,
-               "plugins": plugin_count, "log": log_path})
+    _hunt_log(
+        {
+            "tool": "wpscan",
+            "target": target_url,
+            "findings": len(findings),
+            "vulns": vuln_count,
+            "plugins": plugin_count,
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -286,9 +311,12 @@ def _sev_from_cvss(v: dict) -> str:
     """Best-effort severity from a wpscan vuln dict."""
     score = v.get("cvss", {}).get("score") if isinstance(v.get("cvss"), dict) else None
     if isinstance(score, (int, float)):
-        if score >= 9.0: return "critical"
-        if score >= 7.0: return "high"
-        if score >= 4.0: return "medium"
+        if score >= 9.0:
+            return "critical"
+        if score >= 7.0:
+            return "high"
+        if score >= 4.0:
+            return "medium"
         return "low"
     return "medium"
 
@@ -297,12 +325,14 @@ def _sev_from_cvss(v: dict) -> str:
 
 
 @mcp.tool()
-def kali_sqlmap(target_url: str,
-                consent_verified: bool = False,
-                risk: int = 1,
-                level: int = 1,
-                cookie: Optional[str] = None,
-                extra_args: Optional[List[str]] = None) -> dict:
+def kali_sqlmap(
+    target_url: str,
+    consent_verified: bool = False,
+    risk: int = 1,
+    level: int = 1,
+    cookie: Optional[str] = None,
+    extra_args: Optional[List[str]] = None,
+) -> dict:
     """Run sqlmap against a WordPress target URL.
 
     REQUIRES CONSENT. sqlmap is LOUD — it sends hundreds of payload
@@ -324,9 +354,11 @@ def kali_sqlmap(target_url: str,
 
     cmd = [
         "sqlmap",
-        "-u", target_url,
-        "--batch",           # non-interactive
-        "--delay", "1",      # 1s between requests
+        "-u",
+        target_url,
+        "--batch",  # non-interactive
+        "--delay",
+        "1",  # 1s between requests
         f"--risk={risk}",
         f"--level={level}",
         "--random-agent",
@@ -343,35 +375,45 @@ def kali_sqlmap(target_url: str,
     findings: List[Dict[str, Any]] = []
     # sqlmap success indicators: injection-point + payload discovery.
     if "is vulnerable" in out or "sqlmap identified" in out:
-        findings.append({
-            "rule_id":  "sqlmap.injection_confirmed",
-            "severity": "critical",
-            "title":    "SQL injection confirmed by sqlmap",
-            "evidence": {"snippet": out[out.find("is vulnerable"):][:500]},
-        })
+        findings.append(
+            {
+                "rule_id": "sqlmap.injection_confirmed",
+                "severity": "critical",
+                "title": "SQL injection confirmed by sqlmap",
+                "evidence": {"snippet": out[out.find("is vulnerable") :][:500]},
+            }
+        )
     # Extract DBMS fingerprint if present.
     m = re.search(r"back-end DBMS(?: is)?:\s+([^\n]+)", out)
     if m:
-        findings.append({
-            "rule_id":  "sqlmap.dbms_fingerprint",
-            "severity": "info",
-            "title":    f"DBMS identified: {m.group(1).strip()}",
-            "evidence": {"dbms": m.group(1).strip()},
-        })
+        findings.append(
+            {
+                "rule_id": "sqlmap.dbms_fingerprint",
+                "severity": "info",
+                "title": f"DBMS identified: {m.group(1).strip()}",
+                "evidence": {"dbms": m.group(1).strip()},
+            }
+        )
 
     summary = {
-        "ok":             raw.get("ok", False),
-        "tool":           "sqlmap",
-        "target":         target_url,
-        "duration_s":     raw.get("duration_s"),
-        "exit_code":      raw.get("exit_code"),
-        "finding_count":  len(findings),
-        "findings":       findings,
+        "ok": raw.get("ok", False),
+        "tool": "sqlmap",
+        "target": target_url,
+        "duration_s": raw.get("duration_s"),
+        "exit_code": raw.get("exit_code"),
+        "finding_count": len(findings),
+        "findings": findings,
         "stdout_excerpt": _stdout_excerpt(raw),
-        "full_log_path":  log_path,
+        "full_log_path": log_path,
     }
-    _hunt_log({"tool": "sqlmap", "target": target_url,
-               "findings": len(findings), "log": log_path})
+    _hunt_log(
+        {
+            "tool": "sqlmap",
+            "target": target_url,
+            "findings": len(findings),
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -379,9 +421,9 @@ def kali_sqlmap(target_url: str,
 
 
 @mcp.tool()
-def kali_nikto(target_url: str,
-               consent_verified: bool = False,
-               tuning: str = "b") -> dict:
+def kali_nikto(
+    target_url: str, consent_verified: bool = False, tuning: str = "b"
+) -> dict:
     """Run nikto web server vulnerability scan.
 
     REQUIRES CONSENT.
@@ -402,10 +444,15 @@ def kali_nikto(target_url: str,
     # by using /dev/stdout; -ask no keeps it non-interactive without
     # requiring -nointeractive (which isn't universal across nikto builds).
     cmd = [
-        "nikto", "-h", target_url,
-        "-Tuning", tuning,
-        "-ask", "no",
-        "-maxtime", "600s",  # 10-min cap so it doesn't run forever
+        "nikto",
+        "-h",
+        target_url,
+        "-Tuning",
+        tuning,
+        "-ask",
+        "no",
+        "-maxtime",
+        "600s",  # 10-min cap so it doesn't run forever
     ]
     raw = _run(cmd, timeout=900)
     log_path = _persist_full_log("nikto", target_url, raw)
@@ -415,34 +462,50 @@ def kali_nikto(target_url: str,
     # Nikto lines starting with "+ " are findings.
     for line in out.splitlines():
         if line.startswith("+ ") and any(
-            tag in line for tag in ("OSVDB", "CVE-", "may allow", "vulnerable",
-                                    "Uncommon header", "cookie", "X-XSS-Protection",
-                                    "outdated")
+            tag in line
+            for tag in (
+                "OSVDB",
+                "CVE-",
+                "may allow",
+                "vulnerable",
+                "Uncommon header",
+                "cookie",
+                "X-XSS-Protection",
+                "outdated",
+            )
         ):
             sev = "low"
             if "CVE-" in line or "vulnerable" in line.lower():
                 sev = "medium"
             if "allow remote" in line.lower() or "rce" in line.lower():
                 sev = "high"
-            findings.append({
-                "rule_id":  "nikto.finding",
-                "severity": sev,
-                "title":    line[2:].strip()[:200],
-                "evidence": {"line": line},
-            })
+            findings.append(
+                {
+                    "rule_id": "nikto.finding",
+                    "severity": sev,
+                    "title": line[2:].strip()[:200],
+                    "evidence": {"line": line},
+                }
+            )
 
     summary = {
-        "ok":             raw.get("ok", False),
-        "tool":           "nikto",
-        "target":         target_url,
-        "duration_s":     raw.get("duration_s"),
-        "finding_count":  len(findings),
-        "findings":       findings[:40],
+        "ok": raw.get("ok", False),
+        "tool": "nikto",
+        "target": target_url,
+        "duration_s": raw.get("duration_s"),
+        "finding_count": len(findings),
+        "findings": findings[:40],
         "stdout_excerpt": _stdout_excerpt(raw),
-        "full_log_path":  log_path,
+        "full_log_path": log_path,
     }
-    _hunt_log({"tool": "nikto", "target": target_url,
-               "findings": len(findings), "log": log_path})
+    _hunt_log(
+        {
+            "tool": "nikto",
+            "target": target_url,
+            "findings": len(findings),
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -450,11 +513,13 @@ def kali_nikto(target_url: str,
 
 
 @mcp.tool()
-def kali_ffuf(target_url: str,
-              wordlist: str = "/usr/share/wordlists/dirb/common.txt",
-              consent_verified: bool = False,
-              rate_limit_rps: int = 10,
-              status_filter: str = "200,204,301,302,307,401,403") -> dict:
+def kali_ffuf(
+    target_url: str,
+    wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    consent_verified: bool = False,
+    rate_limit_rps: int = 10,
+    status_filter: str = "200,204,301,302,307,401,403",
+) -> dict:
     """Fuzz for hidden paths/files with ffuf.
 
     REQUIRES CONSENT (or AMOSKYS_CONSENT_DOMAIN).
@@ -477,14 +542,21 @@ def kali_ffuf(target_url: str,
 
     cmd = [
         "ffuf",
-        "-u", target_url,
-        "-w", wordlist,
-        "-mc", status_filter,
-        "-rate", str(rate_limit_rps),
-        "-t", "10",           # threads
-        "-o", "/dev/stdout",
-        "-of", "json",
-        "-s",                 # silent mode — json only
+        "-u",
+        target_url,
+        "-w",
+        wordlist,
+        "-mc",
+        status_filter,
+        "-rate",
+        str(rate_limit_rps),
+        "-t",
+        "10",  # threads
+        "-o",
+        "/dev/stdout",
+        "-of",
+        "json",
+        "-s",  # silent mode — json only
     ]
     raw = _run(cmd, timeout=1200)
     log_path = _persist_full_log("ffuf", target_url, raw)
@@ -494,31 +566,39 @@ def kali_ffuf(target_url: str,
     try:
         data = json.loads(out)
         for r in data.get("results", []):
-            findings.append({
-                "rule_id":  "ffuf.discovered_path",
-                "severity": "info" if r.get("status") in (301, 302, 403) else "low",
-                "title":    f"Discovered: {r.get('url')}",
-                "evidence": {
-                    "status":      r.get("status"),
-                    "length":      r.get("length"),
-                    "words":       r.get("words"),
-                    "redirectlocation": r.get("redirectlocation"),
-                },
-            })
+            findings.append(
+                {
+                    "rule_id": "ffuf.discovered_path",
+                    "severity": "info" if r.get("status") in (301, 302, 403) else "low",
+                    "title": f"Discovered: {r.get('url')}",
+                    "evidence": {
+                        "status": r.get("status"),
+                        "length": r.get("length"),
+                        "words": r.get("words"),
+                        "redirectlocation": r.get("redirectlocation"),
+                    },
+                }
+            )
     except json.JSONDecodeError:
         pass
 
     summary = {
-        "ok":            raw.get("ok", False),
-        "tool":          "ffuf",
-        "target":        target_url,
-        "duration_s":    raw.get("duration_s"),
+        "ok": raw.get("ok", False),
+        "tool": "ffuf",
+        "target": target_url,
+        "duration_s": raw.get("duration_s"),
         "finding_count": len(findings),
-        "findings":      findings[:100],
+        "findings": findings[:100],
         "full_log_path": log_path,
     }
-    _hunt_log({"tool": "ffuf", "target": target_url,
-               "findings": len(findings), "log": log_path})
+    _hunt_log(
+        {
+            "tool": "ffuf",
+            "target": target_url,
+            "findings": len(findings),
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -526,12 +606,14 @@ def kali_ffuf(target_url: str,
 
 
 @mcp.tool()
-def kali_nuclei(target_url: str,
-                consent_verified: bool = False,
-                tags: Optional[List[str]] = None,
-                severity: str = "medium,high,critical",
-                rate_limit_rps: int = 20,
-                timeout_s: int = 900) -> dict:
+def kali_nuclei(
+    target_url: str,
+    consent_verified: bool = False,
+    tags: Optional[List[str]] = None,
+    severity: str = "medium,high,critical",
+    rate_limit_rps: int = 20,
+    timeout_s: int = 900,
+) -> dict:
     """Run nuclei community templates against a target.
 
     REQUIRES CONSENT. Nuclei is a template-driven CVE / misconfig
@@ -555,11 +637,15 @@ def kali_nuclei(target_url: str,
     use_tags = tags or ["wordpress"]
     cmd = [
         "nuclei",
-        "-target", target_url,
-        "-tags", ",".join(use_tags),
-        "-severity", severity,
-        "-rate-limit", str(rate_limit_rps),
-        "-jsonl",                 # machine-parseable output
+        "-target",
+        target_url,
+        "-tags",
+        ",".join(use_tags),
+        "-severity",
+        severity,
+        "-rate-limit",
+        str(rate_limit_rps),
+        "-jsonl",  # machine-parseable output
         "-silent",
         "-disable-update-check",
         "-duc",
@@ -578,31 +664,43 @@ def kali_nuclei(target_url: str,
         except json.JSONDecodeError:
             continue
         info = obj.get("info", {}) or {}
-        findings.append({
-            "rule_id":  f"nuclei.{obj.get('template-id') or obj.get('templateID') or 'unknown'}",
-            "severity": info.get("severity", "info"),
-            "title":    info.get("name") or obj.get("template-id"),
-            "evidence": {
-                "matched_at": obj.get("matched-at"),
-                "tags":       info.get("tags"),
-                "reference":  info.get("reference", []),
-                "cve":        info.get("classification", {}).get("cve-id") if isinstance(info.get("classification"), dict) else None,
-            },
-        })
+        findings.append(
+            {
+                "rule_id": f"nuclei.{obj.get('template-id') or obj.get('templateID') or 'unknown'}",
+                "severity": info.get("severity", "info"),
+                "title": info.get("name") or obj.get("template-id"),
+                "evidence": {
+                    "matched_at": obj.get("matched-at"),
+                    "tags": info.get("tags"),
+                    "reference": info.get("reference", []),
+                    "cve": (
+                        info.get("classification", {}).get("cve-id")
+                        if isinstance(info.get("classification"), dict)
+                        else None
+                    ),
+                },
+            }
+        )
 
     summary = {
-        "ok":             raw.get("ok", False),
-        "tool":           "nuclei",
-        "target":         target_url,
-        "duration_s":     raw.get("duration_s"),
-        "exit_code":      raw.get("exit_code"),
-        "finding_count":  len(findings),
-        "findings":       findings[:50],
+        "ok": raw.get("ok", False),
+        "tool": "nuclei",
+        "target": target_url,
+        "duration_s": raw.get("duration_s"),
+        "exit_code": raw.get("exit_code"),
+        "finding_count": len(findings),
+        "findings": findings[:50],
         "stdout_excerpt": _stdout_excerpt(raw),
-        "full_log_path":  log_path,
+        "full_log_path": log_path,
     }
-    _hunt_log({"tool": "nuclei", "target": target_url,
-               "findings": len(findings), "log": log_path})
+    _hunt_log(
+        {
+            "tool": "nuclei",
+            "target": target_url,
+            "findings": len(findings),
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -610,8 +708,7 @@ def kali_nuclei(target_url: str,
 
 
 @mcp.tool()
-def kali_amass_enum(domain: str, passive: bool = True,
-                    timeout_min: int = 5) -> dict:
+def kali_amass_enum(domain: str, passive: bool = True, timeout_min: int = 5) -> dict:
     """Amass subdomain enumeration. Passive mode by default (OSINT only).
 
     Passive enumeration uses public data sources (CT logs, DNS
@@ -629,33 +726,45 @@ def kali_amass_enum(domain: str, passive: bool = True,
         return {
             "ok": False,
             "error": "active amass requires consent; set passive=True or "
-                     "use a consent_verified-gated tool instead",
+            "use a consent_verified-gated tool instead",
         }
     cmd = [
-        "amass", "enum",
+        "amass",
+        "enum",
         "-passive",
-        "-d", domain,
-        "-timeout", str(timeout_min),
+        "-d",
+        domain,
+        "-timeout",
+        str(timeout_min),
     ]
     raw = _run(cmd, timeout=timeout_min * 60 + 60)
     log_path = _persist_full_log("amass", domain, raw)
     out = raw.get("stdout", "") or ""
-    subdomains = sorted({
-        line.strip() for line in out.splitlines()
-        if line.strip() and not line.startswith("#") and "." in line
-    })
+    subdomains = sorted(
+        {
+            line.strip()
+            for line in out.splitlines()
+            if line.strip() and not line.startswith("#") and "." in line
+        }
+    )
     summary = {
-        "ok":             raw.get("ok", False),
-        "tool":           "amass",
-        "mode":           "passive",
-        "target":         domain,
-        "duration_s":     raw.get("duration_s"),
-        "subdomains":     subdomains[:200],
-        "total":          len(subdomains),
-        "full_log_path":  log_path,
+        "ok": raw.get("ok", False),
+        "tool": "amass",
+        "mode": "passive",
+        "target": domain,
+        "duration_s": raw.get("duration_s"),
+        "subdomains": subdomains[:200],
+        "total": len(subdomains),
+        "full_log_path": log_path,
     }
-    _hunt_log({"tool": "amass", "target": domain,
-               "subdomain_count": len(subdomains), "log": log_path})
+    _hunt_log(
+        {
+            "tool": "amass",
+            "target": domain,
+            "subdomain_count": len(subdomains),
+            "log": log_path,
+        }
+    )
     return summary
 
 
@@ -685,7 +794,7 @@ def kali_hunt_journal(limit: int = 30) -> dict:
     except OSError as e:
         return {"ok": False, "error": str(e)}
     return {
-        "ok":       True,
-        "total":    len(entries),
-        "entries":  entries[-limit:],
+        "ok": True,
+        "total": len(entries),
+        "entries": entries[-limit:],
     }

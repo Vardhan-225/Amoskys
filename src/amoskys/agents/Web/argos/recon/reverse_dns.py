@@ -35,9 +35,7 @@ from amoskys.agents.Web.argos.recon.base import (
     ReconSource,
     StealthClass,
 )
-from amoskys.agents.Web.argos.recon.cloud_detector import (
-    is_generic_cloud_hostname,
-)
+from amoskys.agents.Web.argos.recon.cloud_detector import is_generic_cloud_hostname
 from amoskys.agents.Web.argos.storage import AssetKind
 
 logger = logging.getLogger("amoskys.argos.recon.reverse_dns")
@@ -165,9 +163,23 @@ def _is_ipv4(value: str) -> bool:
 # apex extraction. For v1 this covers ~90% of customer domains we'll
 # see. A proper PSL (publicsuffix.org) integration is v2 work.
 _MULTI_LABEL_TLDS = (
-    "co.uk", "com.au", "co.jp", "co.nz", "co.za", "com.br",
-    "com.mx", "com.sg", "com.hk", "co.in", "com.cn", "com.tw",
-    "ac.uk", "gov.uk", "org.uk", "net.au", "org.au",
+    "co.uk",
+    "com.au",
+    "co.jp",
+    "co.nz",
+    "co.za",
+    "com.br",
+    "com.mx",
+    "com.sg",
+    "com.hk",
+    "co.in",
+    "com.cn",
+    "com.tw",
+    "ac.uk",
+    "gov.uk",
+    "org.uk",
+    "net.au",
+    "org.au",
 )
 
 

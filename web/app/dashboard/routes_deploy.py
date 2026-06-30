@@ -243,10 +243,15 @@ def deploy_quick():
                 platform=platform,
             )
             if not result.success:
-                return jsonify({
-                    "status": "error",
-                    "message": result.error or "Failed to create token",
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "message": result.error or "Failed to create token",
+                        }
+                    ),
+                    400,
+                )
 
             token = result.token
             server = OPS_SERVER_URL
@@ -260,15 +265,17 @@ def deploy_quick():
             else:
                 install_cmd = f"# Download from https://amoskys.com/deploy/{platform}"
 
-            return jsonify({
-                "status": "success",
-                "token": token,
-                "token_id": result.token_id,
-                "install_command": install_cmd,
-                "ops_server": server,
-                "platform": platform,
-                "label": label,
-            })
+            return jsonify(
+                {
+                    "status": "success",
+                    "token": token,
+                    "token_id": result.token_id,
+                    "install_command": install_cmd,
+                    "ops_server": server,
+                    "platform": platform,
+                    "label": label,
+                }
+            )
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -289,7 +296,9 @@ def serve_install_script():
             content = path.read_text()
             return Response(content, mimetype="text/x-shellscript")
 
-    return Response("# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404)
+    return Response(
+        "# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404
+    )
 
 
 @dashboard_bp.route("/api/agents/deploy/download", methods=["POST"])
@@ -321,7 +330,9 @@ def deploy_download_pkg():
     pkg_candidates = [
         Path("/var/www/amoskys-static/AMOSKYS.pkg"),
         Path("/opt/amoskys/dist/AMOSKYS-0.9.1-beta.pkg"),
-        Path(__file__).parent.parent.parent.parent / "dist" / "AMOSKYS-0.9.1-beta-signed.pkg",
+        Path(__file__).parent.parent.parent.parent
+        / "dist"
+        / "AMOSKYS-0.9.1-beta-signed.pkg",
         Path(__file__).parent.parent.parent.parent / "dist" / "AMOSKYS-0.9.1-beta.pkg",
     ]
     pkg_path = None
@@ -331,7 +342,10 @@ def deploy_download_pkg():
             break
 
     if not pkg_path:
-        return jsonify({"status": "error", "message": "Installer package not found"}), 500
+        return (
+            jsonify({"status": "error", "message": "Installer package not found"}),
+            500,
+        )
 
     # Generate deployment token
     try:
@@ -373,6 +387,7 @@ def deploy_download_pkg():
 
 # In-memory store for pending downloads (short-lived, <10 min)
 import time
+
 _pending_downloads: dict = {}
 
 

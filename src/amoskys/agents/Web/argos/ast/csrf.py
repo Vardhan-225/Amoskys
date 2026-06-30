@@ -50,7 +50,6 @@ from amoskys.agents.Web.argos.ast.base import (
     strip_comments_and_strings,
 )
 
-
 # ── Signals ─────────────────────────────────────────────────────────
 
 # State-changing sinks (same spirit as rest_authz but per-plugin).
@@ -142,7 +141,7 @@ def _find_function_body(
     if not m:
         return None
     # Find the opening `{`.
-    after = source.masked[m.end():]
+    after = source.masked[m.end() :]
     brace_rel = after.find("{")
     if brace_rel < 0:
         return None
@@ -224,19 +223,19 @@ class CsrfScanner(ASTScanner):
                 continue  # Nonce / capability guard present → safe.
 
             rule_id = {
-                "admin_post":        "csrf.admin_post_no_nonce",
+                "admin_post": "csrf.admin_post_no_nonce",
                 "admin_post_nopriv": "csrf.admin_post_nopriv_state_change",
-                "wp_ajax":           "csrf.wp_ajax_no_nonce",
-                "wp_ajax_nopriv":    "csrf.wp_ajax_nopriv_state_change",
-                "init":              "csrf.init_handler_no_referer",
+                "wp_ajax": "csrf.wp_ajax_no_nonce",
+                "wp_ajax_nopriv": "csrf.wp_ajax_nopriv_state_change",
+                "init": "csrf.init_handler_no_referer",
             }[family]
 
             title = {
-                "admin_post":        f"admin_post_{hook.split('_', 2)[-1]} handler mutates state without nonce check",
+                "admin_post": f"admin_post_{hook.split('_', 2)[-1]} handler mutates state without nonce check",
                 "admin_post_nopriv": f"admin_post_nopriv_{hook.split('_', 3)[-1]} is unauth AND mutates state",
-                "wp_ajax":           f"wp_ajax_{hook.split('_', 2)[-1]} handler mutates state without nonce check",
-                "wp_ajax_nopriv":    f"wp_ajax_nopriv_{hook.split('_', 3)[-1]} is unauth AND mutates state",
-                "init":              f"{hook} hook dispatches a mutating action without nonce check",
+                "wp_ajax": f"wp_ajax_{hook.split('_', 2)[-1]} handler mutates state without nonce check",
+                "wp_ajax_nopriv": f"wp_ajax_nopriv_{hook.split('_', 3)[-1]} is unauth AND mutates state",
+                "init": f"{hook} hook dispatches a mutating action without nonce check",
             }[family]
 
             description = (
@@ -254,26 +253,39 @@ class CsrfScanner(ASTScanner):
                     "CSRF against a logged-in user."
                 )
 
-            out.append(self._finding(
-                plugin, source, call.line,
-                snippet=f"add_action('{hook}', …)  — body mutates state with no nonce check",
-                rule_id=rule_id,
-                severity=severity_unauth,
-                title=title,
-                description=description,
-                recommendation=(
-                    "Add `check_admin_referer('your_action')` or "
-                    "`wp_verify_nonce($_POST['_wpnonce'], 'your_action')` at "
-                    "the top of the handler, before any state mutation. For "
-                    "admin-only actions also add `current_user_can('manage_options')`."
-                ),
-                hook=hook,
-            ))
+            out.append(
+                self._finding(
+                    plugin,
+                    source,
+                    call.line,
+                    snippet=f"add_action('{hook}', …)  — body mutates state with no nonce check",
+                    rule_id=rule_id,
+                    severity=severity_unauth,
+                    title=title,
+                    description=description,
+                    recommendation=(
+                        "Add `check_admin_referer('your_action')` or "
+                        "`wp_verify_nonce($_POST['_wpnonce'], 'your_action')` at "
+                        "the top of the handler, before any state mutation. For "
+                        "admin-only actions also add `current_user_can('manage_options')`."
+                    ),
+                    hook=hook,
+                )
+            )
         return out
 
     def _finding(
-        self, plugin, source, line, snippet,
-        rule_id, severity, title, description, recommendation, hook,
+        self,
+        plugin,
+        source,
+        line,
+        snippet,
+        rule_id,
+        severity,
+        title,
+        description,
+        recommendation,
+        hook,
     ) -> ASTFinding:
         return ASTFinding(
             scanner=self.scanner_id,

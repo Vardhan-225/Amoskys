@@ -22,7 +22,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -65,12 +65,17 @@ class WPScanTool(Tool):
         url = f"https://{target}" if not target.startswith("http") else target
         cmd: List[str] = [
             "wpscan",
-            "--url", url,
-            "--format", "json",
-            "--output", str(out_path),
-            "--enumerate", self.enumerate,
+            "--url",
+            url,
+            "--format",
+            "json",
+            "--output",
+            str(out_path),
+            "--enumerate",
+            self.enumerate,
             "--random-user-agent",
-            "--throttle", str(max(200, int(1000 / max(scope.max_rps, 1)))),  # ms between requests
+            "--throttle",
+            str(max(200, int(1000 / max(scope.max_rps, 1)))),  # ms between requests
             "--no-banner",
             "--disable-tls-checks",  # for lab targets, real targets enable
         ]
@@ -117,7 +122,9 @@ class WPScanTool(Tool):
             try:
                 stderr_bytes = os.path.getsize(stderr_path)
                 if stderr_bytes > 0:
-                    tail = stderr_path.read_bytes()[-500:].decode("utf-8", errors="replace")
+                    tail = stderr_path.read_bytes()[-500:].decode(
+                        "utf-8", errors="replace"
+                    )
                     errors.append(f"stderr (tail): {tail}")
             except Exception:  # noqa: BLE001
                 pass
@@ -179,7 +186,9 @@ class WPScanTool(Tool):
                 plugin = plugin or {}
                 for v in _safe_get(plugin, "vulnerabilities", []) or []:
                     findings.append(
-                        _wp_vuln_to_finding(v, f"plugin:{slug}", _safe_get(plugin, "version", {}))
+                        _wp_vuln_to_finding(
+                            v, f"plugin:{slug}", _safe_get(plugin, "version", {})
+                        )
                     )
 
         # Theme vulnerabilities
@@ -189,7 +198,9 @@ class WPScanTool(Tool):
                 theme = theme or {}
                 for v in _safe_get(theme, "vulnerabilities", []) or []:
                     findings.append(
-                        _wp_vuln_to_finding(v, f"theme:{slug}", _safe_get(theme, "version", {}))
+                        _wp_vuln_to_finding(
+                            v, f"theme:{slug}", _safe_get(theme, "version", {})
+                        )
                     )
 
         # User enumeration
@@ -294,7 +305,9 @@ def _interesting_to_finding(f: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _wp_vuln_to_finding(v: Dict[str, Any], component: str, target: Any) -> Dict[str, Any]:
+def _wp_vuln_to_finding(
+    v: Dict[str, Any], component: str, target: Any
+) -> Dict[str, Any]:
     cve_list = v.get("references", {}).get("cve") or []
     url_refs = v.get("references", {}).get("url") or []
     refs = [f"CVE-{c}" for c in cve_list] + list(url_refs)

@@ -68,8 +68,13 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     # Observability Mandate v1.0 — process context fields
     MANDATE_DATA_FIELDS = (
-        "pid", "process_name", "exe", "cmdline",
-        "ppid", "parent_name", "username",
+        "pid",
+        "process_name",
+        "exe",
+        "cmdline",
+        "ppid",
+        "parent_name",
+        "username",
     )
 
     def __init__(self, collection_interval: float = 10.0) -> None:

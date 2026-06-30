@@ -668,9 +668,7 @@ def forgot_password():
         # Send password reset email if token was generated
         if result.reset_token:
             # Build reset URL from canonical public origin
-            reset_url = _public_url(
-                f"/auth/reset-password?token={result.reset_token}"
-            )
+            reset_url = _public_url(f"/auth/reset-password?token={result.reset_token}")
 
             # Send email
             email_sent = send_password_reset_email(email, reset_url)

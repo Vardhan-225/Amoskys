@@ -9,10 +9,14 @@ import time
 import pytest
 
 from amoskys.agents.Web.argos.campaign import (
-    Campaign, CampaignMode, EventBus, EventKind, null_bus, run_campaign,
+    Campaign,
+    CampaignMode,
+    EventBus,
+    EventKind,
+    null_bus,
+    run_campaign,
 )
 from amoskys.agents.Web.argos.chain import ChainFinding
-
 
 # ──────────────────────────────────────────────────────────────────
 # EventBus
@@ -40,8 +44,13 @@ def test_event_bus_emits_and_records():
 def test_event_bus_subscriber_exception_does_not_stop_others():
     bus = EventBus()
     good = []
-    def raising(e): raise RuntimeError("boom")
-    def good_sub(e): good.append(e)
+
+    def raising(e):
+        raise RuntimeError("boom")
+
+    def good_sub(e):
+        good.append(e)
+
     bus.subscribe(raising)
     bus.subscribe(good_sub)
     bus.log("x", "hi")
@@ -85,58 +94,67 @@ def _no_http(url, timeout, headers):
 
 def test_consent_report_mode_allows_any_domain(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("https://random.example.com/", mode=CampaignMode.REPORT,
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://random.example.com/", mode=CampaignMode.REPORT, http_get=_no_http
+    ).run()
     assert rep.consent_verified is True
     assert "no-consent-required" in rep.consent_method
 
 
 def test_consent_confirm_mode_blocks_without_token(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("https://somebody.com/", mode=CampaignMode.CONFIRM,
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://somebody.com/", mode=CampaignMode.CONFIRM, http_get=_no_http
+    ).run()
     assert rep.consent_verified is False
     assert "consent verification failed" in rep.errors
 
 
 def test_consent_env_match(monkeypatch):
     monkeypatch.setenv("AMOSKYS_CONSENT_DOMAIN", "lab.amoskys.com")
-    rep = Campaign("https://lab.amoskys.com/", mode=CampaignMode.EXPLOIT,
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://lab.amoskys.com/", mode=CampaignMode.EXPLOIT, http_get=_no_http
+    ).run()
     assert rep.consent_verified is True
     assert "AMOSKYS_CONSENT_DOMAIN" in rep.consent_method
 
 
 def test_consent_env_matches_subdomain(monkeypatch):
     monkeypatch.setenv("AMOSKYS_CONSENT_DOMAIN", "amoskys.com")
-    rep = Campaign("https://lab.amoskys.com/", mode=CampaignMode.CONFIRM,
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://lab.amoskys.com/", mode=CampaignMode.CONFIRM, http_get=_no_http
+    ).run()
     assert rep.consent_verified is True
 
 
 def test_consent_bounty_token(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("https://some.bounty.target/",
-                   mode=CampaignMode.CONFIRM,
-                   consent_token="bounty:hackerone-acme",
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://some.bounty.target/",
+        mode=CampaignMode.CONFIRM,
+        consent_token="bounty:hackerone-acme",
+        http_get=_no_http,
+    ).run()
     assert rep.consent_verified is True
     assert rep.consent_method == "bounty:hackerone-acme"
 
 
 def test_consent_sow_token(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("https://client.example.com/",
-                   mode=CampaignMode.EXPLOIT,
-                   consent_token="sow:acme-corp-2026",
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "https://client.example.com/",
+        mode=CampaignMode.EXPLOIT,
+        consent_token="sow:acme-corp-2026",
+        http_get=_no_http,
+    ).run()
     assert rep.consent_verified is True
 
 
 def test_consent_localhost_implicit(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("http://localhost:8080/", mode=CampaignMode.EXPLOIT,
-                   http_get=_no_http).run()
+    rep = Campaign(
+        "http://localhost:8080/", mode=CampaignMode.EXPLOIT, http_get=_no_http
+    ).run()
     assert rep.consent_verified is True
     assert "localhost" in rep.consent_method
 
@@ -148,6 +166,7 @@ def test_consent_localhost_implicit(monkeypatch):
 
 def _wp_fake_http():
     """Deterministic fake HTTP emulating a WP site behind Cloudflare/Wordfence."""
+
     def _http(url, t, h):
         if url.endswith("/robots.txt"):
             return (200, {}, "User-agent: *\nDisallow: /wp-admin/")
@@ -160,14 +179,19 @@ def _wp_fake_http():
         if url.endswith("/wp-login.php"):
             return (200, {"server": "cloudflare"}, "<form id='loginform'></form>")
         if url.endswith("/"):
-            return (200, {
-                "server": "cloudflare",
-                "cf-ray": "abc",
-                "set-cookie": "wfwaf-authcookie-xx=1",
-                "x-powered-by": "PHP/8.0.30",
-            }, "<meta name='generator' content='WordPress 6.4.2'>"
-               "powered by wordfence backtrace")
+            return (
+                200,
+                {
+                    "server": "cloudflare",
+                    "cf-ray": "abc",
+                    "set-cookie": "wfwaf-authcookie-xx=1",
+                    "x-powered-by": "PHP/8.0.30",
+                },
+                "<meta name='generator' content='WordPress 6.4.2'>"
+                "powered by wordfence backtrace",
+            )
         return (404, {}, "")
+
     return _http
 
 
@@ -182,12 +206,20 @@ def test_campaign_run_produces_report(monkeypatch):
     bus.subscribe(lambda e: events.append(e))
 
     prebuilt = [
-        ChainFinding(kind="rest_authz", location="/wp-json/x/y", severity="high",
-                     evidence="permission_callback missing"),
+        ChainFinding(
+            kind="rest_authz",
+            location="/wp-json/x/y",
+            severity="high",
+            evidence="permission_callback missing",
+        ),
     ]
-    rep = Campaign("https://target.example/", mode=CampaignMode.REPORT,
-                   bus=bus, http_get=_wp_fake_http(),
-                   prebuilt_findings=prebuilt).run()
+    rep = Campaign(
+        "https://target.example/",
+        mode=CampaignMode.REPORT,
+        bus=bus,
+        http_get=_wp_fake_http(),
+        prebuilt_findings=prebuilt,
+    ).run()
 
     assert rep.consent_verified is True
     assert rep.profile is not None
@@ -205,8 +237,12 @@ def test_campaign_run_produces_report(monkeypatch):
 def test_campaign_emits_decision_events_for_adapted_strategy(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     bus = EventBus()
-    Campaign("https://target.example/", mode=CampaignMode.REPORT,
-              bus=bus, http_get=_wp_fake_http()).run()
+    Campaign(
+        "https://target.example/",
+        mode=CampaignMode.REPORT,
+        bus=bus,
+        http_get=_wp_fake_http(),
+    ).run()
     decisions = [e for e in bus.history if e.kind == EventKind.DECISION]
     assert any("probe_order" in d.message for d in decisions)
     assert any("encoding_cascade" in d.message for d in decisions)
@@ -217,14 +253,26 @@ def test_campaign_chains_findings_from_event_stream_and_prebuilt(monkeypatch):
     bus = EventBus()
     # Seed the campaign with a finding that triggers a chain rule
     prebuilt = [
-        ChainFinding(kind="file_upload", location="/upload", severity="high",
-                     evidence="jpg polyglot"),
-        ChainFinding(kind="lfi", location="/read", severity="high",
-                     evidence="wp-config base64 leaked"),
+        ChainFinding(
+            kind="file_upload",
+            location="/upload",
+            severity="high",
+            evidence="jpg polyglot",
+        ),
+        ChainFinding(
+            kind="lfi",
+            location="/read",
+            severity="high",
+            evidence="wp-config base64 leaked",
+        ),
     ]
-    rep = Campaign("https://wp.example/", mode=CampaignMode.REPORT,
-                    bus=bus, http_get=_wp_fake_http(),
-                    prebuilt_findings=prebuilt).run()
+    rep = Campaign(
+        "https://wp.example/",
+        mode=CampaignMode.REPORT,
+        bus=bus,
+        http_get=_wp_fake_http(),
+        prebuilt_findings=prebuilt,
+    ).run()
     names = [c["name"] for c in rep.chains]
     assert any("upload" in n.lower() and "LFI" in n for n in names)
 
@@ -232,8 +280,12 @@ def test_campaign_chains_findings_from_event_stream_and_prebuilt(monkeypatch):
 def test_campaign_fatal_recorded_on_no_consent(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     bus = EventBus()
-    rep = Campaign("https://nothing-authorized.example/", mode=CampaignMode.EXPLOIT,
-                    bus=bus, http_get=_no_http).run()
+    rep = Campaign(
+        "https://nothing-authorized.example/",
+        mode=CampaignMode.EXPLOIT,
+        bus=bus,
+        http_get=_no_http,
+    ).run()
     assert rep.consent_verified is False
     fatal = [e for e in bus.history if e.kind == EventKind.FATAL]
     assert fatal
@@ -242,15 +294,17 @@ def test_campaign_fatal_recorded_on_no_consent(monkeypatch):
 
 def test_campaign_report_to_dict_is_json_safe(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = Campaign("https://t.example/", mode=CampaignMode.REPORT,
-                    http_get=_wp_fake_http()).run()
+    rep = Campaign(
+        "https://t.example/", mode=CampaignMode.REPORT, http_get=_wp_fake_http()
+    ).run()
     json.dumps(rep.to_dict())
 
 
 def test_run_campaign_one_liner(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
-    rep = run_campaign("https://t.example/", mode=CampaignMode.REPORT,
-                       http_get=_wp_fake_http())
+    rep = run_campaign(
+        "https://t.example/", mode=CampaignMode.REPORT, http_get=_wp_fake_http()
+    )
     assert rep.mode == CampaignMode.REPORT
     assert rep.finished_at > 0
 
@@ -262,14 +316,22 @@ def test_run_campaign_one_liner(monkeypatch):
 
 def test_render_campaign_html_contains_core_sections(monkeypatch):
     from amoskys.agents.Web.argos.campaign import render_campaign_html
+
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     prebuilt = [
-        ChainFinding(kind="rest_authz", location="/wp-json/x/y", severity="high",
-                     evidence="permission_callback missing"),
+        ChainFinding(
+            kind="rest_authz",
+            location="/wp-json/x/y",
+            severity="high",
+            evidence="permission_callback missing",
+        ),
     ]
-    rep = Campaign("https://target.example/", mode=CampaignMode.REPORT,
-                    http_get=_wp_fake_http(),
-                    prebuilt_findings=prebuilt).run()
+    rep = Campaign(
+        "https://target.example/",
+        mode=CampaignMode.REPORT,
+        http_get=_wp_fake_http(),
+        prebuilt_findings=prebuilt,
+    ).run()
     html = render_campaign_html(rep.to_dict())
     assert "<!DOCTYPE html>" in html
     assert "Argos" in html
@@ -281,26 +343,27 @@ def test_render_campaign_html_contains_core_sections(monkeypatch):
 
 def test_render_campaign_html_escapes_target(monkeypatch):
     from amoskys.agents.Web.argos.campaign import render_campaign_html
+
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     # Target with HTML-hostile characters should be escaped
     rep_dict = {
-        "target_url":       'https://evil<script>alert(1)</script>.com/',
-        "target_host":      "evil",
-        "mode":             "report",
-        "started_at":       1700000000,
-        "finished_at":      1700000001,
-        "duration_s":       1.0,
-        "profile":          None,
-        "strategy":         None,
+        "target_url": "https://evil<script>alert(1)</script>.com/",
+        "target_host": "evil",
+        "mode": "report",
+        "started_at": 1700000000,
+        "finished_at": 1700000001,
+        "duration_s": 1.0,
+        "profile": None,
+        "strategy": None,
         "origin_candidates": [],
-        "smuggle_report":   None,
-        "findings":         [],
-        "chains":           [],
-        "max_severity":     "low",
-        "events":           [],
-        "errors":           [],
+        "smuggle_report": None,
+        "findings": [],
+        "chains": [],
+        "max_severity": "low",
+        "events": [],
+        "errors": [],
         "consent_verified": True,
-        "consent_method":   "test",
+        "consent_method": "test",
     }
     html = render_campaign_html(rep_dict)
     assert "<script>alert(1)</script>" not in html
@@ -309,15 +372,24 @@ def test_render_campaign_html_escapes_target(monkeypatch):
 
 def test_render_campaign_html_handles_chains_and_events(monkeypatch):
     from amoskys.agents.Web.argos.campaign import render_campaign_html
+
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     bus = EventBus()
     prebuilt = [
-        ChainFinding(kind="file_upload", location="/upload", severity="high", evidence="polyglot"),
-        ChainFinding(kind="lfi", location="/read", severity="high", evidence="wp-config leak"),
+        ChainFinding(
+            kind="file_upload", location="/upload", severity="high", evidence="polyglot"
+        ),
+        ChainFinding(
+            kind="lfi", location="/read", severity="high", evidence="wp-config leak"
+        ),
     ]
-    rep = Campaign("https://wp.example/", mode=CampaignMode.REPORT,
-                    bus=bus, http_get=_wp_fake_http(),
-                    prebuilt_findings=prebuilt).run()
+    rep = Campaign(
+        "https://wp.example/",
+        mode=CampaignMode.REPORT,
+        bus=bus,
+        http_get=_wp_fake_http(),
+        prebuilt_findings=prebuilt,
+    ).run()
     html = render_campaign_html(rep.to_dict())
     # chain narrative must appear
     assert "upload" in html.lower()
@@ -333,8 +405,12 @@ def test_render_campaign_html_handles_chains_and_events(monkeypatch):
 def test_confirm_mode_runs_hidden_param_stage(monkeypatch):
     monkeypatch.setenv("AMOSKYS_CONSENT_DOMAIN", "target.example")
     bus = EventBus()
-    Campaign("https://target.example/", mode=CampaignMode.CONFIRM,
-             bus=bus, http_get=_wp_fake_http()).run()
+    Campaign(
+        "https://target.example/",
+        mode=CampaignMode.CONFIRM,
+        bus=bus,
+        http_get=_wp_fake_http(),
+    ).run()
     stages = [e.stage for e in bus.history if e.kind == EventKind.STAGE_START]
     assert "fuzz_params" in stages
 
@@ -342,8 +418,12 @@ def test_confirm_mode_runs_hidden_param_stage(monkeypatch):
 def test_report_mode_skips_hidden_param_stage(monkeypatch):
     monkeypatch.delenv("AMOSKYS_CONSENT_DOMAIN", raising=False)
     bus = EventBus()
-    Campaign("https://target.example/", mode=CampaignMode.REPORT,
-             bus=bus, http_get=_wp_fake_http()).run()
+    Campaign(
+        "https://target.example/",
+        mode=CampaignMode.REPORT,
+        bus=bus,
+        http_get=_wp_fake_http(),
+    ).run()
     stages = [e.stage for e in bus.history if e.kind == EventKind.STAGE_START]
     assert "fuzz_params" not in stages
     assert "auth_probe" not in stages
@@ -357,12 +437,20 @@ def test_exploit_mode_runs_auth_probe_stage(monkeypatch):
         status, hdrs, body = base(url, t, h)
         if url.endswith("/api/login"):
             # Return a fake JWT in the body
-            return (200, {}, '{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.abcdefghijkl"}')
+            return (
+                200,
+                {},
+                '{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.abcdefghijkl"}',
+            )
         return (status, hdrs, body)
 
     bus = EventBus()
-    Campaign("https://target.example/", mode=CampaignMode.EXPLOIT,
-             bus=bus, http_get=http_with_jwt).run()
+    Campaign(
+        "https://target.example/",
+        mode=CampaignMode.EXPLOIT,
+        bus=bus,
+        http_get=http_with_jwt,
+    ).run()
     stages = [e.stage for e in bus.history if e.kind == EventKind.STAGE_START]
     assert "auth_probe" in stages
     # JWT evidence should be emitted for the token found
@@ -372,9 +460,10 @@ def test_exploit_mode_runs_auth_probe_stage(monkeypatch):
 
 def test_jwt_extraction_regex():
     from amoskys.agents.Web.argos.campaign.orchestrator import _extract_jwts
+
     sample = (
-        'auth token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.sighere '
-        'other: not-a-jwt '
+        "auth token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.sighere "
+        "other: not-a-jwt "
         '{"bearer":"eyJtZXN0XzEyMw.eyJpbmZvIjoiYWJjIn0.aabbccddeeff"}'
     )
     found = _extract_jwts(sample)

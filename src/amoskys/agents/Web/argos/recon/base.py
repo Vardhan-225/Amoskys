@@ -18,7 +18,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Iterator, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 if TYPE_CHECKING:
     from amoskys.agents.Web.argos.storage import AssetKind
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 class StealthClass(str, Enum):
     """Ordering hint for the orchestrator."""
 
-    PASSIVE = "passive"     # zero traffic to target; reads public DBs
-    RESOLVER = "resolver"   # queries public resolvers (DNS), not target NS
-    ACTIVE = "active"       # touches the target; must be rate-limited
+    PASSIVE = "passive"  # zero traffic to target; reads public DBs
+    RESOLVER = "resolver"  # queries public resolvers (DNS), not target NS
+    ACTIVE = "active"  # touches the target; must be rate-limited
 
 
 @dataclass
@@ -42,8 +42,8 @@ class ReconEvent:
 
     kind: "AssetKind"
     value: str
-    source: str              # source name, e.g. "ct_logs.crtsh"
-    confidence: float        # 0.0 – 1.0
+    source: str  # source name, e.g. "ct_logs.crtsh"
+    confidence: float  # 0.0 – 1.0
     parent_value: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -71,13 +71,14 @@ class ReconContext:
 
     customer_id: str
     run_id: str
-    seed: str                        # the root domain or IP
+    seed: str  # the root domain or IP
     known_subdomains: List[str] = field(default_factory=list)
     known_ips: List[str] = field(default_factory=list)
 
     def absorb(self, event: ReconEvent) -> None:
         """Let sources peek at prior events (keeps helpers simple)."""
         from amoskys.agents.Web.argos.storage import AssetKind as _K
+
         if event.kind == _K.SUBDOMAIN or event.kind == _K.DOMAIN:
             if event.value not in self.known_subdomains:
                 self.known_subdomains.append(event.value)

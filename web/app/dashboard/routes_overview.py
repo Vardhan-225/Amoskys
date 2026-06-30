@@ -109,9 +109,12 @@ def overview_geo_points():
         if not is_admin and org_id:
             # Get this org's device_ids from command center
             try:
-                import urllib.request as urlreq
                 import ssl
-                ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+                import urllib.request as urlreq
+
+                ops_host = os.getenv(
+                    "AMOSKYS_OPS_SERVER", "https://18.223.110.15"
+                ).rstrip("/")
                 rq = urlreq.Request(
                     f"{ops_host}/api/v1/fleet/status?org_id={org_id}",
                     headers={"Accept": "application/json"},
@@ -148,9 +151,14 @@ def overview_geo_points():
         ).fetchall()
         points = [
             {
-                "lat": r[0], "lon": r[1], "country": r[2] or "",
-                "city": r[3] or "", "asn_org": r[4] or "",
-                "bytes": r[5] or 0, "count": r[6], "threat": bool(r[7]),
+                "lat": r[0],
+                "lon": r[1],
+                "country": r[2] or "",
+                "city": r[3] or "",
+                "asn_org": r[4] or "",
+                "bytes": r[5] or 0,
+                "count": r[6],
+                "threat": bool(r[7]),
             }
             for r in rows
         ]
@@ -182,6 +190,7 @@ def overview_device_locations():
     ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
     try:
         import ssl
+
         url = f"{ops_host}/api/v1/fleet/status"
         if not is_admin and org_id:
             url += f"?org_id={org_id}"
@@ -215,7 +224,9 @@ def overview_device_locations():
 
     # Batch geo lookup via ip-api.com
     try:
-        batch_url = "http://ip-api.com/batch?fields=lat,lon,city,regionName,country,query"
+        batch_url = (
+            "http://ip-api.com/batch?fields=lat,lon,city,regionName,country,query"
+        )
         batch_data = json.dumps(ips_to_resolve).encode()
         req = urllib.request.Request(
             batch_url,
@@ -235,22 +246,24 @@ def overview_device_locations():
         ip = geo.get("query")
         d = device_map.get(ip, {})
         if geo.get("lat") and geo.get("lon"):
-            markers.append({
-                "device_id": d.get("device_id", ""),
-                "hostname": d.get("hostname", "Unknown"),
-                "os": d.get("os", ""),
-                "status": d.get("status", "offline"),
-                "event_count": d.get("event_count", 0),
-                "critical_count": d.get("critical_count", 0),
-                "high_count": d.get("high_count", 0),
-                "max_risk": d.get("max_risk", 0),
-                "org_id": d.get("org_id", ""),
-                "lat": geo["lat"],
-                "lon": geo["lon"],
-                "city": geo.get("city", ""),
-                "region": geo.get("regionName", ""),
-                "country": geo.get("country", ""),
-            })
+            markers.append(
+                {
+                    "device_id": d.get("device_id", ""),
+                    "hostname": d.get("hostname", "Unknown"),
+                    "os": d.get("os", ""),
+                    "status": d.get("status", "offline"),
+                    "event_count": d.get("event_count", 0),
+                    "critical_count": d.get("critical_count", 0),
+                    "high_count": d.get("high_count", 0),
+                    "max_risk": d.get("max_risk", 0),
+                    "org_id": d.get("org_id", ""),
+                    "lat": geo["lat"],
+                    "lon": geo["lon"],
+                    "city": geo.get("city", ""),
+                    "region": geo.get("regionName", ""),
+                    "country": geo.get("country", ""),
+                }
+            )
 
     return jsonify(markers)
 
@@ -270,20 +283,22 @@ def overview_data():
 
     # If we have neither local DB nor fleet_cache, we still try command center
     if db is None and evt_db is None:
-        return jsonify({
-            "available": False,
-            "message": "No data source available",
-            "posture": _compute_posture(0, 0),
-            "fleet": {"total_devices": 0, "online": 0, "offline": 0},
-            "last_24h": {"total_events": 0, "critical": 0, "high": 0},
-            "previous_24h": {"total_events": 0, "critical": 0, "high": 0},
-            "top_mitre_techniques": [],
-            "top_categories": [],
-            "devices": [],
-            "needs_attention": [],
-            "signals": {"active": 0, "items": []},
-            "agents": {"total": 0, "healthy": 0},
-        })
+        return jsonify(
+            {
+                "available": False,
+                "message": "No data source available",
+                "posture": _compute_posture(0, 0),
+                "fleet": {"total_devices": 0, "online": 0, "offline": 0},
+                "last_24h": {"total_events": 0, "critical": 0, "high": 0},
+                "previous_24h": {"total_events": 0, "critical": 0, "high": 0},
+                "top_mitre_techniques": [],
+                "top_categories": [],
+                "devices": [],
+                "needs_attention": [],
+                "signals": {"active": 0, "items": []},
+                "agents": {"total": 0, "healthy": 0},
+            }
+        )
 
     # If no full fleet.db but we have fleet_cache.db, use it for events
     if db is None:
@@ -302,7 +317,10 @@ def overview_data():
         # fleet_cache.db may not have org_id columns — check
         has_evt_org = False
         try:
-            cols = [c[1] for c in db.execute("PRAGMA table_info(security_events)").fetchall()]
+            cols = [
+                c[1]
+                for c in db.execute("PRAGMA table_info(security_events)").fetchall()
+            ]
             has_evt_org = "org_id" in cols
         except Exception:
             pass
@@ -325,9 +343,12 @@ def overview_data():
         # Always call command center for device list (we need it for
         # both the device cards AND the device_id isolation filter)
         try:
-            import urllib.request as urlreq
             import ssl
-            ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+            import urllib.request as urlreq
+
+            ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip(
+                "/"
+            )
             cc_url = f"{ops_host}/api/v1/fleet/status"
             if not is_admin and org_id:
                 cc_url += f"?org_id={org_id}"
@@ -343,7 +364,9 @@ def overview_data():
 
         # Build allowed device_id list
         if cc_devices:
-            allowed_device_ids = [d["device_id"] for d in cc_devices if d.get("device_id")]
+            allowed_device_ids = [
+                d["device_id"] for d in cc_devices if d.get("device_id")
+            ]
 
         # Build event WHERE clause using device_id IN (...) for isolation
         if is_admin and not org_id:
@@ -366,25 +389,30 @@ def overview_data():
 
         # ── Event stats (last 24h) — always from local DB ──
         total_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + evt_dev_clause,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?"
+            + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + evt_dev_clause,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8"
+            + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + evt_dev_clause,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8"
+            + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
 
         # ── Previous 24h (for trend arrows) ──
         prev_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?" + evt_dev_clause,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?"
+            + evt_dev_clause,
             (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
         prev_critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8" + evt_dev_clause,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8"
+            + evt_dev_clause,
             (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
 
@@ -392,7 +420,8 @@ def overview_data():
         mitre_rows = db.execute(
             """SELECT mitre_techniques FROM security_events
                WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-               AND mitre_techniques != '[]'""" + evt_dev_clause,
+               AND mitre_techniques != '[]'"""
+            + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchall()
         technique_counts: dict[str, int] = {}
@@ -415,7 +444,9 @@ def overview_data():
         top_categories = db.execute(
             """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
                FROM security_events
-               WHERE timestamp_ns > ? AND risk_score > 0""" + evt_dev_clause + """
+               WHERE timestamp_ns > ? AND risk_score > 0"""
+            + evt_dev_clause
+            + """
                GROUP BY event_category
                ORDER BY cnt DESC LIMIT 8""",
             (day_ago_ns,) + evt_dev_params,
@@ -445,23 +476,29 @@ def overview_data():
                 (day_ago_ns,) + dev_params_q,
             ).fetchall()
             for r in device_rows:
-                status = "online" if r["last_seen"] and r["last_seen"] > now - 300 else "offline"
+                status = (
+                    "online"
+                    if r["last_seen"] and r["last_seen"] > now - 300
+                    else "offline"
+                )
                 cr = r["critical_count"] or 0
                 hi = r["high_count"] or 0
-                devices.append({
-                    "device_id": r["device_id"],
-                    "hostname": r["hostname"] or r["device_id"][:12],
-                    "os": r["os"],
-                    "os_version": r["os_version"],
-                    "agent_version": r["agent_version"],
-                    "status": status,
-                    "last_seen": r["last_seen"],
-                    "event_count": r["event_count"] or 0,
-                    "max_risk": r["max_risk"] or 0,
-                    "critical_count": cr,
-                    "high_count": hi,
-                    "posture": _compute_posture(cr, hi),
-                })
+                devices.append(
+                    {
+                        "device_id": r["device_id"],
+                        "hostname": r["hostname"] or r["device_id"][:12],
+                        "os": r["os"],
+                        "os_version": r["os_version"],
+                        "agent_version": r["agent_version"],
+                        "status": status,
+                        "last_seen": r["last_seen"],
+                        "event_count": r["event_count"] or 0,
+                        "max_risk": r["max_risk"] or 0,
+                        "critical_count": cr,
+                        "high_count": hi,
+                        "posture": _compute_posture(cr, hi),
+                    }
+                )
         else:
             # No devices table — use command center devices, enrich with local event counts
             for ccd in cc_devices:
@@ -482,52 +519,61 @@ def overview_data():
                     ).fetchone()[0]
                 except Exception:
                     ec, cr, hi = 0, 0, 0
-                devices.append({
-                    "device_id": did,
-                    "hostname": ccd.get("hostname", did[:12]),
-                    "os": ccd.get("os", ""),
-                    "os_version": ccd.get("os_version", ""),
-                    "agent_version": ccd.get("agent_version", ""),
-                    "status": ccd.get("status", "offline"),
-                    "last_seen": ccd.get("last_seen"),
-                    "event_count": ec,
-                    "max_risk": ccd.get("max_risk", 0) or 0,
-                    "critical_count": cr,
-                    "high_count": hi,
-                    "posture": _compute_posture(cr, hi),
-                })
+                devices.append(
+                    {
+                        "device_id": did,
+                        "hostname": ccd.get("hostname", did[:12]),
+                        "os": ccd.get("os", ""),
+                        "os_version": ccd.get("os_version", ""),
+                        "agent_version": ccd.get("agent_version", ""),
+                        "status": ccd.get("status", "offline"),
+                        "last_seen": ccd.get("last_seen"),
+                        "event_count": ec,
+                        "max_risk": ccd.get("max_risk", 0) or 0,
+                        "critical_count": cr,
+                        "high_count": hi,
+                        "posture": _compute_posture(cr, hi),
+                    }
+                )
 
         # ── Needs Attention items ──
         needs_attention = []
         if critical > 0:
-            needs_attention.append({
-                "severity": "critical",
-                "text": f"{critical} critical event{'s' if critical != 1 else ''} in the last 24h",
-                "action": "Review immediately",
-                "link": "/dashboard/threats",
-            })
+            needs_attention.append(
+                {
+                    "severity": "critical",
+                    "text": f"{critical} critical event{'s' if critical != 1 else ''} in the last 24h",
+                    "action": "Review immediately",
+                    "link": "/dashboard/threats",
+                }
+            )
         if high > 0:
-            needs_attention.append({
-                "severity": "high",
-                "text": f"{high} high-risk event{'s' if high != 1 else ''} detected",
-                "action": "Worth investigating",
-                "link": "/dashboard/threats",
-            })
+            needs_attention.append(
+                {
+                    "severity": "high",
+                    "text": f"{high} high-risk event{'s' if high != 1 else ''} detected",
+                    "action": "Worth investigating",
+                    "link": "/dashboard/threats",
+                }
+            )
 
         # Check for offline devices
         offline_count = total - online
         if offline_count > 0 and total > 0:
-            needs_attention.append({
-                "severity": "medium" if offline_count < total else "high",
-                "text": f"{offline_count} device{'s' if offline_count != 1 else ''} offline",
-                "action": "Check connectivity",
-                "link": "/dashboard/devices",
-            })
+            needs_attention.append(
+                {
+                    "severity": "medium" if offline_count < total else "high",
+                    "text": f"{offline_count} device{'s' if offline_count != 1 else ''} offline",
+                    "action": "Check connectivity",
+                    "link": "/dashboard/devices",
+                }
+            )
 
         # ── IGRIS signals ──
         signals = {"active": 0, "items": []}
         try:
             from amoskys.igris import get_igris
+
             igris = get_igris()
             sigs = igris.get_signals(limit=10)
             active_sigs = [s for s in sigs if not s.get("cleared")]
@@ -542,12 +588,14 @@ def overview_data():
                 for s in active_sigs[:5]
             ]
             if signals["active"] > 0:
-                needs_attention.append({
-                    "severity": "medium",
-                    "text": f"{signals['active']} active IGRIS signal{'s' if signals['active'] != 1 else ''}",
-                    "action": "Review anomalies",
-                    "link": "/dashboard/igris",
-                })
+                needs_attention.append(
+                    {
+                        "severity": "medium",
+                        "text": f"{signals['active']} active IGRIS signal{'s' if signals['active'] != 1 else ''}",
+                        "action": "Review anomalies",
+                        "link": "/dashboard/igris",
+                    }
+                )
         except Exception:
             pass
 
@@ -555,9 +603,11 @@ def overview_data():
         agents = {"total": 0, "healthy": 0}
         try:
             from .agent_discovery import AGENT_CATALOG, detect_agent_status
+
             agents["total"] = len(AGENT_CATALOG)
             agents["healthy"] = sum(
-                1 for cfg in AGENT_CATALOG.values()
+                1
+                for cfg in AGENT_CATALOG.values()
                 if detect_agent_status(cfg)["health"] == "online"
             )
         except Exception:
@@ -568,37 +618,39 @@ def overview_data():
 
         db.close()
 
-        return jsonify({
-            "available": True,
-            "posture": posture,
-            "fleet": {
-                "total_devices": total,
-                "online": online,
-                "offline": total - online,
-            },
-            "last_24h": {
-                "total_events": total_events,
-                "critical": critical,
-                "high": high,
-            },
-            "previous_24h": {
-                "total_events": prev_events,
-                "critical": prev_critical,
-                "high": 0,
-            },
-            "mitre": {
-                "unique_techniques": unique_technique_count,
-                "top": [{"technique": t, "count": c} for t, c in top_techniques],
-            },
-            "top_categories": [
-                {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
-                for r in top_categories
-            ],
-            "devices": devices,
-            "needs_attention": needs_attention,
-            "signals": signals,
-            "agents": agents,
-        })
+        return jsonify(
+            {
+                "available": True,
+                "posture": posture,
+                "fleet": {
+                    "total_devices": total,
+                    "online": online,
+                    "offline": total - online,
+                },
+                "last_24h": {
+                    "total_events": total_events,
+                    "critical": critical,
+                    "high": high,
+                },
+                "previous_24h": {
+                    "total_events": prev_events,
+                    "critical": prev_critical,
+                    "high": 0,
+                },
+                "mitre": {
+                    "unique_techniques": unique_technique_count,
+                    "top": [{"technique": t, "count": c} for t, c in top_techniques],
+                },
+                "top_categories": [
+                    {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
+                    for r in top_categories
+                ],
+                "devices": devices,
+                "needs_attention": needs_attention,
+                "signals": signals,
+                "agents": agents,
+            }
+        )
 
     except Exception as e:
         logger.error("Overview data failed: %s", e)
@@ -682,7 +734,8 @@ def investigation_context(incident_id):
         start_ns = end_ns - int(24 * 3600 * 1e9)
         if incident.get("created_at"):
             try:
-                from datetime import datetime, timezone as _tz
+                from datetime import datetime
+                from datetime import timezone as _tz
 
                 created = datetime.fromisoformat(
                     incident["created_at"].replace("Z", "+00:00")

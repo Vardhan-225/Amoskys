@@ -53,17 +53,17 @@ class BlockedTargetError(RuntimeError):
 class RateLimiterConfig:
     """Tuning knobs. Defaults are deliberately conservative."""
 
-    initial_rps: float = 1.0           # 1 request per second default
-    min_rps: float = 0.1               # floor when adaptive halving kicks in
-    max_rps: float = 5.0               # hard ceiling even if target is quiet
-    jitter_ratio: float = 0.3          # ±30% jitter on wait interval
-    block_threshold: int = 3           # consecutive blocks → BlockedTargetError
-    backoff_base_s: float = 30.0       # first backoff on a single block
-    backoff_max_s: float = 900.0       # 15-minute cap
+    initial_rps: float = 1.0  # 1 request per second default
+    min_rps: float = 0.1  # floor when adaptive halving kicks in
+    max_rps: float = 5.0  # hard ceiling even if target is quiet
+    jitter_ratio: float = 0.3  # ±30% jitter on wait interval
+    block_threshold: int = 3  # consecutive blocks → BlockedTargetError
+    backoff_base_s: float = 30.0  # first backoff on a single block
+    backoff_max_s: float = 900.0  # 15-minute cap
     halve_on_block_codes: frozenset = field(
         default_factory=lambda: frozenset({429, 403, 503})
     )
-    respect_retry_after: bool = True    # honor Retry-After header if present
+    respect_retry_after: bool = True  # honor Retry-After header if present
 
 
 # ── Implementation ─────────────────────────────────────────────────
@@ -153,7 +153,9 @@ class AdaptiveRateLimiter:
             )
         logger.debug(
             "rate_limiter: %s saw error %s, rps now %.2f",
-            self.target, type(error).__name__, self._current_rps,
+            self.target,
+            type(error).__name__,
+            self._current_rps,
         )
 
     # ── Inspection ────────────────────────────────────────────────
@@ -221,7 +223,8 @@ class AdaptiveRateLimiter:
             self._blocked = True
             logger.error(
                 "rate_limiter: %s marked BLOCKED after %d consecutive blocks",
-                self.target, self._consecutive_blocks,
+                self.target,
+                self._consecutive_blocks,
             )
 
 

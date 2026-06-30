@@ -47,12 +47,11 @@ import logging
 import random
 import re
 import time
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
-
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("amoskys.argos.recon.stealth")
 
@@ -82,13 +81,13 @@ _LONG_PAUSE_MAX_S = 20.0
 class StealthFinding:
     """One exposure. Each finding is produced by exactly one check."""
 
-    category:  str     # one of the 7 categories below
-    check_id:  str     # e.g., "wp.readme_html"
-    severity:  str     # info | low | medium | high
-    title:     str
-    observed:  str     # raw evidence the finding is based on
-    mandate:   str     # why this matters — citation included
-    remediation: str   # what the owner does to fix
+    category: str  # one of the 7 categories below
+    check_id: str  # e.g., "wp.readme_html"
+    severity: str  # info | low | medium | high
+    title: str
+    observed: str  # raw evidence the finding is based on
+    mandate: str  # why this matters — citation included
+    remediation: str  # what the owner does to fix
     references: List[str] = field(default_factory=list)
 
 
@@ -96,12 +95,12 @@ class StealthFinding:
 class StealthDossier:
     """The deliverable for one target."""
 
-    target_url:   str
-    target_host:  str
-    ran_at:       float
-    duration_s:   float
-    http_checks:  int
-    findings:     List[StealthFinding]
+    target_url: str
+    target_host: str
+    ran_at: float
+    duration_s: float
+    http_checks: int
+    findings: List[StealthFinding]
 
     def by_category(self) -> Dict[str, List[StealthFinding]]:
         out: Dict[str, List[StealthFinding]] = {}
@@ -117,15 +116,18 @@ class StealthDossier:
         return out
 
     def to_json(self, indent: int = 2) -> str:
-        return json.dumps({
-            "target_url":  self.target_url,
-            "target_host": self.target_host,
-            "ran_at":      self.ran_at,
-            "duration_s":  self.duration_s,
-            "http_checks": self.http_checks,
-            "summary":     self.severity_counts(),
-            "findings":    [asdict(f) for f in self.findings],
-        }, indent=indent)
+        return json.dumps(
+            {
+                "target_url": self.target_url,
+                "target_host": self.target_host,
+                "ran_at": self.ran_at,
+                "duration_s": self.duration_s,
+                "http_checks": self.http_checks,
+                "summary": self.severity_counts(),
+                "findings": [asdict(f) for f in self.findings],
+            },
+            indent=indent,
+        )
 
 
 # ── HTTP primitive ─────────────────────────────────────────────────
@@ -133,11 +135,11 @@ class StealthDossier:
 
 @dataclass
 class _HTTPResult:
-    status:   int
-    headers:  Dict[str, str]
-    body:     str
-    url:      str
-    error:    Optional[str] = None
+    status: int
+    headers: Dict[str, str]
+    body: str
+    url: str
+    error: Optional[str] = None
 
 
 def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
@@ -149,9 +151,11 @@ def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
     try:
         if enc == "gzip":
             import gzip
+
             body_bytes = gzip.decompress(body_bytes)
         elif enc == "deflate":
             import zlib
+
             try:
                 body_bytes = zlib.decompress(body_bytes)
             except zlib.error:
@@ -159,6 +163,7 @@ def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
         elif enc == "br":
             try:
                 import brotli  # type: ignore
+
                 body_bytes = brotli.decompress(body_bytes)
             except ImportError:
                 pass
@@ -167,11 +172,14 @@ def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
     return body_bytes.decode("utf-8", errors="replace")
 
 
-def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
-              user_agent: str = _DEFAULT_UA,
-              max_bytes: int = 512 * 1024,
-              referer: Optional[str] = None,
-              first_nav: bool = False) -> _HTTPResult:
+def _http_get(
+    url: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    user_agent: str = _DEFAULT_UA,
+    max_bytes: int = 512 * 1024,
+    referer: Optional[str] = None,
+    first_nav: bool = False,
+) -> _HTTPResult:
     """One polite HTTP GET. Never raises except on DNS-level failure.
 
     Args:
@@ -188,15 +196,16 @@ def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
     same_origin = False
     if referer:
         ref_parsed = urllib.parse.urlparse(referer)
-        same_origin = (ref_parsed.netloc == parsed.netloc
-                       and ref_parsed.scheme == parsed.scheme)
+        same_origin = (
+            ref_parsed.netloc == parsed.netloc and ref_parsed.scheme == parsed.scheme
+        )
 
     headers = {
-        "User-Agent":      user_agent,
-        "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate",
-        "Connection":      "keep-alive",   # browsers default to keep-alive
+        "Connection": "keep-alive",  # browsers default to keep-alive
         "Upgrade-Insecure-Requests": "1",
     }
     if referer:
@@ -217,8 +226,7 @@ def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body_bytes = resp.read(max_bytes)
             resp_headers = {k.lower(): v for k, v in resp.headers.items()}
-            body = _decompress_body(body_bytes,
-                                    resp_headers.get("content-encoding"))
+            body = _decompress_body(body_bytes, resp_headers.get("content-encoding"))
             return _HTTPResult(
                 status=resp.status,
                 headers=resp_headers,
@@ -230,8 +238,9 @@ def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
         body = ""
         if e.fp:
             try:
-                body = _decompress_body(e.fp.read(max_bytes),
-                                        err_headers.get("content-encoding"))
+                body = _decompress_body(
+                    e.fp.read(max_bytes), err_headers.get("content-encoding")
+                )
             except Exception:
                 pass
         return _HTTPResult(
@@ -250,13 +259,15 @@ def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
 class StealthRecon:
     """Coordinates the 7-category sweep against one target."""
 
-    def __init__(self, target_url: str,
-                 user_agent: str = _DEFAULT_UA,
-                 timeout: float = _DEFAULT_TIMEOUT,
-                 polite: bool = True,
-                 revisit_probability: float = 0.15,
-                 search_referer: str = "https://www.google.com/",
-                 ) -> None:
+    def __init__(
+        self,
+        target_url: str,
+        user_agent: str = _DEFAULT_UA,
+        timeout: float = _DEFAULT_TIMEOUT,
+        polite: bool = True,
+        revisit_probability: float = 0.15,
+        search_referer: str = "https://www.google.com/",
+    ) -> None:
         self.target_url = target_url.rstrip("/")
         parsed = urllib.parse.urlparse(target_url)
         if not parsed.scheme:
@@ -315,9 +326,11 @@ class StealthRecon:
         # ratio below the 0.8 trip-wire our scanner-shape sensor
         # watches for. We lower the threshold to 3 visited paths so
         # revisits start happening before `distinct` crosses 10.
-        if (self.polite
-          and len(self._visited_urls) >= 3
-          and self._rng.random() < self.revisit_probability):
+        if (
+            self.polite
+            and len(self._visited_urls) >= 3
+            and self._rng.random() < self.revisit_probability
+        ):
             self._do_revisit()
 
         url = f"{self.scheme}://{self.host}{path}"
@@ -329,7 +342,7 @@ class StealthRecon:
         # traffic), subsequent hits come from the previous page we
         # fetched (same-origin continuation).
         referer = self._last_url or self.search_referer
-        first_nav = (self.http_checks == 1)
+        first_nav = self.http_checks == 1
 
         result = _http_get(
             url,
@@ -392,10 +405,11 @@ class StealthRecon:
                 severity="low",
                 title=(
                     f"WordPress version leaked via /readme.html ({ver})"
-                    if ver else "WordPress confirmed via /readme.html"
+                    if ver
+                    else "WordPress confirmed via /readme.html"
                 ),
                 observed=f"GET /readme.html → {r.status}; "
-                         + (f"version={ver}" if ver else "core-confirmed"),
+                + (f"version={ver}" if ver else "core-confirmed"),
                 mandate=(
                     "/readme.html is a canonical WordPress artifact. Its "
                     "presence and its embedded version string are the FIRST "
@@ -446,15 +460,27 @@ class StealthRecon:
             try:
                 data = json.loads(r.body)
                 namespaces = data.get("namespaces", [])
-                plugin_ns = [n for n in namespaces
-                             if n not in ("wp/v2", "wp-site-health/v1", "oembed/1.0", "wp-block-editor/v1")]
+                plugin_ns = [
+                    n
+                    for n in namespaces
+                    if n
+                    not in (
+                        "wp/v2",
+                        "wp-site-health/v1",
+                        "oembed/1.0",
+                        "wp-block-editor/v1",
+                    )
+                ]
                 self._add(
                     category="wp_core",
                     check_id="wp.rest_index",
                     severity="medium" if plugin_ns else "low",
                     title=f"REST API discloses {len(plugin_ns)} plugin namespaces",
-                    observed=(f"GET /wp-json/ → 200; plugin namespaces: {plugin_ns[:6]}"
-                              if plugin_ns else "GET /wp-json/ → 200"),
+                    observed=(
+                        f"GET /wp-json/ → 200; plugin namespaces: {plugin_ns[:6]}"
+                        if plugin_ns
+                        else "GET /wp-json/ → 200"
+                    ),
                     mandate=(
                         "The REST API index exposes every plugin that "
                         "registered a namespace. Each namespace is a "
@@ -479,7 +505,8 @@ class StealthRecon:
         if r.status == 200:
             m = re.search(
                 r"""<meta\s+name=['"]generator['"]\s+content=['"]([^'"]+)['"]""",
-                r.body, re.IGNORECASE,
+                r.body,
+                re.IGNORECASE,
             )
             if m and "wordpress" in m.group(1).lower():
                 self._add(
@@ -487,7 +514,7 @@ class StealthRecon:
                     check_id="wp.meta_generator",
                     severity="low",
                     title=f"Generator meta-tag leaks: {m.group(1)}",
-                    observed=f"<meta generator> = \"{m.group(1)}\"",
+                    observed=f'<meta generator> = "{m.group(1)}"',
                     mandate=(
                         "`<meta name=generator>` tells every attacker the "
                         "exact WP version before they've touched a single "
@@ -533,41 +560,83 @@ class StealthRecon:
 
     def _cat2_dev_leaks(self) -> None:
         mandates = {
-            "git":       ("/.git/config",             "high",
-                          "Exposed .git directory lets an attacker reconstruct the entire source tree. "
-                          "Every commit message, every file, every secret ever committed. "
-                          "CVE history is loaded with `.git` leaks leading to full codebase exfil."),
-            "git_head":  ("/.git/HEAD",               "high",
-                          "Same class as .git/config — confirms the directory is readable."),
-            "env":       ("/.env",                    "high",
-                          "/.env files hold DB creds, API tokens, AWS keys. "
-                          "Single 200 response here means game-over for most infrastructures."),
-            "env_bak":   ("/.env.backup",             "high",
-                          "Backup of .env is the same disaster with a different filename."),
-            "wpcfg_bak": ("/wp-config.php.bak",       "high",
-                          "wp-config.php.bak contains DB_HOST/USER/PASSWORD + AUTH_KEY — "
-                          "complete takeover primitive."),
-            "wpcfg_tilde":("/wp-config.php~",         "high",
-                          "Editor backup of wp-config.php — same contents as .bak."),
-            "wpcfg_save":("/wp-config.php.save",      "high",
-                          "nano-editor autosave of wp-config.php."),
-            "composer":  ("/composer.json",           "low",
-                          "Discloses PHP dependency tree — every direct dep + version, "
-                          "letting an attacker map known-CVE dep chains."),
-            "package":   ("/package.json",            "low",
-                          "Discloses JS dependency tree — same as composer.json for node."),
-            "ds_store":  ("/.DS_Store",               "medium",
-                          ".DS_Store leaks macOS filesystem metadata including "
-                          "filenames the attacker didn't otherwise know existed."),
-            "idea":      ("/.idea/workspace.xml",     "medium",
-                          "JetBrains IDE config file — leaks local paths, editor history."),
-            "sql_dump":  ("/dump.sql",                "high",
-                          "Raw SQL dump — full DB contents including password hashes."),
-            "sql_gz":    ("/db_backup.sql.gz",        "high",
-                          "Compressed DB dump — same impact as /dump.sql."),
-            "readme_md": ("/README.md",               "info",
-                          "Accidentally-deployed repo README — often leaks developer "
-                          "names, internal hostnames, deployment steps."),
+            "git": (
+                "/.git/config",
+                "high",
+                "Exposed .git directory lets an attacker reconstruct the entire source tree. "
+                "Every commit message, every file, every secret ever committed. "
+                "CVE history is loaded with `.git` leaks leading to full codebase exfil.",
+            ),
+            "git_head": (
+                "/.git/HEAD",
+                "high",
+                "Same class as .git/config — confirms the directory is readable.",
+            ),
+            "env": (
+                "/.env",
+                "high",
+                "/.env files hold DB creds, API tokens, AWS keys. "
+                "Single 200 response here means game-over for most infrastructures.",
+            ),
+            "env_bak": (
+                "/.env.backup",
+                "high",
+                "Backup of .env is the same disaster with a different filename.",
+            ),
+            "wpcfg_bak": (
+                "/wp-config.php.bak",
+                "high",
+                "wp-config.php.bak contains DB_HOST/USER/PASSWORD + AUTH_KEY — "
+                "complete takeover primitive.",
+            ),
+            "wpcfg_tilde": (
+                "/wp-config.php~",
+                "high",
+                "Editor backup of wp-config.php — same contents as .bak.",
+            ),
+            "wpcfg_save": (
+                "/wp-config.php.save",
+                "high",
+                "nano-editor autosave of wp-config.php.",
+            ),
+            "composer": (
+                "/composer.json",
+                "low",
+                "Discloses PHP dependency tree — every direct dep + version, "
+                "letting an attacker map known-CVE dep chains.",
+            ),
+            "package": (
+                "/package.json",
+                "low",
+                "Discloses JS dependency tree — same as composer.json for node.",
+            ),
+            "ds_store": (
+                "/.DS_Store",
+                "medium",
+                ".DS_Store leaks macOS filesystem metadata including "
+                "filenames the attacker didn't otherwise know existed.",
+            ),
+            "idea": (
+                "/.idea/workspace.xml",
+                "medium",
+                "JetBrains IDE config file — leaks local paths, editor history.",
+            ),
+            "sql_dump": (
+                "/dump.sql",
+                "high",
+                "Raw SQL dump — full DB contents including password hashes.",
+            ),
+            "sql_gz": (
+                "/db_backup.sql.gz",
+                "high",
+                "Compressed DB dump — same impact as /dump.sql.",
+            ),
+            "readme_md": (
+                "/README.md",
+                "info",
+                "Accidentally-deployed repo README — often leaks developer "
+                "names, internal hostnames, deployment steps.",
+            ),
         }
 
         refs = [
@@ -576,7 +645,11 @@ class StealthRecon:
         ]
         for check_id, (path, sev, mandate) in mandates.items():
             r = self._get(path)
-            if r.status == 200 and len(r.body) > 0 and "<title" not in r.body.lower()[:500]:
+            if (
+                r.status == 200
+                and len(r.body) > 0
+                and "<title" not in r.body.lower()[:500]
+            ):
                 # <title appears in 404 pages; real dev-leak responses don't have one.
                 self._add(
                     category="dev_leaks",
@@ -584,8 +657,8 @@ class StealthRecon:
                     severity=sev,
                     title=f"Developer artifact exposed: {path}",
                     observed=f"GET {path} → {r.status}; "
-                             f"content-type={r.headers.get('content-type', '?')}; "
-                             f"bytes={len(r.body)}",
+                    f"content-type={r.headers.get('content-type', '?')}; "
+                    f"bytes={len(r.body)}",
                     mandate=mandate,
                     remediation=(
                         f"Web-server rule: deny access to {path} "
@@ -604,7 +677,8 @@ class StealthRecon:
         # Harvest /wp-content/plugins/<slug>/...?ver=1.2.3 occurrences.
         plugin_refs = re.findall(
             r"""/wp-content/plugins/([a-z0-9][-a-z0-9._]*)/[^'"]+\?ver=([0-9][0-9a-z.+-]*)""",
-            r.body, re.IGNORECASE,
+            r.body,
+            re.IGNORECASE,
         )
         # Dedupe (slug, version) pairs.
         seen = {}
@@ -649,9 +723,17 @@ class StealthRecon:
             return
         hdr = r.headers
         notable = {}
-        for h in ("server", "x-powered-by", "x-pingback", "x-generator",
-                  "x-cache", "x-amz-cf-id", "cf-ray", "x-fastly-request-id",
-                  "x-akamai-transformed"):
+        for h in (
+            "server",
+            "x-powered-by",
+            "x-pingback",
+            "x-generator",
+            "x-cache",
+            "x-amz-cf-id",
+            "cf-ray",
+            "x-fastly-request-id",
+            "x-akamai-transformed",
+        ):
             if h in hdr:
                 notable[h] = hdr[h]
         if notable:
@@ -775,7 +857,8 @@ class StealthRecon:
         # External JS script origins — not same-host.
         scripts = re.findall(
             r"""<script[^>]+src=['"]([^'"]+)['"]""",
-            r.body, re.IGNORECASE,
+            r.body,
+            re.IGNORECASE,
         )
         external = []
         for s in scripts:

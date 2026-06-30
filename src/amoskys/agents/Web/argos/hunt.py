@@ -44,6 +44,7 @@ logger = logging.getLogger("amoskys.argos.hunt")
 
 # ── Data ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class HuntResult:
     """Output of one hunt run."""
@@ -125,6 +126,7 @@ class HuntResult:
 
 
 # ── Hunt ───────────────────────────────────────────────────────────
+
 
 class Hunt:
     """A corpus-wide AST sweep.
@@ -210,11 +212,13 @@ class Hunt:
         errors: List[str] = []
         scanned = 0
 
-        logger.info("hunt %s: %d targets, scanners=%s, operator=%s",
-                    self.hunt_id,
-                    len(targets),
-                    [s.scanner_id for s in self.scanners],
-                    self.operator_email or self.operator_id or "<none>")
+        logger.info(
+            "hunt %s: %d targets, scanners=%s, operator=%s",
+            self.hunt_id,
+            len(targets),
+            [s.scanner_id for s in self.scanners],
+            self.operator_email or self.operator_id or "<none>",
+        )
 
         self._audit_hunt_event(
             action="hunt_start",
@@ -284,6 +288,7 @@ class Hunt:
             return
         try:
             from amoskys.agents.Web.argos.storage import AuditEntry
+
             self.db.audit(
                 AuditEntry(
                     log_id=None,

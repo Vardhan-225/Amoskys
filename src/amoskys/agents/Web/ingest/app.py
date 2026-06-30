@@ -22,9 +22,10 @@ from amoskys.agents.Web.ingest import __version__
 from amoskys.agents.Web.ingest.schema import EventEnvelope, IngestResponse
 from amoskys.agents.Web.ingest.storage import EventStore
 
-
 logger = logging.getLogger("amoskys.ingest")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s"
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ store.ensure_dev_tenant(DEV_TOKEN)
 # Auth
 # ─────────────────────────────────────────────────────────────
 
+
 def require_bearer(
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> str:
@@ -87,6 +89,7 @@ def require_bearer(
 # ─────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────
+
 
 @app.get("/health")
 def health() -> dict:
@@ -154,7 +157,10 @@ def ingest_event(
             # Soft-accept for now; hard-reject in prod
             logger.warning(
                 "chain break tenant=%s site=%s origin=%s event=%s",
-                tenant_id, envelope.site_id, origin, envelope.event_id,
+                tenant_id,
+                envelope.site_id,
+                origin,
+                envelope.event_id,
             )
 
     persisted_at = store.insert_event(
@@ -188,6 +194,7 @@ def tail_events(
 ) -> dict:
     """Dev helper — last N events for a site."""
     import json as _json
+
     with store._conn() as c:
         rows = c.execute(
             """SELECT event_id, event_type, severity, event_timestamp_ns,
@@ -199,20 +206,23 @@ def tail_events(
         ).fetchall()
         events = []
         for r in rows:
-            events.append({
-                "event_id": r["event_id"],
-                "event_type": r["event_type"],
-                "severity": r["severity"],
-                "event_timestamp_ns": r["event_timestamp_ns"],
-                "sig": r["sig"][:16],
-                "prev_sig": (r["prev_sig"] or "")[:16],
-                "attributes": _json.loads(r["envelope_json"]).get("attributes", {}),
-            })
+            events.append(
+                {
+                    "event_id": r["event_id"],
+                    "event_type": r["event_type"],
+                    "severity": r["severity"],
+                    "event_timestamp_ns": r["event_timestamp_ns"],
+                    "sig": r["sig"][:16],
+                    "prev_sig": (r["prev_sig"] or "")[:16],
+                    "attributes": _json.loads(r["envelope_json"]).get("attributes", {}),
+                }
+            )
         return {"tenant_id": tenant_id, "site_id": site_id, "events": events}
 
 
 def main() -> None:
     import uvicorn
+
     host = os.environ.get("AMOSKYS_INGEST_HOST", "0.0.0.0")
     port = int(os.environ.get("AMOSKYS_INGEST_PORT", "8765"))
     uvicorn.run(app, host=host, port=port, log_level="info")

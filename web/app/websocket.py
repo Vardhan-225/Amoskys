@@ -325,7 +325,12 @@ def handle_join_dashboard(data):
     if client_id in active_connections:
         active_connections[client_id]["rooms"].append(scoped_room)
 
-    logger.info("Client %s joined dashboard: %s (room=%s)", client_id, dashboard_type, scoped_room)
+    logger.info(
+        "Client %s joined dashboard: %s (room=%s)",
+        client_id,
+        dashboard_type,
+        scoped_room,
+    )
     emit("joined_dashboard", {"dashboard": dashboard_type})
 
 

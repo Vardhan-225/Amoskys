@@ -22,66 +22,70 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from amoskys.agents.Web.argos.prospecting.wp_indicator import (
-    WPIndicatorResult,
-)
+from amoskys.agents.Web.argos.prospecting.wp_indicator import WPIndicatorResult
 
 
 @dataclass
 class Prospect:
     """A scored, ranked candidate ready for Stage-1."""
-    host:            str
-    score:           int
-    breakdown:       Dict[str, int] = field(default_factory=dict)
-    is_wordpress:    bool = False
+
+    host: str
+    score: int
+    breakdown: Dict[str, int] = field(default_factory=dict)
+    is_wordpress: bool = False
     wp_version_hint: Optional[str] = None
-    contact_hints:   List[str] = field(default_factory=list)
-    on_bug_bounty:   bool = False
+    contact_hints: List[str] = field(default_factory=list)
+    on_bug_bounty: bool = False
     bounty_evidence: Optional[str] = None
-    why_this_score:  str = ""
-    indicator:       Optional[WPIndicatorResult] = None
+    why_this_score: str = ""
+    indicator: Optional[WPIndicatorResult] = None
 
     def to_dict(self) -> Dict:
         return {
-            "host":             self.host,
-            "score":            self.score,
-            "breakdown":        self.breakdown,
-            "is_wordpress":     self.is_wordpress,
-            "wp_version_hint":  self.wp_version_hint,
-            "contact_hints":    self.contact_hints,
-            "on_bug_bounty":    self.on_bug_bounty,
-            "bounty_evidence":  self.bounty_evidence,
-            "why_this_score":   self.why_this_score,
+            "host": self.host,
+            "score": self.score,
+            "breakdown": self.breakdown,
+            "is_wordpress": self.is_wordpress,
+            "wp_version_hint": self.wp_version_hint,
+            "contact_hints": self.contact_hints,
+            "on_bug_bounty": self.on_bug_bounty,
+            "bounty_evidence": self.bounty_evidence,
+            "why_this_score": self.why_this_score,
         }
 
 
 # ── Weights ────────────────────────────────────────────────────────
 
 _W = {
-    "wp_confirmed":            30,   # base — no WP, no fit
-    "contact_reachable":       20,   # can we actually reach them?
-    "security_txt_present":    15,   # explicit "we accept reports"
-    "bug_bounty_PENALTY":     -60,   # hard penalty — effectively drops
-    "plugin_inventory_leak":   15,   # public plugin leak = easy pitch
-    "wp_generator_exposed":     5,   # minor extra
-    "wp_version_old":          10,   # outdated core = strong pitch
-    "enterprise_cdn_PENALTY": -15,   # probably has a dedicated security team
-    "no_cdn_bonus":             5,   # smaller ops, more likely to need help
+    "wp_confirmed": 30,  # base — no WP, no fit
+    "contact_reachable": 20,  # can we actually reach them?
+    "security_txt_present": 15,  # explicit "we accept reports"
+    "bug_bounty_PENALTY": -60,  # hard penalty — effectively drops
+    "plugin_inventory_leak": 15,  # public plugin leak = easy pitch
+    "wp_generator_exposed": 5,  # minor extra
+    "wp_version_old": 10,  # outdated core = strong pitch
+    "enterprise_cdn_PENALTY": -15,  # probably has a dedicated security team
+    "no_cdn_bonus": 5,  # smaller ops, more likely to need help
 }
 
 
-_KNOWN_CDN_ENTERPRISE = {"Akamai"}   # Cloudflare/Fastly are fine for SMBs
+_KNOWN_CDN_ENTERPRISE = {"Akamai"}  # Cloudflare/Fastly are fine for SMBs
 
 
-def score_prospect(indicator: WPIndicatorResult,
-                   now_wp_major_minor: str = "6.9") -> Prospect:
+def score_prospect(
+    indicator: WPIndicatorResult, now_wp_major_minor: str = "6.9"
+) -> Prospect:
     """Produce a Prospect score from a WP-indicator result."""
-    p = Prospect(host=indicator.host, score=0, indicator=indicator,
-                 is_wordpress=indicator.is_wordpress,
-                 wp_version_hint=indicator.wp_version_hint,
-                 contact_hints=list(indicator.contact_hints),
-                 on_bug_bounty=indicator.on_bug_bounty,
-                 bounty_evidence=indicator.bounty_evidence)
+    p = Prospect(
+        host=indicator.host,
+        score=0,
+        indicator=indicator,
+        is_wordpress=indicator.is_wordpress,
+        wp_version_hint=indicator.wp_version_hint,
+        contact_hints=list(indicator.contact_hints),
+        on_bug_bounty=indicator.on_bug_bounty,
+        bounty_evidence=indicator.bounty_evidence,
+    )
 
     breakdown = {}
     reasons: List[str] = []
@@ -98,15 +102,11 @@ def score_prospect(indicator: WPIndicatorResult,
 
     if indicator.contact_hints:
         breakdown["contact_reachable"] = _W["contact_reachable"]
-        reasons.append(
-            f"{len(indicator.contact_hints)} reachable contact(s) found"
-        )
+        reasons.append(f"{len(indicator.contact_hints)} reachable contact(s) found")
 
     if indicator.has_security_txt:
         breakdown["security_txt_present"] = _W["security_txt_present"]
-        reasons.append(
-            "security.txt published — explicitly welcomes disclosure"
-        )
+        reasons.append("security.txt published — explicitly welcomes disclosure")
 
     if indicator.on_bug_bounty:
         breakdown["bug_bounty_PENALTY"] = _W["bug_bounty_PENALTY"]
@@ -143,8 +143,7 @@ def score_prospect(indicator: WPIndicatorResult,
     if indicator.cdn_name in _KNOWN_CDN_ENTERPRISE:
         breakdown["enterprise_cdn_PENALTY"] = _W["enterprise_cdn_PENALTY"]
         reasons.append(
-            f"fronted by {indicator.cdn_name} — likely has a dedicated "
-            "security team"
+            f"fronted by {indicator.cdn_name} — likely has a dedicated " "security team"
         )
 
     if not indicator.uses_cdn:

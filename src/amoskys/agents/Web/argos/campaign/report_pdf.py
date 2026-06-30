@@ -32,19 +32,19 @@ logger = logging.getLogger("amoskys.argos.campaign.report_pdf")
 
 # ── Brand constants ───────────────────────────────────────────────
 
-_BRAND_NAVY    = "#0b1220"
-_BRAND_INK     = "#1a2238"
-_BRAND_BLUE    = "#1d4ed8"
-_BRAND_CYAN    = "#0891b2"
-_BRAND_ACCENT  = "#0ea5e9"
+_BRAND_NAVY = "#0b1220"
+_BRAND_INK = "#1a2238"
+_BRAND_BLUE = "#1d4ed8"
+_BRAND_CYAN = "#0891b2"
+_BRAND_ACCENT = "#0ea5e9"
 
 _SEV_COLORS = {
     "critical": ("#991b1b", "#fee2e2"),
-    "high":     ("#c2410c", "#ffedd5"),
-    "medium":   ("#a16207", "#fef9c3"),
-    "low":      ("#1e40af", "#dbeafe"),
-    "info":     ("#374151", "#e5e7eb"),
-    "none":     ("#374151", "#e5e7eb"),
+    "high": ("#c2410c", "#ffedd5"),
+    "medium": ("#a16207", "#fef9c3"),
+    "low": ("#1e40af", "#dbeafe"),
+    "info": ("#374151", "#e5e7eb"),
+    "none": ("#374151", "#e5e7eb"),
 }
 
 
@@ -60,12 +60,14 @@ def _sev_pill(sev: str) -> str:
     fg, bg = _SEV_COLORS.get(sev, _SEV_COLORS["info"])
     return (
         f'<span class="pill" style="background:{bg};color:{fg};">'
-        f'{_esc(sev.upper())}</span>'
+        f"{_esc(sev.upper())}</span>"
     )
 
 
 def _fmt_ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts or 0, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return datetime.fromtimestamp(ts or 0, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
 
 
 def _fmt_time(ts: float) -> str:
@@ -587,22 +589,28 @@ def _executive(report: Dict[str, Any]) -> str:
 
     # Narrative paragraph
     if n_chains > 0:
-        headline = (f"Argos identified <strong>{n_chains} end-to-end exploit "
-                    f"chain{'s' if n_chains != 1 else ''}</strong> on "
-                    f"<code>{_esc(target)}</code>. The highest-severity chain "
-                    f"rates <strong>{_esc(max_sev.upper())}</strong>.")
+        headline = (
+            f"Argos identified <strong>{n_chains} end-to-end exploit "
+            f"chain{'s' if n_chains != 1 else ''}</strong> on "
+            f"<code>{_esc(target)}</code>. The highest-severity chain "
+            f"rates <strong>{_esc(max_sev.upper())}</strong>."
+        )
     elif n_findings > 0:
-        headline = (f"Argos identified <strong>{n_findings} individual "
-                    f"finding{'s' if n_findings != 1 else ''}</strong> on "
-                    f"<code>{_esc(target)}</code>. No full exploit chain "
-                    f"composed from current observations, but the findings "
-                    f"alone warrant remediation.")
+        headline = (
+            f"Argos identified <strong>{n_findings} individual "
+            f"finding{'s' if n_findings != 1 else ''}</strong> on "
+            f"<code>{_esc(target)}</code>. No full exploit chain "
+            f"composed from current observations, but the findings "
+            f"alone warrant remediation."
+        )
     else:
-        headline = (f"Argos completed its scan of <code>{_esc(target)}</code> "
-                    f"without composing chains from observed findings. This "
-                    f"does not mean the target is invulnerable — it means the "
-                    f"probes in this engagement mode did not reach exploitable "
-                    f"surface. Deeper engagement modes may uncover more.")
+        headline = (
+            f"Argos completed its scan of <code>{_esc(target)}</code> "
+            f"without composing chains from observed findings. This "
+            f"does not mean the target is invulnerable — it means the "
+            f"probes in this engagement mode did not reach exploitable "
+            f"surface. Deeper engagement modes may uncover more."
+        )
 
     return f"""
     <section>
@@ -657,18 +665,18 @@ def _architecture(report: Dict[str, Any]) -> str:
         return f"{name}{v}"
 
     cells = [
-        ("CDN",           fmt(cdn.get("name"))),
-        ("WAF",           ", ".join(waf.get("names") or []) or "—"),
+        ("CDN", fmt(cdn.get("name"))),
+        ("WAF", ", ".join(waf.get("names") or []) or "—"),
         ("Origin server", fmt(origin.get("server"), origin.get("version"))),
-        ("Runtime",       fmt(runtime.get("name"), runtime.get("version"))),
-        ("Database",      fmt(db.get("name"))),
-        ("OS",            fmt(osf.get("family"))),
-        ("Framework",     fmt(fw.get("name"), fw.get("version"))),
+        ("Runtime", fmt(runtime.get("name"), runtime.get("version"))),
+        ("Database", fmt(db.get("name"))),
+        ("OS", fmt(osf.get("family"))),
+        ("Framework", fmt(fw.get("name"), fw.get("version"))),
         ("Verbose errors", "YES (leak)" if p.get("verbose_errors") else "no"),
-        ("Debug mode",    "YES" if p.get("debug_mode") else "no"),
+        ("Debug mode", "YES" if p.get("debug_mode") else "no"),
         ("HTTP requests", str(p.get("http_requests_used") or 0)),
         ("Time to profile", f"{p.get('fingerprint_time_ms') or 0} ms"),
-        ("Host",          _esc(p.get("target_host") or "—")),
+        ("Host", _esc(p.get("target_host") or "—")),
     ]
     grid = "".join(
         f'<div class="kv-cell"><div class="k">{_esc(k)}</div>'
@@ -719,7 +727,10 @@ def _strategy(report: Dict[str, Any]) -> str:
     rps = s.get("rps_ceiling") or 0
     origin_bypass = s.get("origin_bypass") or False
 
-    note_lis = "".join(f"<li>{_esc(n)}</li>" for n in notes) or "<li class='muted'>(no notes recorded)</li>"
+    note_lis = (
+        "".join(f"<li>{_esc(n)}</li>" for n in notes)
+        or "<li class='muted'>(no notes recorded)</li>"
+    )
 
     return f"""
     <section>
@@ -793,15 +804,16 @@ def _chains_section(report: Dict[str, Any]) -> str:
     cards = []
     for i, c in enumerate(chains, 1):
         sev = (c.get("severity") or "info").lower()
-        evidence_items = "".join(f"<li>{_esc(e)}</li>"
-                                  for e in (c.get("evidence_trail") or []))
+        evidence_items = "".join(
+            f"<li>{_esc(e)}</li>" for e in (c.get("evidence_trail") or [])
+        )
         # Graph-path extras
-        ev_score    = c.get("expected_value")
-        prob        = c.get("success_prob")
-        detect      = c.get("detectability")
-        cost        = c.get("cost_minutes")
-        mitre       = c.get("mitre_chain") or []
-        defense_n   = c.get("defense_notes") or []
+        ev_score = c.get("expected_value")
+        prob = c.get("success_prob")
+        detect = c.get("detectability")
+        cost = c.get("cost_minutes")
+        mitre = c.get("mitre_chain") or []
+        defense_n = c.get("defense_notes") or []
         assumptions = c.get("assumptions") or []
         replay_cmds = c.get("replay_commands") or []
 
@@ -854,7 +866,8 @@ def _chains_section(report: Dict[str, Any]) -> str:
             </div>
             """
 
-        cards.append(f"""
+        cards.append(
+            f"""
         <div class="chain {_esc(sev)}">
           <div class="head">
             <div><span class="muted">Path #{i:02d}</span> <span class="name">{_esc(c.get("name"))}</span></div>
@@ -873,7 +886,8 @@ def _chains_section(report: Dict[str, Any]) -> str:
           {replay_html}
           <div class="evidence"><strong>Evidence trail:</strong><ul>{evidence_items}</ul></div>
         </div>
-        """)
+        """
+        )
 
     # Near-miss section
     near_html = ""
@@ -882,7 +896,8 @@ def _chains_section(report: Dict[str, Any]) -> str:
         near_cards = []
         for nm in nms:
             miss = nm.get("missing_for_completion") or []
-            near_cards.append(f"""
+            near_cards.append(
+                f"""
             <div class="chain" style="border-left-color:#6b7280; background:#f9fafb;">
               <div class="head">
                 <span class="name">{_esc(nm.get("name",""))}</span>
@@ -896,7 +911,8 @@ def _chains_section(report: Dict[str, Any]) -> str:
                 <code>{_esc("|".join(miss))}</code> — if one of these
                 is detected in a future scan this chain activates.</div>
             </div>
-            """)
+            """
+            )
         near_html = f"""
         <h2 class="sub" style="margin-top:6mm;">Near-miss paths (one finding away)</h2>
         <p class="muted">These paths would activate if the listed finding kind
@@ -955,8 +971,17 @@ def _timeline_section(report: Dict[str, Any]) -> str:
     target = report.get("target_url") or "—"
     events = report.get("events") or []
     # Keep decision trail compact — show only the meaningful event kinds
-    meaningful = {"stage_start", "stage_end", "evidence", "decision",
-                  "finding", "chain", "fatal", "report", "done"}
+    meaningful = {
+        "stage_start",
+        "stage_end",
+        "evidence",
+        "decision",
+        "finding",
+        "chain",
+        "fatal",
+        "report",
+        "done",
+    }
     rows = []
     for e in events:
         if e.get("kind") not in meaningful:
@@ -969,7 +994,9 @@ def _timeline_section(report: Dict[str, Any]) -> str:
             f"<td>{_esc((e.get('message') or '')[:160])}</td>"
             f"</tr>"
         )
-    rows_html = "".join(rows) or "<tr><td colspan='4' class='muted'>(no events)</td></tr>"
+    rows_html = (
+        "".join(rows) or "<tr><td colspan='4' class='muted'>(no events)</td></tr>"
+    )
 
     return f"""
     <section>

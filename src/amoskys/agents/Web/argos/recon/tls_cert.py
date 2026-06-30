@@ -78,10 +78,7 @@ from amoskys.agents.Web.argos.recon.base import (
     ReconSource,
     StealthClass,
 )
-from amoskys.agents.Web.argos.recon.cloud_detector import (
-    CDNBehavior,
-    CloudDetector,
-)
+from amoskys.agents.Web.argos.recon.cloud_detector import CDNBehavior, CloudDetector
 from amoskys.agents.Web.argos.stealth import (
     AdaptiveRateLimiter,
     BlockedTargetError,
@@ -96,21 +93,23 @@ logger = logging.getLogger("amoskys.argos.recon.tls_cert")
 # Cipher list aligned with modern Chrome/Firefox defaults. This is our
 # closest stdlib-achievable approximation of a browser handshake. It
 # does NOT fully match JA4 — see module docstring.
-_MODERN_CIPHERS = ":".join([
-    "TLS_AES_128_GCM_SHA256",
-    "TLS_AES_256_GCM_SHA384",
-    "TLS_CHACHA20_POLY1305_SHA256",
-    "ECDHE-ECDSA-AES128-GCM-SHA256",
-    "ECDHE-RSA-AES128-GCM-SHA256",
-    "ECDHE-ECDSA-AES256-GCM-SHA384",
-    "ECDHE-RSA-AES256-GCM-SHA384",
-    "ECDHE-ECDSA-CHACHA20-POLY1305",
-    "ECDHE-RSA-CHACHA20-POLY1305",
-    "ECDHE-RSA-AES128-SHA",
-    "ECDHE-RSA-AES256-SHA",
-    "AES128-GCM-SHA256",
-    "AES256-GCM-SHA384",
-])
+_MODERN_CIPHERS = ":".join(
+    [
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "ECDHE-ECDSA-AES128-GCM-SHA256",
+        "ECDHE-RSA-AES128-GCM-SHA256",
+        "ECDHE-ECDSA-AES256-GCM-SHA384",
+        "ECDHE-RSA-AES256-GCM-SHA384",
+        "ECDHE-ECDSA-CHACHA20-POLY1305",
+        "ECDHE-RSA-CHACHA20-POLY1305",
+        "ECDHE-RSA-AES128-SHA",
+        "ECDHE-RSA-AES256-SHA",
+        "AES128-GCM-SHA256",
+        "AES256-GCM-SHA384",
+    ]
+)
 
 DEFAULT_CONNECT_TIMEOUT_S = 5.0
 DEFAULT_HANDSHAKE_TIMEOUT_S = 5.0
@@ -122,8 +121,9 @@ DEFAULT_HANDSHAKE_TIMEOUT_S = 5.0
 @dataclass
 class CertInfo:
     """Parsed certificate relevant fields."""
+
     ip: str
-    sni: Optional[str]             # the SNI we sent (None if IP-only)
+    sni: Optional[str]  # the SNI we sent (None if IP-only)
     subject_cn: Optional[str]
     issuer_cn: Optional[str]
     sans: List[str] = field(default_factory=list)
@@ -158,12 +158,12 @@ class TLSCertSource(ReconSource):
         rate_config: Optional[RateLimiterConfig] = None,
         connect_timeout_s: float = DEFAULT_CONNECT_TIMEOUT_S,
         handshake_timeout_s: float = DEFAULT_HANDSHAKE_TIMEOUT_S,
-        probe_fn=None,   # injection point for tests
+        probe_fn=None,  # injection point for tests
     ) -> None:
         self.detector = detector or CloudDetector()
         self.identity = identity_pool or IdentityPool()
         self.rate_config = rate_config or RateLimiterConfig(
-            initial_rps=0.5,   # cert probes should be QUIET — 1 per 2 seconds
+            initial_rps=0.5,  # cert probes should be QUIET — 1 per 2 seconds
             max_rps=1.0,
             min_rps=0.1,
             block_threshold=2,  # two handshake failures = back off hard
@@ -271,7 +271,9 @@ class TLSCertSource(ReconSource):
                 if not cleaned or cleaned in seen_sans:
                     continue
                 seen_sans.add(cleaned)
-                kind = AssetKind.DOMAIN if cleaned.count(".") == 1 else AssetKind.SUBDOMAIN
+                kind = (
+                    AssetKind.DOMAIN if cleaned.count(".") == 1 else AssetKind.SUBDOMAIN
+                )
                 yield ReconEvent(
                     kind=kind,
                     value=cleaned,
@@ -331,7 +333,9 @@ class TLSCertSource(ReconSource):
             except ssl.SSLError:
                 # Retry without SNI — some servers misbehave on virt-host mismatch
                 if server_hostname:
-                    raw2 = socket.create_connection((ip, 443), timeout=connect_timeout_s)
+                    raw2 = socket.create_connection(
+                        (ip, 443), timeout=connect_timeout_s
+                    )
                     raw2.settimeout(handshake_timeout_s)
                     wrapped = ctx.wrap_socket(raw2, server_hostname=None)
                     raw = raw2
@@ -402,7 +406,7 @@ def _parse_cert(
 
 def _extract_cn(name_tuple: tuple) -> Optional[str]:
     """Extract the commonName from a cert name like:
-        ((('commonName', 'example.com'),),)
+    ((('commonName', 'example.com'),),)
     """
     for rdn in name_tuple:
         for key, value in rdn:

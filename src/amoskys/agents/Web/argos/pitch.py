@@ -22,7 +22,6 @@ from typing import List
 
 from amoskys.agents.Web.argos.stage1 import PitchDossier, PitchFinding
 
-
 # ── Email (plain text, first-touch friendly) ──────────────────────
 
 
@@ -127,25 +126,31 @@ def _report_id(dossier: PitchDossier) -> str:
 def _posture_score(dossier: PitchDossier) -> int:
     """100 is 'no public findings'; every high costs 25, every medium 10, etc.
     Clamped at 0."""
-    deduct = sum(
-        _SEV_WEIGHTS.get(f.severity, 0) for f in dossier.findings
-    )
+    deduct = sum(_SEV_WEIGHTS.get(f.severity, 0) for f in dossier.findings)
     return max(0, 100 - deduct)
 
 
 def _verdict_label(score: int) -> tuple:
     """(label, tone-class, one-line summary) for the cover."""
     if score >= 90:
-        return ("STRONG", "ok",
-                "Public-surface posture is above industry norm.")
+        return ("STRONG", "ok", "Public-surface posture is above industry norm.")
     if score >= 70:
-        return ("ADEQUATE", "warn",
-                "A few visible items to close — most sites score here.")
+        return (
+            "ADEQUATE",
+            "warn",
+            "A few visible items to close — most sites score here.",
+        )
     if score >= 40:
-        return ("AT RISK", "risk",
-                "Multiple public exposures that narrow an attacker's path.")
-    return ("URGENT", "urgent",
-            "Critical public exposures that require immediate attention.")
+        return (
+            "AT RISK",
+            "risk",
+            "Multiple public exposures that narrow an attacker's path.",
+        )
+    return (
+        "URGENT",
+        "urgent",
+        "Critical public exposures that require immediate attention.",
+    )
 
 
 _CSS = """
@@ -265,8 +270,8 @@ _CSS = """
 
 def _html_head(host: str, report_id: str) -> str:
     return (
-        "<!doctype html><html lang=\"en\"><head>"
-        "<meta charset=\"utf-8\"/>"
+        '<!doctype html><html lang="en"><head>'
+        '<meta charset="utf-8"/>'
         f"<title>Public Exposure Review — {host} ({report_id})</title>"
         f"<style>{_CSS}</style></head><body>"
     )
@@ -278,10 +283,10 @@ def _masthead(dossier: PitchDossier, report_id: str) -> str:
         f'<div class="masthead">'
         f'  <div class="brand">AMOSKYS WEB<small>Public Exposure Review</small></div>'
         f'  <div class="meta">'
-        f'    <div><strong>{html.escape(report_id)}</strong></div>'
-        f'    <div>{scanned_at}</div>'
-        f'  </div>'
-        f'</div>'
+        f"    <div><strong>{html.escape(report_id)}</strong></div>"
+        f"    <div>{scanned_at}</div>"
+        f"  </div>"
+        f"</div>"
     )
 
 
@@ -291,32 +296,35 @@ def _cover_block(dossier: PitchDossier) -> str:
     label, tone, blurb = _verdict_label(score)
     counts = dossier.severity_counts()
     fields = [
-        ("Target",                html.escape(dossier.target_url)),
-        ("Scan type",             "Stage 1 — OSINT, public-surface only"),
-        ("Method",                f"{dossier.http_requests} polite HTTP requests over {dossier.duration_s:.0f}s"),
-        ("Authorization",         "None required — anonymous-visitor-equivalent access"),
-        ("Findings",              f"{len(dossier.findings)} total · "
-                                   f"{counts['high']} high · "
-                                   f"{counts['medium']} medium · "
-                                   f"{counts['low']} low · "
-                                   f"{counts['info']} info"),
+        ("Target", html.escape(dossier.target_url)),
+        ("Scan type", "Stage 1 — OSINT, public-surface only"),
+        (
+            "Method",
+            f"{dossier.http_requests} polite HTTP requests over {dossier.duration_s:.0f}s",
+        ),
+        ("Authorization", "None required — anonymous-visitor-equivalent access"),
+        (
+            "Findings",
+            f"{len(dossier.findings)} total · "
+            f"{counts['high']} high · "
+            f"{counts['medium']} medium · "
+            f"{counts['low']} low · "
+            f"{counts['info']} info",
+        ),
     ]
-    kv_html = "".join(
-        f'<dt>{html.escape(k)}</dt><dd>{v}</dd>'
-        for k, v in fields
-    )
+    kv_html = "".join(f"<dt>{html.escape(k)}</dt><dd>{v}</dd>" for k, v in fields)
     return (
-        f'<h1>Public Exposure Review</h1>'
+        f"<h1>Public Exposure Review</h1>"
         f'<p class="lede">A light, consent-free assessment of everything '
-        f'<strong>{host}</strong> currently reveals to an anonymous visitor. '
-        f'No probes. No brute-force. No authorization bypass.</p>'
+        f"<strong>{host}</strong> currently reveals to an anonymous visitor. "
+        f"No probes. No brute-force. No authorization bypass.</p>"
         f'<div class="verdict">'
         f'  <div class="score-ring">{score}</div>'
-        f'  <div>'
+        f"  <div>"
         f'    <div class="label {tone}">{label}</div>'
         f'    <div style="color:var(--fg-2);">{blurb}</div>'
-        f'  </div>'
-        f'</div>'
+        f"  </div>"
+        f"</div>"
         f'<dl class="kv">{kv_html}</dl>'
     )
 
@@ -324,31 +332,34 @@ def _cover_block(dossier: PitchDossier) -> str:
 def _summary_grid(dossier: PitchDossier) -> str:
     counts = dossier.severity_counts()
     cells = []
-    for label, key in (("High", "high"), ("Medium", "medium"),
-                       ("Low", "low"), ("Info", "info")):
+    for label, key in (
+        ("High", "high"),
+        ("Medium", "medium"),
+        ("Low", "low"),
+        ("Info", "info"),
+    ):
         cells.append(
             f'<div class="cell"><div class="n">{counts[key]}</div>'
             f'<div class="l">{label}</div></div>'
         )
     return (
         '<h2 id="sec-summary">Severity at a glance</h2>'
-        '<div class="summary-grid">' + "".join(cells) + '</div>'
+        '<div class="summary-grid">' + "".join(cells) + "</div>"
     )
 
 
 def _toc(dossier: PitchDossier) -> str:
     items = [
-        ("Executive summary",        "#sec-exec"),
-        ("Severity at a glance",     "#sec-summary"),
-        ("Methodology & scope",      "#sec-method"),
-        ("Findings",                 "#sec-findings"),
+        ("Executive summary", "#sec-exec"),
+        ("Severity at a glance", "#sec-summary"),
+        ("Methodology & scope", "#sec-method"),
+        ("Findings", "#sec-findings"),
     ]
     if dossier.next_steps:
         items.append(("Recommended next steps", "#sec-actions"))
-    items.append(("Scope, legal basis, and contact",  "#sec-legal"))
+    items.append(("Scope, legal basis, and contact", "#sec-legal"))
     li = "".join(
-        f'<li><a href="{href}">{html.escape(title)}</a></li>'
-        for title, href in items
+        f'<li><a href="{href}">{html.escape(title)}</a></li>' for title, href in items
     )
     return f'<div class="toc"><strong>Contents</strong><ol>{li}</ol></div>'
 
@@ -369,9 +380,12 @@ def _executive_summary(dossier: PitchDossier) -> str:
             f"you want end-to-end assurance.</p>"
         )
     else:
-        top = sorted(dossier.findings,
-                     key=lambda f: {"high": 0, "medium": 1, "low": 2, "info": 3}
-                                    .get(f.severity, 9))
+        top = sorted(
+            dossier.findings,
+            key=lambda f: {"high": 0, "medium": 1, "low": 2, "info": 3}.get(
+                f.severity, 9
+            ),
+        )
         hi = [f for f in top if f.severity == "high"]
         highlight = ""
         if hi:
@@ -401,35 +415,35 @@ def _executive_summary(dossier: PitchDossier) -> str:
 def _methodology_block(dossier: PitchDossier) -> str:
     return (
         '<h2 id="sec-method">Methodology &amp; scope</h2>'
-        '<p>This is a Stage-1 review: everything we checked is data your '
-        'site serves to any anonymous visitor. No authentication was '
-        'bypassed; no form was submitted; no payload was injected; no '
-        'password was guessed. Each check below was a single HTTP GET to '
-        'a public path, at gaussian-jittered pacing centered on roughly '
-        'three seconds between requests &mdash; the rhythm of a human '
-        'reader, not a scanner.</p>'
-        '<p><strong>What we looked at:</strong></p>'
-        '<ul>'
-        '<li>Standard WordPress fingerprints &mdash; /readme.html, '
+        "<p>This is a Stage-1 review: everything we checked is data your "
+        "site serves to any anonymous visitor. No authentication was "
+        "bypassed; no form was submitted; no payload was injected; no "
+        "password was guessed. Each check below was a single HTTP GET to "
+        "a public path, at gaussian-jittered pacing centered on roughly "
+        "three seconds between requests &mdash; the rhythm of a human "
+        "reader, not a scanner.</p>"
+        "<p><strong>What we looked at:</strong></p>"
+        "<ul>"
+        "<li>Standard WordPress fingerprints &mdash; /readme.html, "
         '<code>&lt;meta name="generator"&gt;</code>, the REST API index, '
-        'RSS feeds, and the public plugin list referenced in your HTML.</li>'
-        '<li>Common developer-artifact paths &mdash; /.git, /.env, '
-        'wp-config backups, Composer/npm manifests. Each one is a '
-        'single HTTP GET; 200 responses indicate exposure.</li>'
-        '<li>Infrastructure identifiers from response headers &mdash; '
-        'Server, X-Powered-By, CDN fingerprints.</li>'
-        '<li>User-enumeration via the standard <code>?author=N</code> '
-        'redirect and the <code>/wp-json/wp/v2/users</code> REST index '
-        '(one probe each; we do not iterate).</li>'
-        '<li>Third-party scripts and tracking IDs included in your HTML '
-        '&mdash; a quick snapshot of your visible supply-chain surface.</li>'
-        '<li>Polite preflights: <code>robots.txt</code> '
-        '(RFC&nbsp;9309) and <code>/.well-known/security.txt</code> '
-        '(RFC&nbsp;9116).</li>'
-        '</ul>'
-        '<p><strong>What we did not do:</strong> any active attack. '
-        'That belongs to a Stage-2 engagement, which is consented, '
-        'scoped, and contractually bounded.</p>'
+        "RSS feeds, and the public plugin list referenced in your HTML.</li>"
+        "<li>Common developer-artifact paths &mdash; /.git, /.env, "
+        "wp-config backups, Composer/npm manifests. Each one is a "
+        "single HTTP GET; 200 responses indicate exposure.</li>"
+        "<li>Infrastructure identifiers from response headers &mdash; "
+        "Server, X-Powered-By, CDN fingerprints.</li>"
+        "<li>User-enumeration via the standard <code>?author=N</code> "
+        "redirect and the <code>/wp-json/wp/v2/users</code> REST index "
+        "(one probe each; we do not iterate).</li>"
+        "<li>Third-party scripts and tracking IDs included in your HTML "
+        "&mdash; a quick snapshot of your visible supply-chain surface.</li>"
+        "<li>Polite preflights: <code>robots.txt</code> "
+        "(RFC&nbsp;9309) and <code>/.well-known/security.txt</code> "
+        "(RFC&nbsp;9116).</li>"
+        "</ul>"
+        "<p><strong>What we did not do:</strong> any active attack. "
+        "That belongs to a Stage-2 engagement, which is consented, "
+        "scoped, and contractually bounded.</p>"
     )
 
 
@@ -437,11 +451,12 @@ def _findings_block(dossier: PitchDossier) -> str:
     if not dossier.findings:
         return (
             '<h2 id="sec-findings">Findings</h2>'
-            '<p>No findings in this sweep. See executive summary above.</p>'
+            "<p>No findings in this sweep. See executive summary above.</p>"
         )
     sev_order = {"high": 0, "medium": 1, "low": 2, "info": 3}
-    ordered = sorted(dossier.findings,
-                     key=lambda f: (sev_order.get(f.severity, 9), f.category))
+    ordered = sorted(
+        dossier.findings, key=lambda f: (sev_order.get(f.severity, 9), f.category)
+    )
     parts = ['<h2 id="sec-findings">Findings</h2>']
     for i, f in enumerate(ordered, 1):
         parts.append(_finding_html(f, index=i))
@@ -452,9 +467,13 @@ def _finding_html(f: PitchFinding, index: int = 0) -> str:
     fid = f"F-{index:03d}" if index else "F"
     refs_html = ""
     if f.references:
-        refs_html = '<div class="refs"><strong>References: </strong>' + " · ".join(
-            f'<a href="{html.escape(r)}">{html.escape(r)}</a>' for r in f.references
-        ) + '</div>'
+        refs_html = (
+            '<div class="refs"><strong>References: </strong>'
+            + " · ".join(
+                f'<a href="{html.escape(r)}">{html.escape(r)}</a>' for r in f.references
+            )
+            + "</div>"
+        )
     remediation_html = ""
     # Try to surface a remediation line from the raw stealth-finding map.
     # PitchFinding doesn't carry remediation directly yet; the mandate +
@@ -464,26 +483,24 @@ def _finding_html(f: PitchFinding, index: int = 0) -> str:
         f'<div class="finding">'
         f'<div class="category">{html.escape(f.category)}</div>'
         f'<div class="head">'
-        f'  <h3>{html.escape(f.title)}</h3>'
+        f"  <h3>{html.escape(f.title)}</h3>"
         f'  <span class="id">{fid}</span>'
-        f'</div>'
+        f"</div>"
         f'<span class="badge sev-{f.severity}">{f.severity}</span>'
         f'<div class="impact">{html.escape(f.one_line_impact)}</div>'
         f'<div class="evidence">{html.escape(f.evidence)}</div>'
         f'<div class="mandate"><strong>Why it matters.</strong> '
-        f'{html.escape(f.mandate)}</div>'
-        f'{remediation_html}'
-        f'{refs_html}'
-        f'</div>'
+        f"{html.escape(f.mandate)}</div>"
+        f"{remediation_html}"
+        f"{refs_html}"
+        f"</div>"
     )
 
 
 def _actions_block(dossier: PitchDossier) -> str:
     if not dossier.next_steps:
         return ""
-    items = "".join(
-        f'<li>{html.escape(s)}</li>' for s in dossier.next_steps
-    )
+    items = "".join(f"<li>{html.escape(s)}</li>" for s in dossier.next_steps)
     return (
         '<h2 id="sec-actions">Recommended next steps</h2>'
         f'<div class="action-card"><ol>{items}</ol></div>'
@@ -494,20 +511,20 @@ def _legal_footer(dossier: PitchDossier) -> str:
     scanned_at = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(dossier.ran_at))
     return (
         '<div class="legal" id="sec-legal">'
-        '<h4>Scope, legal basis, and contact</h4>'
-        '<p>This review accessed only resources your website serves '
-        'publicly, at a traffic volume below any reasonable rate-limit. '
-        'No authentication boundary was crossed. No password, form, or '
-        'injection payload was submitted.</p>'
-        '<p>Legal basis: CFAA §1030(a)(2)(C) as narrowed by <em>Van Buren '
-        'v. United States</em>, 141 S.&nbsp;Ct. 1648 (2021); public-data '
-        'access per <em>hiQ Labs v. LinkedIn</em>, 31 F.4th 1180 '
-        '(9th Cir. 2022). RFC&nbsp;9309 (robots) and RFC&nbsp;9116 '
-        '(security.txt) were honored throughout.</p>'
-        f'<p>Prepared by AMOSKYS Web on {scanned_at}. '
-        'For a full consented pentest or to dispute any finding, reply to '
-        'the email that accompanied this report.</p>'
-        '</div>'
+        "<h4>Scope, legal basis, and contact</h4>"
+        "<p>This review accessed only resources your website serves "
+        "publicly, at a traffic volume below any reasonable rate-limit. "
+        "No authentication boundary was crossed. No password, form, or "
+        "injection payload was submitted.</p>"
+        "<p>Legal basis: CFAA §1030(a)(2)(C) as narrowed by <em>Van Buren "
+        "v. United States</em>, 141 S.&nbsp;Ct. 1648 (2021); public-data "
+        "access per <em>hiQ Labs v. LinkedIn</em>, 31 F.4th 1180 "
+        "(9th Cir. 2022). RFC&nbsp;9309 (robots) and RFC&nbsp;9116 "
+        "(security.txt) were honored throughout.</p>"
+        f"<p>Prepared by AMOSKYS Web on {scanned_at}. "
+        "For a full consented pentest or to dispute any finding, reply to "
+        "the email that accompanied this report.</p>"
+        "</div>"
     )
 
 
@@ -543,9 +560,11 @@ def to_pdf_bytes(dossier: PitchDossier) -> bytes:
         from weasyprint import HTML  # type: ignore
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger("amoskys.argos.pitch").warning(
             "WeasyPrint unavailable (%s); skipping PDF render. "
-            "Install with: pip install weasyprint", e,
+            "Install with: pip install weasyprint",
+            e,
         )
         return b""
     html_str = to_html_report(dossier)

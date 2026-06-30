@@ -71,14 +71,16 @@ _ORDER = {
 @dataclass
 class CompletenessNote:
     """One line of the customer-facing 'what we couldn't do and why'."""
-    level: str       # "ok" | "warn" | "info"
+
+    level: str  # "ok" | "warn" | "info"
     message: str
 
 
 @dataclass
 class CompletenessReport:
     """The "gaps + reasons" section of the customer deliverable."""
-    seed_type: str                                  # "ip" | "domain"
+
+    seed_type: str  # "ip" | "domain"
     pivot_notes: List[CompletenessNote] = field(default_factory=list)
     forward_notes: List[CompletenessNote] = field(default_factory=list)
     sources_skipped: List[Tuple[str, str]] = field(default_factory=list)
@@ -112,7 +114,7 @@ class AttackSurfaceResult:
     run_id: str
     customer_id: str
     seed: str
-    seed_type: str                                   # "ip" | "domain"
+    seed_type: str  # "ip" | "domain"
     source_results: List[ReconSourceResult] = field(default_factory=list)
     total_assets: int = 0
     duration_s: float = 0.0
@@ -175,9 +177,9 @@ class AttackSurfaceMap:
         elif seed_type == "ip":
             lineup = [
                 # Pivot phase — IP → domain
-                IPWHOISSource(),        # passive
-                ReverseDNSSource(),     # resolver
-                TLSCertSource(),        # active (one-shot per IP)
+                IPWHOISSource(),  # passive
+                ReverseDNSSource(),  # resolver
+                TLSCertSource(),  # active (one-shot per IP)
                 # Forward phase — domain → surface
                 CertTransparencyLogs(),
                 DNSResolveSource(),
@@ -343,63 +345,80 @@ class AttackSurfaceMap:
         ptr_generic_count: int,
         sources_skipped: List[Tuple[str, str]],
     ) -> CompletenessReport:
-        report = CompletenessReport(seed_type=seed_type, sources_skipped=sources_skipped)
+        report = CompletenessReport(
+            seed_type=seed_type, sources_skipped=sources_skipped
+        )
 
         if seed_type == "ip":
             # What we learned from the pivot attempt
             if context.known_subdomains:
-                report.pivot_notes.append(CompletenessNote(
-                    "ok",
-                    f"TLS cert / reverse DNS yielded {len(context.known_subdomains)} hostnames",
-                ))
+                report.pivot_notes.append(
+                    CompletenessNote(
+                        "ok",
+                        f"TLS cert / reverse DNS yielded {len(context.known_subdomains)} hostnames",
+                    )
+                )
             else:
-                report.pivot_notes.append(CompletenessNote(
-                    "warn",
-                    "No customer hostname discoverable from the seed IP "
-                    "(generic PTR + no cert SAN pivot + no whois URL). "
-                    "Customer should supply a domain seed for fuller coverage.",
-                ))
+                report.pivot_notes.append(
+                    CompletenessNote(
+                        "warn",
+                        "No customer hostname discoverable from the seed IP "
+                        "(generic PTR + no cert SAN pivot + no whois URL). "
+                        "Customer should supply a domain seed for fuller coverage.",
+                    )
+                )
             if cert_pivots_skipped_cdn > 0:
-                report.pivot_notes.append(CompletenessNote(
-                    "warn",
-                    f"{cert_pivots_skipped_cdn} IP(s) skipped for TLS cert probe "
-                    "(CDN edge — origin not reachable without authorized pivot).",
-                ))
+                report.pivot_notes.append(
+                    CompletenessNote(
+                        "warn",
+                        f"{cert_pivots_skipped_cdn} IP(s) skipped for TLS cert probe "
+                        "(CDN edge — origin not reachable without authorized pivot).",
+                    )
+                )
             if cert_pivots_succeeded > 0:
-                report.pivot_notes.append(CompletenessNote(
-                    "ok",
-                    f"{cert_pivots_succeeded} TLS cert(s) harvested for SAN + fingerprint "
-                    "(ready for cross-IP pivot in a subsequent run).",
-                ))
+                report.pivot_notes.append(
+                    CompletenessNote(
+                        "ok",
+                        f"{cert_pivots_succeeded} TLS cert(s) harvested for SAN + fingerprint "
+                        "(ready for cross-IP pivot in a subsequent run).",
+                    )
+                )
             if ptr_generic_count > 0:
-                report.pivot_notes.append(CompletenessNote(
-                    "info",
-                    f"{ptr_generic_count} IP(s) have provider-generic PTR records "
-                    "(cloud-hosted — customer name not derivable from PTR).",
-                ))
+                report.pivot_notes.append(
+                    CompletenessNote(
+                        "info",
+                        f"{ptr_generic_count} IP(s) have provider-generic PTR records "
+                        "(cloud-hosted — customer name not derivable from PTR).",
+                    )
+                )
 
         # Forward coverage notes
         ct_coverage_ok = any(
-            s.endswith(seed) or s == seed
-            for s in context.known_subdomains
+            s.endswith(seed) or s == seed for s in context.known_subdomains
         )
         if ct_coverage_ok:
-            report.forward_notes.append(CompletenessNote(
-                "ok",
-                f"Certificate Transparency returned full history for {seed}.",
-            ))
+            report.forward_notes.append(
+                CompletenessNote(
+                    "ok",
+                    f"Certificate Transparency returned full history for {seed}.",
+                )
+            )
         if context.known_ips:
-            report.forward_notes.append(CompletenessNote(
-                "ok",
-                f"{len(context.known_ips)} IP(s) resolved for discovered hostnames.",
-            ))
+            report.forward_notes.append(
+                CompletenessNote(
+                    "ok",
+                    f"{len(context.known_ips)} IP(s) resolved for discovered hostnames.",
+                )
+            )
         else:
-            report.forward_notes.append(CompletenessNote(
-                "warn",
-                "No IPs resolved — hostnames may be behind Cloudflare "
-                "proxy or DNS failed. Add customer-authorized active "
-                "probing to reach origins.",
-            ))
+            report.forward_notes.append(
+                CompletenessNote(
+                    "warn",
+                    "No IPs resolved — hostnames may be behind Cloudflare "
+                    "proxy or DNS failed. Add customer-authorized active "
+                    "probing to reach origins.",
+                )
+            )
 
         return report
 

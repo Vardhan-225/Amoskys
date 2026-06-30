@@ -59,7 +59,7 @@ class CertTransparencyLogs(ReconSource):
         self,
         timeout_s: float = DEFAULT_TIMEOUT,
         max_retries: int = MAX_RETRIES,
-        http_get=None,   # injection point for tests
+        http_get=None,  # injection point for tests
     ) -> None:
         self.timeout_s = timeout_s
         self.max_retries = max_retries
@@ -143,8 +143,9 @@ class CertTransparencyLogs(ReconSource):
                 logger.warning("%s: %s", self.name, last_err)
                 return None
 
-        logger.warning("%s: failed after %d retries: %s",
-                       self.name, self.max_retries, last_err)
+        logger.warning(
+            "%s: failed after %d retries: %s", self.name, self.max_retries, last_err
+        )
         return None
 
     @staticmethod

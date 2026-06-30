@@ -332,19 +332,21 @@ class MacOSPeripheralCollector:
                     key, _, value = line.partition(":")
                     info[key.strip()] = value.strip()
 
-            vol.manufacturer = (
-                info.get("Media Name", "")
-                or info.get("Device / Media Name", "")
+            vol.manufacturer = info.get("Media Name", "") or info.get(
+                "Device / Media Name", ""
             )
             vol.vendor_id = info.get("Disk / Partition UUID", "")[:16]
-            vol.serial = (
-                info.get("Volume UUID", "")
-                or info.get("Disk / Partition UUID", "")
+            vol.serial = info.get("Volume UUID", "") or info.get(
+                "Disk / Partition UUID", ""
             )
             # Store extra metadata in the address field (protocol + filesystem)
             protocol = info.get("Protocol", "")
-            fs_type = info.get("Type (Bundle)", "") or info.get("File System Personality", "")
-            total_size = info.get("Disk Size", "") or info.get("Container Total Space", "")
+            fs_type = info.get("Type (Bundle)", "") or info.get(
+                "File System Personality", ""
+            )
+            total_size = info.get("Disk Size", "") or info.get(
+                "Container Total Space", ""
+            )
             vol.address = f"{protocol}|{fs_type}|{total_size}"
         except Exception as e:
             logger.debug("diskutil enrich failed for %s: %s", vol.mount_point, e)

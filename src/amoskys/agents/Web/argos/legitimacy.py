@@ -76,6 +76,7 @@ logger = logging.getLogger("amoskys.argos.legitimacy")
 # Q1 2026.  We rotate with weights proportional to global browser
 # market share so a randomly-picked UA reflects real traffic mix.
 
+
 @dataclass(frozen=True)
 class _UA:
     ua: str
@@ -87,49 +88,61 @@ class _UA:
 
 _UA_POOL: List[_UA] = [
     _UA(
-        ua=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"),
+        ua=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        ),
         accept_language="en-US,en;q=0.9",
         sec_ch_ua='"Chromium";v="133", "Not(A:Brand";v="24", "Google Chrome";v="133"',
         dnt=None,
         weight=0.35,
     ),
     _UA(
-        ua=("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"),
+        ua=(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        ),
         accept_language="en-US,en;q=0.9",
         sec_ch_ua='"Chromium";v="133", "Not(A:Brand";v="24", "Google Chrome";v="133"',
         dnt=None,
         weight=0.20,
     ),
     _UA(
-        ua=("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 "
-            "(KHTML, like Gecko) Version/17.3 Safari/605.1.15"),
+        ua=(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 "
+            "(KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+        ),
         accept_language="en-US,en;q=0.9",
         sec_ch_ua=None,
         dnt=None,
         weight=0.15,
     ),
     _UA(
-        ua=("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) "
-            "Gecko/20100101 Firefox/122.0"),
+        ua=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) "
+            "Gecko/20100101 Firefox/122.0"
+        ),
         accept_language="en-US,en;q=0.5",
         sec_ch_ua=None,
         dnt="1",
         weight=0.10,
     ),
     _UA(
-        ua=("Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) "
+        ua=(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 "
-            "Mobile/15E148 Safari/604.1"),
+            "Mobile/15E148 Safari/604.1"
+        ),
         accept_language="en-US,en;q=0.9",
         sec_ch_ua=None,
         dnt=None,
         weight=0.12,
     ),
     _UA(
-        ua=("Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36"),
+        ua=(
+            "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36"
+        ),
         accept_language="en-US,en;q=0.9",
         sec_ch_ua='"Chromium";v="133", "Not(A:Brand";v="24", "Google Chrome";v="133"',
         dnt=None,
@@ -159,11 +172,11 @@ class UserAgentPool:
     def headers(self) -> Dict[str, str]:
         u = self.identity()
         h = {
-            "User-Agent":      u.ua,
-            "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "User-Agent": u.ua,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": u.accept_language,
             "Accept-Encoding": "gzip, deflate, br",
-            "Cache-Control":   "max-age=0",
+            "Cache-Control": "max-age=0",
             "Upgrade-Insecure-Requests": "1",
         }
         if u.sec_ch_ua:
@@ -181,11 +194,16 @@ class UserAgentPool:
 
 def _platform_hint(ua: str) -> str:
     ua = ua.lower()
-    if "windows" in ua:  return '"Windows"'
-    if "mac os x" in ua: return '"macOS"'
-    if "android" in ua:  return '"Android"'
-    if "iphone" in ua or "ipad" in ua: return '"iOS"'
-    if "linux" in ua:    return '"Linux"'
+    if "windows" in ua:
+        return '"Windows"'
+    if "mac os x" in ua:
+        return '"macOS"'
+    if "android" in ua:
+        return '"Android"'
+    if "iphone" in ua or "ipad" in ua:
+        return '"iOS"'
+    if "linux" in ua:
+        return '"Linux"'
     return '"Unknown"'
 
 
@@ -200,13 +218,14 @@ class PacingProfile:
     dwell 3 s, std dev 1.5 s. 10 % of visits include a long-tail "reader
     pause" uniformly distributed in [min_long, max_long].
     """
-    median_s: float      = 3.0
-    stddev_s: float      = 1.5
-    min_s: float         = 0.8    # floor — faster than this is bot-y
-    max_s: float         = 12.0   # cap for the core gaussian draw
+
+    median_s: float = 3.0
+    stddev_s: float = 1.5
+    min_s: float = 0.8  # floor — faster than this is bot-y
+    max_s: float = 12.0  # cap for the core gaussian draw
     long_tail_prob: float = 0.10  # probability of a "reader pause"
-    min_long_s: float    = 15.0
-    max_long_s: float    = 45.0
+    min_long_s: float = 15.0
+    max_long_s: float = 45.0
 
     # Respect Retry-After on rate limits.
     honor_retry_after: bool = True
@@ -215,8 +234,11 @@ class PacingProfile:
 class Pacer:
     """Sleeps between requests in a human-looking distribution."""
 
-    def __init__(self, profile: Optional[PacingProfile] = None,
-                 rng: Optional[random.Random] = None):
+    def __init__(
+        self,
+        profile: Optional[PacingProfile] = None,
+        rng: Optional[random.Random] = None,
+    ):
         self.profile = profile or PacingProfile()
         self._rng = rng or random.Random()
         self._last_request_ts: Optional[float] = None
@@ -266,18 +288,22 @@ class BackoffController:
     abort the session (the target has clearly decided they don't want
     us and pushing further is both unethical and counterproductive)."""
 
-    def __init__(self,
-                 base_delay_s: float = 2.0,
-                 max_delay_s: float = 120.0,
-                 consecutive_error_budget: int = 5,
-                 rng: Optional[random.Random] = None):
+    def __init__(
+        self,
+        base_delay_s: float = 2.0,
+        max_delay_s: float = 120.0,
+        consecutive_error_budget: int = 5,
+        rng: Optional[random.Random] = None,
+    ):
         self.base_delay_s = base_delay_s
         self.max_delay_s = max_delay_s
         self.budget = consecutive_error_budget
         self._rng = rng or random.Random()
         self.state = BackoffState()
 
-    def note_status(self, status: int, retry_after: Optional[float] = None) -> Tuple[bool, float]:
+    def note_status(
+        self, status: int, retry_after: Optional[float] = None
+    ) -> Tuple[bool, float]:
         """Note an HTTP response status. Returns (should_abort, next_delay_s).
 
         should_abort == True means we've hit the error budget; the caller
@@ -294,11 +320,14 @@ class BackoffController:
 
         # Honor Retry-After if given.
         if retry_after:
-            return (False, min(self.max_delay_s, retry_after + self._rng.uniform(1.0, 5.0)))
+            return (
+                False,
+                min(self.max_delay_s, retry_after + self._rng.uniform(1.0, 5.0)),
+            )
 
         # Exponential with jitter: base * 2^n with ±25% noise.
         n = self.state.consecutive_errors - 1
-        d = self.base_delay_s * (2 ** n)
+        d = self.base_delay_s * (2**n)
         d = min(self.max_delay_s, d)
         d *= self._rng.uniform(0.75, 1.25)
 
@@ -311,8 +340,9 @@ class BackoffController:
 # We use the stdlib parser — it's compliant with RFC 9309.
 
 
-def _fetch_robots(host_url: str, headers: Dict[str, str],
-                  timeout: float = 8.0) -> Optional[str]:
+def _fetch_robots(
+    host_url: str, headers: Dict[str, str], timeout: float = 8.0
+) -> Optional[str]:
     """Fetch robots.txt for the host. Returns raw text or None on failure."""
     parsed = urllib.parse.urlparse(host_url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
@@ -367,7 +397,7 @@ def load_robots(host_url: str, headers: Dict[str, str]) -> RobotsPolicy:
         k = k.strip().lower()
         v = v.strip()
         if k == "user-agent":
-            in_wildcard = (v == "*")
+            in_wildcard = v == "*"
         elif in_wildcard and k == "disallow" and v:
             disallows.append(v)
         elif in_wildcard and k == "crawl-delay":
@@ -440,6 +470,7 @@ def _parse_security_txt(text: str) -> SecurityTxt:
 class LegitimacyProfile:
     """All three primitives bundled — the one object an orchestrator
     threads through its HTTP calls."""
+
     ua_pool: UserAgentPool = field(default_factory=UserAgentPool)
     pacer: Pacer = field(default_factory=Pacer)
     backoff: BackoffController = field(default_factory=BackoffController)

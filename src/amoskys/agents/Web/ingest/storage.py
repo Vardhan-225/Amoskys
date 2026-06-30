@@ -22,7 +22,6 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Iterator, Optional
 
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS web_events (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,9 +124,17 @@ class EventStore:
                     ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        event_id, tenant_id, site_id, origin, event_type,
-                        severity, event_timestamp_ns, persisted_at_ns,
-                        sig, prev_sig, json.dumps(envelope, sort_keys=True),
+                        event_id,
+                        tenant_id,
+                        site_id,
+                        origin,
+                        event_type,
+                        severity,
+                        event_timestamp_ns,
+                        persisted_at_ns,
+                        sig,
+                        prev_sig,
+                        json.dumps(envelope, sort_keys=True),
                     ),
                 )
                 # Update chain state
@@ -147,7 +154,9 @@ class EventStore:
                 pass
         return persisted_at_ns
 
-    def expected_prev_sig(self, tenant_id: str, site_id: str, origin: str) -> Optional[str]:
+    def expected_prev_sig(
+        self, tenant_id: str, site_id: str, origin: str
+    ) -> Optional[str]:
         """What the next event's prev_sig should be (or None = no prior)."""
         with self._conn() as c:
             row = c.execute(
@@ -157,8 +166,15 @@ class EventStore:
             return row["last_sig"] if row else None
 
     def note_chain_break(
-        self, *, tenant_id: str, site_id: str, origin: str, event_id: str,
-        expected_prev: Optional[str], submitted_prev: Optional[str], reason: str,
+        self,
+        *,
+        tenant_id: str,
+        site_id: str,
+        origin: str,
+        event_id: str,
+        expected_prev: Optional[str],
+        submitted_prev: Optional[str],
+        reason: str,
     ) -> None:
         with self._lock, self._conn() as c:
             c.execute(
@@ -166,8 +182,16 @@ class EventStore:
                    (tenant_id, site_id, origin, event_id, expected_prev,
                     submitted_prev, noted_at_ns, reason)
                    VALUES (?,?,?,?,?,?,?,?)""",
-                (tenant_id, site_id, origin, event_id, expected_prev,
-                 submitted_prev, int(time.time() * 1e9), reason),
+                (
+                    tenant_id,
+                    site_id,
+                    origin,
+                    event_id,
+                    expected_prev,
+                    submitted_prev,
+                    int(time.time() * 1e9),
+                    reason,
+                ),
             )
             c.commit()
 
@@ -190,6 +214,7 @@ class EventStore:
     def ensure_dev_tenant(self, token: str) -> str:
         """Create (if not exists) the single dev tenant + bind the bearer token."""
         import hashlib
+
         tenant_id = "dev-tenant"
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         with self._lock, self._conn() as c:
@@ -205,6 +230,7 @@ class EventStore:
     def tenant_from_token(self, token: str) -> Optional[str]:
         """Look up tenant_id from bearer token. Returns None if unknown."""
         import hashlib
+
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         with self._conn() as c:
             row = c.execute(

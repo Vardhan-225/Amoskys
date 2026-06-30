@@ -77,7 +77,9 @@ def make_env(i=0):
     return env
 
 
-@pytest.mark.skip(reason="flowagent/main.py does not exist — test references unimplemented module")
+@pytest.mark.skip(
+    reason="flowagent/main.py does not exist — test references unimplemented module"
+)
 def test_wal_grows_then_drains():
     import sys
 

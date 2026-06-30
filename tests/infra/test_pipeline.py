@@ -26,9 +26,12 @@ VERIFY_SSL = False  # Ops server uses self-signed cert
 
 # ── Helper ─────────────────────────────────────────────────────────
 
+
 def ops_get(path, params=None):
     """GET from ops server."""
-    return requests.get(f"{OPS_SERVER}{path}", params=params, timeout=10, verify=VERIFY_SSL)
+    return requests.get(
+        f"{OPS_SERVER}{path}", params=params, timeout=10, verify=VERIFY_SSL
+    )
 
 
 def web_get(path, params=None):
@@ -39,6 +42,7 @@ def web_get(path, params=None):
 # ══════════════════════════════════════════════════════════════════
 # LAYER 1: OPS SERVER HEALTH
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestOpsServerHealth:
     """Verify the operations server is running and responding."""
@@ -74,8 +78,13 @@ class TestOpsServerHealth:
         r = ops_get("/api/v1/bulk-export", params={"limit": 10})
         assert r.status_code == 200
         data = r.json()
-        expected_tables = ["security_events", "process_events", "flow_events",
-                          "dns_events", "persistence_events"]
+        expected_tables = [
+            "security_events",
+            "process_events",
+            "flow_events",
+            "dns_events",
+            "persistence_events",
+        ]
         for table in expected_tables:
             assert table in data, f"Missing table: {table}"
 
@@ -102,7 +111,8 @@ class TestOpsServerHealth:
         try:
             requests.delete(
                 f"{OPS_SERVER}/api/v1/devices/{test_id}",
-                timeout=5, verify=VERIFY_SSL,
+                timeout=5,
+                verify=VERIFY_SSL,
             )
         except Exception:
             pass  # Best effort cleanup
@@ -111,6 +121,7 @@ class TestOpsServerHealth:
 # ══════════════════════════════════════════════════════════════════
 # LAYER 2: OPS SERVER DATA INTEGRITY
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestOpsServerData:
     """Verify data exists and has the right structure in the ops server."""
@@ -136,8 +147,13 @@ class TestOpsServerData:
         """All 9 event tables should exist in the bulk export."""
         r = ops_get("/api/v1/bulk-export", params={"limit": 1})
         data = r.json()
-        required = ["security_events", "process_events", "flow_events",
-                    "dns_events", "persistence_events"]
+        required = [
+            "security_events",
+            "process_events",
+            "flow_events",
+            "dns_events",
+            "persistence_events",
+        ]
         for table in required:
             assert table in data, f"Table {table} missing from bulk export"
 
@@ -149,7 +165,9 @@ class TestOpsServerData:
             pytest.skip("No events to check")
 
         # Check if any events have enrichment
-        enriched = [e for e in events if e.get("geo_src_country") or e.get("asn_src_org")]
+        enriched = [
+            e for e in events if e.get("geo_src_country") or e.get("asn_src_org")
+        ]
         network_events = [e for e in events if e.get("remote_ip")]
 
         if network_events:
@@ -177,13 +195,22 @@ class TestOpsServerData:
             pytest.skip("No devices")
 
         # Pick device with most events (skip test devices with 0)
-        device_id = max(devices, key=lambda d: d.get("security_event_count", 0))["device_id"]
+        device_id = max(devices, key=lambda d: d.get("security_event_count", 0))[
+            "device_id"
+        ]
         r2 = ops_get(f"/api/v1/devices/{device_id}/telemetry")
         assert r2.status_code == 200
         data = r2.json()
 
-        required_keys = ["device", "posture", "summary", "categories",
-                        "mitre_techniques", "agents", "recent_events"]
+        required_keys = [
+            "device",
+            "posture",
+            "summary",
+            "categories",
+            "mitre_techniques",
+            "agents",
+            "recent_events",
+        ]
         for key in required_keys:
             assert key in data, f"Missing key in telemetry: {key}"
 
@@ -191,6 +218,7 @@ class TestOpsServerData:
 # ══════════════════════════════════════════════════════════════════
 # LAYER 3: PRESENTATION SERVER HEALTH
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestPresentationServer:
     """Verify the presentation server (amoskys.com) is running."""
@@ -232,6 +260,7 @@ class TestPresentationServer:
 # LAYER 4: LOCAL AGENT
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestLocalAgent:
     """Verify the local agent is installed and running."""
 
@@ -250,7 +279,9 @@ class TestLocalAgent:
             content = config.read_text()
         except PermissionError:
             pytest.skip("Config file is root-owned — run tests with sudo to check")
-        assert "AMOSKYS_SERVER" in content, "AMOSKYS_SERVER not in config — agent won't ship"
+        assert (
+            "AMOSKYS_SERVER" in content
+        ), "AMOSKYS_SERVER not in config — agent won't ship"
 
     def test_venv_exists(self):
         assert Path("/Library/Amoskys/venv/bin/python3").exists(), "Venv missing"
@@ -260,7 +291,10 @@ class TestLocalAgent:
 
     def test_watchdog_running(self):
         import subprocess
-        result = subprocess.run(["pgrep", "-f", "amoskys.watchdog"], capture_output=True)
+
+        result = subprocess.run(
+            ["pgrep", "-f", "amoskys.watchdog"], capture_output=True
+        )
         assert result.returncode == 0, "Watchdog not running"
 
     def test_local_telemetry_db(self):
@@ -294,16 +328,25 @@ class TestLocalAgent:
 # LAYER 5: END-TO-END PIPELINE
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEndToEndPipeline:
     """Verify data flows from agent through ops to presentation."""
 
     def _get_my_hostname(self):
         """Get hostname using the same logic as the shipper."""
-        import platform, socket, subprocess
+        import platform
+        import socket
+        import subprocess
+
         if platform.system() == "Darwin":
             for cmd in ["ComputerName", "LocalHostName"]:
                 try:
-                    result = subprocess.run(["scutil", "--get", cmd], capture_output=True, text=True, timeout=3)
+                    result = subprocess.run(
+                        ["scutil", "--get", cmd],
+                        capture_output=True,
+                        text=True,
+                        timeout=3,
+                    )
                     name = result.stdout.strip()
                     if name and len(name) > 1:
                         return name
@@ -318,7 +361,9 @@ class TestEndToEndPipeline:
         r = ops_get("/api/v1/devices")
         devices = r.json()["devices"]
         hostnames = [d["hostname"] for d in devices]
-        assert hostname in hostnames, f"Local host '{hostname}' not found in ops devices: {hostnames}"
+        assert (
+            hostname in hostnames
+        ), f"Local host '{hostname}' not found in ops devices: {hostnames}"
 
     def test_agent_is_online(self):
         """The local Mac should show as online."""
@@ -327,7 +372,9 @@ class TestEndToEndPipeline:
         devices = r.json()["devices"]
         my_device = next((d for d in devices if d["hostname"] == hostname), None)
         assert my_device is not None, f"Device {hostname} not found"
-        assert my_device["status"] == "online", f"Device status is {my_device['status']}, expected online"
+        assert (
+            my_device["status"] == "online"
+        ), f"Device status is {my_device['status']}, expected online"
 
     def test_events_shipped_to_ops(self):
         """The local Mac should have events on the ops server."""
@@ -352,6 +399,7 @@ class TestEndToEndPipeline:
 # LAYER 6: DATA QUALITY
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestDataQuality:
     """Verify the quality of telemetry data."""
 
@@ -359,7 +407,9 @@ class TestDataQuality:
         r = ops_get("/api/v1/events", params={"limit": 10})
         events = r.json()["events"]
         for e in events:
-            assert e.get("timestamp_ns") or e.get("timestamp_dt"), f"Event missing timestamp: {e.get('id')}"
+            assert e.get("timestamp_ns") or e.get(
+                "timestamp_dt"
+            ), f"Event missing timestamp: {e.get('id')}"
 
     def test_events_have_device_id(self):
         r = ops_get("/api/v1/events", params={"limit": 10})
@@ -388,12 +438,16 @@ class TestDataQuality:
     def test_multiple_event_categories(self):
         r = ops_get("/api/v1/fleet/status")
         cats = r.json().get("top_categories", [])
-        assert len(cats) >= 3, f"Only {len(cats)} categories — expected diverse event types"
+        assert (
+            len(cats) >= 3
+        ), f"Only {len(cats)} categories — expected diverse event types"
 
     def test_multiple_mitre_techniques(self):
         r = ops_get("/api/v1/fleet/status")
         mitre = r.json().get("top_mitre_techniques", [])
-        assert len(mitre) >= 3, f"Only {len(mitre)} MITRE techniques — expected broader coverage"
+        assert (
+            len(mitre) >= 3
+        ), f"Only {len(mitre)} MITRE techniques — expected broader coverage"
 
 
 if __name__ == "__main__":

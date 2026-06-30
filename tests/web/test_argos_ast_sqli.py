@@ -37,7 +37,9 @@ def _write(tmp_path: Path, name: str, body: str) -> Path:
 
 def _run(tmp_path: Path, source: str, name: str = "t.php"):
     f = _write(tmp_path, name, source)
-    plugin = _FakePlugin(slug="test-plug", version="1.0.0", plugin_root=tmp_path, files=[f])
+    plugin = _FakePlugin(
+        slug="test-plug", version="1.0.0", plugin_root=tmp_path, files=[f]
+    )
     return SqlInjectionScanner().scan(plugin)
 
 
@@ -95,18 +97,16 @@ def test_raw_mysqli_query_with_tainted_arg(tmp_path):
 
 
 def test_heredoc_interpolation(tmp_path):
-    src = '''<?php
+    src = """<?php
 $sql = <<<SQL
 SELECT * FROM t WHERE id = $id
 SQL;
 $wpdb->query($sql);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     # This hits the dynamic-arg path (arg is $sql, not a literal).
     assert findings
-    assert any(
-        f.rule_id in ("sql.interpolation_in_query",) for f in findings
-    )
+    assert any(f.rule_id in ("sql.interpolation_in_query",) for f in findings)
 
 
 def test_prepare_without_any_placeholder(tmp_path):
@@ -159,19 +159,19 @@ def test_constant_only_raw_mysqli_is_low(tmp_path):
 
 
 def test_comment_does_not_fool_interp_detection(tmp_path):
-    src = '''<?php
+    src = """<?php
 // SELECT * FROM t WHERE id = $not_real
 $wpdb->query("SELECT 1");
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert not findings
 
 
 def test_interp_inside_comment_is_ignored(tmp_path):
-    src = '''<?php
+    src = """<?php
 /* WHERE id = $oldthing */
 $wpdb->prepare("SELECT * FROM t WHERE id = %d", $id);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert not findings
 

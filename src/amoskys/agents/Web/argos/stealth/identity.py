@@ -18,7 +18,6 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-
 # ── Pool ───────────────────────────────────────────────────────────
 #
 # Each entry is a self-consistent browser fingerprint. The UA string
@@ -69,8 +68,7 @@ _POOL: List[Dict[str, str]] = [
             "Version/18.1 Safari/605.1.15"
         ),
         "accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "*/*;q=0.8"
+            "text/html,application/xhtml+xml,application/xml;q=0.9," "*/*;q=0.8"
         ),
         "accept_language": "en-US,en;q=0.9",
     },

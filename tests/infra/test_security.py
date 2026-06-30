@@ -44,6 +44,7 @@ def web(method, path, **kwargs):
 # PRIVACY: Data Isolation Between Organizations
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestPrivacyIsolation:
     """Verify that users cannot see other organizations' data."""
 
@@ -95,12 +96,16 @@ class TestPrivacyIsolation:
         """Registering with a fake org_id should still work but the
         org_id should only be trusted if it came through the proper
         deploy token chain."""
-        r = ops("post", "/api/v1/register", json={
-            "device_id": "privacy-test-fake-org",
-            "hostname": "privacy-test",
-            "os": "TestOS",
-            "org_id": "stolen-org-id-attempt",
-        })
+        r = ops(
+            "post",
+            "/api/v1/register",
+            json={
+                "device_id": "privacy-test-fake-org",
+                "hostname": "privacy-test",
+                "os": "TestOS",
+                "org_id": "stolen-org-id-attempt",
+            },
+        )
         assert r.status_code == 200
         # Clean up
         ops("delete", f"/api/v1/devices/privacy-test-fake-org")
@@ -110,39 +115,55 @@ class TestPrivacyIsolation:
 # SECURITY: Authentication & Authorization
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestAuthSecurity:
     """Verify authentication boundaries."""
 
     def test_dashboard_requires_auth(self):
         """Dashboard pages must redirect to login without session."""
-        for path in ["/dashboard/", "/dashboard/devices", "/dashboard/deploy",
-                     "/dashboard/settings", "/dashboard/setup"]:
+        for path in [
+            "/dashboard/",
+            "/dashboard/devices",
+            "/dashboard/deploy",
+            "/dashboard/settings",
+            "/dashboard/setup",
+        ]:
             r = web("get", path, allow_redirects=False)
             assert r.status_code == 302, f"{path} should redirect, got {r.status_code}"
 
     def test_dashboard_api_requires_auth(self):
         """Dashboard API endpoints must require authentication."""
-        for path in ["/dashboard/api/command-center/status",
-                     "/dashboard/api/agents/deploy/agents"]:
+        for path in [
+            "/dashboard/api/command-center/status",
+            "/dashboard/api/agents/deploy/agents",
+        ]:
             r = web("get", path, allow_redirects=False)
             assert r.status_code in (302, 401), f"{path} should require auth"
 
     def test_login_with_invalid_credentials(self):
         """Login with wrong password should fail."""
-        r = web("post", "/api/user/auth/login", json={
-            "email": "nonexistent@fake.com",
-            "password": "wrongpassword123",
-        })
+        r = web(
+            "post",
+            "/api/user/auth/login",
+            json={
+                "email": "nonexistent@fake.com",
+                "password": "wrongpassword123",
+            },
+        )
         assert r.status_code == 400
         data = r.json()
         assert data["success"] is False
 
     def test_login_does_not_leak_user_existence(self):
         """Login error should not reveal if email exists."""
-        r = web("post", "/api/user/auth/login", json={
-            "email": "nonexistent@fake.com",
-            "password": "wrongpassword",
-        })
+        r = web(
+            "post",
+            "/api/user/auth/login",
+            json={
+                "email": "nonexistent@fake.com",
+                "password": "wrongpassword",
+            },
+        )
         data = r.json()
         # Should say "invalid credentials" not "user not found"
         assert "not found" not in data.get("error", "").lower()
@@ -150,40 +171,60 @@ class TestAuthSecurity:
 
     def test_signup_rejects_weak_password(self):
         """Signup with a weak password should fail."""
-        r = web("post", "/api/user/auth/signup", json={
-            "email": "weakpass@test.com",
-            "password": "short",
-        })
-        assert r.status_code == 400 or (r.status_code == 200 and not r.json().get("success"))
+        r = web(
+            "post",
+            "/api/user/auth/signup",
+            json={
+                "email": "weakpass@test.com",
+                "password": "short",
+            },
+        )
+        assert r.status_code == 400 or (
+            r.status_code == 200 and not r.json().get("success")
+        )
 
     def test_signup_rejects_duplicate_email(self):
         """Signing up with an existing email should fail."""
         # First check if there are any users
-        r = web("post", "/api/user/auth/signup", json={
-            "email": "athanneeru@outlook.com",  # Known existing user
-            "password": "TestPassword123!@#",
-        })
+        r = web(
+            "post",
+            "/api/user/auth/signup",
+            json={
+                "email": "athanneeru@outlook.com",  # Known existing user
+                "password": "TestPassword123!@#",
+            },
+        )
         if r.status_code == 200:
             data = r.json()
-            assert data.get("error_code") == "EMAIL_EXISTS" or data.get("success") is False
+            assert (
+                data.get("error_code") == "EMAIL_EXISTS" or data.get("success") is False
+            )
 
     def test_ops_server_no_auth_on_register(self):
         """Registration endpoint should be open (agents need to register)."""
-        r = ops("post", "/api/v1/register", json={
-            "device_id": "auth-test-device",
-            "hostname": "auth-test",
-            "os": "TestOS",
-        })
+        r = ops(
+            "post",
+            "/api/v1/register",
+            json={
+                "device_id": "auth-test-device",
+                "hostname": "auth-test",
+                "os": "TestOS",
+            },
+        )
         assert r.status_code == 200
         ops("delete", "/api/v1/devices/auth-test-device")
 
     def test_telemetry_requires_device_auth(self):
         """Telemetry submission should require device API key."""
-        r = ops("post", "/api/v1/telemetry", json={
-            "device_id": "fake-device",
-            "table": "security_events",
-            "events": [{"test": True}],
-        })
+        r = ops(
+            "post",
+            "/api/v1/telemetry",
+            json={
+                "device_id": "fake-device",
+                "table": "security_events",
+                "events": [{"test": True}],
+            },
+        )
         # Should reject — no Authorization header
         assert r.status_code in (401, 403)
 
@@ -191,6 +232,7 @@ class TestAuthSecurity:
 # ══════════════════════════════════════════════════════════════════
 # SECURITY: Credential Storage
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestCredentialSecurity:
     """Verify credentials are stored securely."""
@@ -201,13 +243,18 @@ class TestCredentialSecurity:
         # We can't access the server DB from here, but we can check
         # the model code
         from amoskys.auth.models import User
+
         # The field is called password_hash, not password
         assert hasattr(User, "password_hash")
-        assert not hasattr(User, "password") or User.__table__.columns.get("password") is None
+        assert (
+            not hasattr(User, "password")
+            or User.__table__.columns.get("password") is None
+        )
 
     def test_session_tokens_are_hashed(self):
         """Session tokens must be stored as hashes."""
         from amoskys.auth.models import Session
+
         assert hasattr(Session, "session_token_hash")
         # Should not have a plaintext session_token column
         cols = [c.name for c in Session.__table__.columns]
@@ -217,6 +264,7 @@ class TestCredentialSecurity:
     def test_deploy_tokens_are_hashed(self):
         """Deployment tokens must be stored as hashes."""
         from amoskys.agents.models import AgentToken
+
         assert hasattr(AgentToken, "token_hash")
         cols = [c.name for c in AgentToken.__table__.columns]
         assert "token" not in cols or "token_hash" in cols
@@ -224,9 +272,9 @@ class TestCredentialSecurity:
     def test_api_keys_not_in_source_code(self):
         """No API keys or secrets hardcoded in source."""
         sensitive_patterns = [
-            ("AKIA", 20),    # AWS access key (followed by 16+ chars)
-            ("ghp_", 36),    # GitHub personal access token
-            ("xoxb-", 40),   # Slack bot token
+            ("AKIA", 20),  # AWS access key (followed by 16+ chars)
+            ("ghp_", 36),  # GitHub personal access token
+            ("xoxb-", 40),  # Slack bot token
         ]
         src_dir = Path("src/amoskys")
         for py_file in src_dir.rglob("*.py"):
@@ -236,9 +284,14 @@ class TestCredentialSecurity:
                 idx = content.find(pattern)
                 while idx != -1:
                     # Check if it looks like a real key (not a help string example)
-                    after = content[idx:idx+min_len]
-                    if "..." not in after and "example" not in content[max(0,idx-30):idx].lower():
-                        assert False, f"Possible secret '{pattern}' found in {py_file} at pos {idx}"
+                    after = content[idx : idx + min_len]
+                    if (
+                        "..." not in after
+                        and "example" not in content[max(0, idx - 30) : idx].lower()
+                    ):
+                        assert (
+                            False
+                        ), f"Possible secret '{pattern}' found in {py_file} at pos {idx}"
                     idx = content.find(pattern, idx + 1)
 
     def test_no_hardcoded_ips_in_agent(self):
@@ -256,6 +309,7 @@ class TestCredentialSecurity:
 # ══════════════════════════════════════════════════════════════════
 # USABILITY: Signup → Onboarding → Install Flow
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestUsabilityFlow:
     """Verify the user journey works end-to-end."""
@@ -298,23 +352,38 @@ class TestUsabilityFlow:
 # USABILITY: Organization Auto-Creation
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestOrgCreation:
     """Verify organizations are auto-created correctly on signup."""
 
     def test_personal_email_creates_individual_org(self):
-        from amoskys.auth.organization import classify_email_domain, OrgType
+        from amoskys.auth.organization import OrgType, classify_email_domain
+
         domain, org_type = classify_email_domain("user@gmail.com")
         assert org_type == OrgType.INDIVIDUAL
 
     def test_corporate_email_creates_enterprise_org(self):
-        from amoskys.auth.organization import classify_email_domain, OrgType
+        from amoskys.auth.organization import OrgType, classify_email_domain
+
         domain, org_type = classify_email_domain("user@company.com")
         assert org_type == OrgType.ENTERPRISE
 
     def test_all_common_personal_domains_classified(self):
-        from amoskys.auth.organization import classify_email_domain, OrgType, PERSONAL_DOMAINS
-        personal = ["gmail.com", "outlook.com", "hotmail.com", "yahoo.com",
-                    "icloud.com", "protonmail.com", "proton.me"]
+        from amoskys.auth.organization import (
+            PERSONAL_DOMAINS,
+            OrgType,
+            classify_email_domain,
+        )
+
+        personal = [
+            "gmail.com",
+            "outlook.com",
+            "hotmail.com",
+            "yahoo.com",
+            "icloud.com",
+            "protonmail.com",
+            "proton.me",
+        ]
         for domain in personal:
             _, org_type = classify_email_domain(f"test@{domain}")
             assert org_type == OrgType.INDIVIDUAL, f"{domain} should be INDIVIDUAL"
@@ -322,6 +391,7 @@ class TestOrgCreation:
 
     def test_org_slug_generation(self):
         from amoskys.auth.organization import generate_org_slug
+
         slug = generate_org_slug("Test Company", "testcompany.com")
         assert slug == "testcompany-com"
         slug2 = generate_org_slug("John Doe")
@@ -333,15 +403,18 @@ class TestOrgCreation:
 # SECURITY: Device ID Stability
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestDeviceIDSecurity:
     """Verify device IDs are stable and not guessable."""
 
     def test_device_id_is_stable(self):
         """Same machine should always generate the same device_id."""
         import sys
+
         sys.path.insert(0, "/Library/Amoskys/src")
         try:
             from amoskys.shipper import _generate_device_id
+
             id1 = _generate_device_id()
             id2 = _generate_device_id()
             assert id1 == id2, "Device ID changed between calls"
@@ -353,9 +426,12 @@ class TestDeviceIDSecurity:
         """Device ID should not be hostname or MAC address in plaintext."""
         try:
             import sys
+
             sys.path.insert(0, "/Library/Amoskys/src")
-            from amoskys.shipper import _generate_device_id
             import platform
+
+            from amoskys.shipper import _generate_device_id
+
             device_id = _generate_device_id()
             hostname = platform.node().lower()
             assert hostname not in device_id, "Device ID contains hostname"
@@ -366,10 +442,14 @@ class TestDeviceIDSecurity:
         """Hostname should not be a reverse DNS artifact."""
         try:
             import sys
+
             sys.path.insert(0, "/Library/Amoskys/src")
             from amoskys.shipper import _get_hostname
+
             hostname = _get_hostname()
-            assert "in-addr.arpa" not in hostname, f"Hostname is reverse DNS: {hostname}"
+            assert (
+                "in-addr.arpa" not in hostname
+            ), f"Hostname is reverse DNS: {hostname}"
             assert len(hostname) > 1, "Hostname too short"
         except ImportError:
             pytest.skip("Agent not installed")
@@ -378,6 +458,7 @@ class TestDeviceIDSecurity:
 # ══════════════════════════════════════════════════════════════════
 # SECURITY: Ops Server Hardening
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestOpsServerSecurity:
     """Verify the ops server is hardened."""
@@ -399,19 +480,26 @@ class TestOpsServerSecurity:
     def test_event_table_whitelist(self):
         """Only whitelisted tables should be accepted for telemetry."""
         # Register a test device first
-        reg = ops("post", "/api/v1/register", json={
-            "device_id": "sqli-test",
-            "hostname": "sqli-test",
-        })
+        reg = ops(
+            "post",
+            "/api/v1/register",
+            json={
+                "device_id": "sqli-test",
+                "hostname": "sqli-test",
+            },
+        )
         api_key = reg.json().get("api_key", "")
 
-        r = ops("post", "/api/v1/telemetry",
+        r = ops(
+            "post",
+            "/api/v1/telemetry",
             headers={"Authorization": f"Bearer {api_key}", "X-Device-ID": "sqli-test"},
             json={
                 "device_id": "sqli-test",
                 "table": "devices; DROP TABLE devices; --",
                 "events": [{}],
-            })
+            },
+        )
         assert r.status_code == 400
         assert "Unknown table" in r.json().get("error", "")
 
@@ -428,10 +516,14 @@ class TestOpsServerSecurity:
     def test_device_delete_works(self):
         """DELETE endpoint should remove devices."""
         # Create
-        ops("post", "/api/v1/register", json={
-            "device_id": "delete-test",
-            "hostname": "delete-test",
-        })
+        ops(
+            "post",
+            "/api/v1/register",
+            json={
+                "device_id": "delete-test",
+                "hostname": "delete-test",
+            },
+        )
         # Delete
         r = ops("delete", "/api/v1/devices/delete-test")
         assert r.status_code == 200
@@ -445,6 +537,7 @@ class TestOpsServerSecurity:
 # SENSIBILITY: Data Quality & Consistency
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestDataSensibility:
     """Verify data makes sense and is consistent."""
 
@@ -455,7 +548,9 @@ class TestDataSensibility:
             if dev["status"] == "online":
                 assert dev["last_seen"] is not None
                 age = time.time() - dev["last_seen"]
-                assert age < 600, f"Device {dev['hostname']} is 'online' but last seen {age:.0f}s ago"
+                assert (
+                    age < 600
+                ), f"Device {dev['hostname']} is 'online' but last seen {age:.0f}s ago"
 
     def test_event_counts_are_non_negative(self):
         """All event counts should be >= 0."""
@@ -511,6 +606,7 @@ class TestDataSensibility:
 # ══════════════════════════════════════════════════════════════════
 # SECURITY: Agent Config File
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestAgentConfigSecurity:
     """Verify agent configuration is secure."""

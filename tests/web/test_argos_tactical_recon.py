@@ -29,16 +29,15 @@ from amoskys.agents.Web.argos.recon import (
     TLSCertSource,
     is_generic_cloud_hostname,
 )
-from amoskys.agents.Web.argos.recon.tls_cert import _clean_san, _parse_cert
 from amoskys.agents.Web.argos.recon.ip_whois import _host_from_url, _parse_whois
 from amoskys.agents.Web.argos.recon.reverse_dns import _best_apex_guess
+from amoskys.agents.Web.argos.recon.tls_cert import _clean_san, _parse_cert
 from amoskys.agents.Web.argos.storage import (
     AssetKind,
     AssetsDB,
     ConsentMethod,
     Customer,
 )
-
 
 # ── Cloud detector ─────────────────────────────────────────────────
 
@@ -57,7 +56,9 @@ def test_cloud_detector_identifies_aws_cloud_hosting():
     c = d.classify("52.84.1.1")
     assert c.provider == Provider.AWS
     assert c.behavior == CDNBehavior.CLOUD_HOSTING
-    assert c.should_attempt_tls_pivot is True  # AWS is customer-bearing, probe is useful
+    assert (
+        c.should_attempt_tls_pivot is True
+    )  # AWS is customer-bearing, probe is useful
 
 
 def test_cloud_detector_marks_unknown_ips_as_probable_customer():
@@ -142,6 +143,7 @@ def test_reverse_dns_handles_no_record_gracefully():
 def test_reverse_dns_skips_domain_seed_if_no_ips_discovered():
     """If seed is a domain and no prior source supplied known_ips, there's
     nothing to PTR — source should noop cleanly."""
+
     def fake_ptr(ip, resolver, timeout):
         pytest.fail("PTR should not be queried for domain-only context")
 
@@ -171,14 +173,18 @@ def test_tls_cert_clean_san_rejects_garbage():
     assert _clean_san("") is None
     assert _clean_san("not a domain") is None
     assert _clean_san("1.2.3.4") is None  # bare IP — not scope-useful
-    assert _clean_san("ab") is None         # no dot
+    assert _clean_san("ab") is None  # no dot
 
 
 def test_tls_cert_parse_extracts_sans_and_fingerprint():
     peer_dict = {
-        "subject": ((('commonName', 'api.acme.com'),),),
-        "issuer": ((('commonName', "Let's Encrypt R3"),),),
-        "subjectAltName": (("DNS", "api.acme.com"), ("DNS", "*.acme.com"), ("DNS", "acme.com")),
+        "subject": ((("commonName", "api.acme.com"),),),
+        "issuer": ((("commonName", "Let's Encrypt R3"),),),
+        "subjectAltName": (
+            ("DNS", "api.acme.com"),
+            ("DNS", "*.acme.com"),
+            ("DNS", "acme.com"),
+        ),
         "notBefore": "Jan  1 00:00:00 2026 GMT",
         "notAfter": "Apr  1 00:00:00 2026 GMT",
         "version": 3,
@@ -298,13 +304,16 @@ def test_ip_whois_source_emits_urls_from_comment():
     assert len(ip_events) == 1
     assert ip_events[0].metadata["whois"]["org_name"] == "Acme Corp"
 
-    hosts = {e.value for e in events if e.kind in (AssetKind.DOMAIN, AssetKind.SUBDOMAIN)}
+    hosts = {
+        e.value for e in events if e.kind in (AssetKind.DOMAIN, AssetKind.SUBDOMAIN)
+    }
     assert "www.acme.com" in hosts
     assert "status.acme.com" in hosts
 
 
 def test_ip_whois_source_skips_domain_seed():
     """whois on an IP is useful; on a domain seed, skip (wrong tool)."""
+
     def fake_query(*a, **kw):
         pytest.fail("whois should not be queried for domain seed")
 
@@ -386,17 +395,26 @@ def test_orchestrator_ip_first_pivot_chain_to_forward(db, tmp_path):
 
     def fake_dns_resolve(hostname, resolver, timeout):
         return {
-            "acme.com":         ["203.0.113.5"],
-            "api.acme.com":     ["203.0.113.10"],
-            "mail.acme.com":    ["203.0.113.5"],
+            "acme.com": ["203.0.113.5"],
+            "api.acme.com": ["203.0.113.10"],
+            "mail.acme.com": ["203.0.113.5"],
             "staging.acme.com": ["203.0.113.20"],
-            "www.acme.com":     ["203.0.113.5"],
+            "www.acme.com": ["203.0.113.5"],
         }.get(hostname, [])
 
     def fake_cymru(ips, timeout):
-        return [{"asn": "64496", "ip": ip, "prefix": "203.0.113.0/24",
-                 "cc": "US", "registry": "arin", "allocated": "2020",
-                 "as_name": "ACME-CORP"} for ip in ips]
+        return [
+            {
+                "asn": "64496",
+                "ip": ip,
+                "prefix": "203.0.113.0/24",
+                "cc": "US",
+                "registry": "arin",
+                "allocated": "2020",
+                "as_name": "ACME-CORP",
+            }
+            for ip in ips
+        ]
 
     sources = [
         IPWHOISSource(query_fn=fake_whois_query),
@@ -414,12 +432,12 @@ def test_orchestrator_ip_first_pivot_chain_to_forward(db, tmp_path):
 
     # Verify chain worked: TLS cert SANs + CT logs + reverse DNS all landed
     counts = result.by_kind()
-    assert counts.get("domain", 0) >= 1     # acme.com
+    assert counts.get("domain", 0) >= 1  # acme.com
     assert counts.get("subdomain", 0) >= 3  # api, staging, mail, www
     assert counts.get("ipv4", 0) >= 1
     assert counts.get("asn", 0) >= 1
     assert counts.get("netblock", 0) >= 1
-    assert counts.get("cert", 0) == 1       # one TLS cert harvested
+    assert counts.get("cert", 0) == 1  # one TLS cert harvested
 
     # Completeness report exists and contains pivot notes
     assert result.completeness is not None
@@ -427,8 +445,10 @@ def test_orchestrator_ip_first_pivot_chain_to_forward(db, tmp_path):
     rendered = result.completeness.render()
     assert "Pivot" in rendered
     # Pivot succeeded → should include an "ok" note about hostnames discovered
-    assert any("hostnames" in n.message.lower() or "cert" in n.message.lower()
-               for n in result.completeness.pivot_notes)
+    assert any(
+        "hostnames" in n.message.lower() or "cert" in n.message.lower()
+        for n in result.completeness.pivot_notes
+    )
 
 
 def test_orchestrator_completeness_report_flags_cdn_skip(db):
@@ -456,8 +476,11 @@ def test_orchestrator_completeness_report_flags_cdn_skip(db):
 
     # Completeness should note the CDN skip
     rendered = result.completeness.render()
-    assert "cdn" in rendered.lower() or "cloudflare" in rendered.lower() or \
-           "skipped" in rendered.lower()
+    assert (
+        "cdn" in rendered.lower()
+        or "cloudflare" in rendered.lower()
+        or "skipped" in rendered.lower()
+    )
 
 
 def test_orchestrator_continues_despite_whois_failure(db):

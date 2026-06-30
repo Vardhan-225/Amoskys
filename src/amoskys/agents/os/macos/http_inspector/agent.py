@@ -64,7 +64,14 @@ class MacOSHTTPInspectorAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_http_cookie_theft     — T1539     Cookie theft
     """
 
-    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+    MANDATE_DATA_FIELDS = (
+        "remote_ip",
+        "remote_port",
+        "local_port",
+        "protocol",
+        "pid",
+        "process_name",
+    )
 
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
@@ -188,13 +195,18 @@ class MacOSHTTPInspectorAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Convert HTTPRequest → HTTPTransaction for merged network_sentinel probes
         if _HAS_SENTINEL:
             from datetime import datetime, timezone
-            from amoskys.agents.os.macos.http_inspector.agent_types import HTTPTransaction
+
+            from amoskys.agents.os.macos.http_inspector.agent_types import (
+                HTTPTransaction,
+            )
 
             transactions = []
             for req in snapshot.get("http_requests", []):
                 transactions.append(
                     HTTPTransaction(
-                        timestamp=datetime.fromtimestamp(req.timestamp, tz=timezone.utc),
+                        timestamp=datetime.fromtimestamp(
+                            req.timestamp, tz=timezone.utc
+                        ),
                         method=req.method if hasattr(req, "method") else "GET",
                         url=req.path,
                         host="",

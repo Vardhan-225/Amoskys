@@ -6,8 +6,8 @@ import json
 import time
 from typing import Optional
 
-from ..db import query, scalar, hours_ago_ns
 from ..config import cfg
+from ..db import hours_ago_ns, query, scalar
 from ..server import mcp
 
 
@@ -50,7 +50,8 @@ def telemetry_query_events(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    events = query(f"""
+    events = query(
+        f"""
         SELECT event_id, device_id, event_category, event_action,
                risk_score, confidence, mitre_techniques, description,
                collection_agent, final_classification, timestamp_dt,
@@ -60,10 +61,13 @@ def telemetry_query_events(
         WHERE {where}
         ORDER BY timestamp_ns DESC
         LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
-    total = scalar(f"SELECT COUNT(*) FROM security_events WHERE {where}",
-                   tuple(params[:-1]))
+    total = scalar(
+        f"SELECT COUNT(*) FROM security_events WHERE {where}", tuple(params[:-1])
+    )
 
     return {"events": events, "returned": len(events), "total": total}
 
@@ -102,13 +106,16 @@ def telemetry_query_processes(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT device_id, pid, name, exe, cmdline, ppid, username,
                parent_name, cpu_percent, memory_percent, timestamp_dt
         FROM process_events
         WHERE {where}
         ORDER BY timestamp_ns DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"processes": rows, "returned": len(rows)}
 
@@ -152,7 +159,8 @@ def telemetry_query_network(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT device_id, src_ip, dst_ip, src_port, dst_port, protocol,
                bytes_tx, bytes_rx, pid, process_name,
                geo_dst_country, geo_dst_city, asn_dst_org,
@@ -160,7 +168,9 @@ def telemetry_query_network(
         FROM flow_events
         WHERE {where}
         ORDER BY timestamp_ns DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"flows": rows, "returned": len(rows)}
 
@@ -194,13 +204,16 @@ def telemetry_query_dns(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT device_id, domain, record_type, response_code,
                risk_score, process_name, timestamp_dt
         FROM dns_events
         WHERE {where}
         ORDER BY timestamp_ns DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"dns_events": rows, "returned": len(rows)}
 
@@ -234,13 +247,16 @@ def telemetry_query_persistence(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT device_id, mechanism, path, change_type, label,
                sha256, risk_score, timestamp_dt
         FROM persistence_events
         WHERE {where}
         ORDER BY timestamp_ns DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"persistence_events": rows, "returned": len(rows)}
 
@@ -274,14 +290,17 @@ def telemetry_query_file_integrity(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    rows = query(f"""
+    rows = query(
+        f"""
         SELECT device_id, path, file_extension, change_type,
                new_hash, owner_uid, is_suid, size,
                risk_score, event_type, timestamp_dt
         FROM fim_events
         WHERE {where}
         ORDER BY timestamp_ns DESC LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"fim_events": rows, "returned": len(rows)}
 
@@ -293,7 +312,8 @@ def telemetry_geo_summary(hours: int = 24) -> dict:
     Args:
         hours: Lookback window
     """
-    rows = query("""
+    rows = query(
+        """
         SELECT geo_dst_country, asn_dst_org,
                COUNT(*) as flow_count,
                SUM(bytes_tx) as total_bytes_tx,
@@ -307,7 +327,9 @@ def telemetry_geo_summary(hours: int = 24) -> dict:
         GROUP BY geo_dst_country, asn_dst_org
         ORDER BY flow_count DESC
         LIMIT 50
-    """, (hours_ago_ns(hours),))
+    """,
+        (hours_ago_ns(hours),),
+    )
 
     return {"geo_summary": rows, "hours": hours}
 
@@ -336,7 +358,8 @@ def telemetry_event_timeline(
     where = " AND ".join(clauses)
     params.append(limit)
 
-    events = query(f"""
+    events = query(
+        f"""
         SELECT event_id, device_id, event_category, event_action,
                risk_score, mitre_techniques, description,
                collection_agent, process_name, pid, username,
@@ -345,6 +368,8 @@ def telemetry_event_timeline(
         WHERE {where}
         ORDER BY timestamp_ns ASC
         LIMIT ?
-    """, tuple(params))
+    """,
+        tuple(params),
+    )
 
     return {"timeline": events, "returned": len(events), "hours": hours}

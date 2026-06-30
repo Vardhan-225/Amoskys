@@ -306,7 +306,9 @@ class ObservationMixin:
 
         # Parse client_pid safely
         client_pid_raw = attrs.get("client_pid", "")
-        client_pid = int(client_pid_raw) if client_pid_raw and client_pid_raw.isdigit() else None
+        client_pid = (
+            int(client_pid_raw) if client_pid_raw and client_pid_raw.isdigit() else None
+        )
 
         self.store.insert_audit_event(
             {
@@ -315,7 +317,9 @@ class ObservationMixin:
                 "device_id": device_id,
                 "host": device_id,
                 "syscall": attrs.get("right") or attrs.get("service") or "",
-                "event_type": attrs.get("event_type") or attrs.get("decision") or "observation",
+                "event_type": attrs.get("event_type")
+                or attrs.get("decision")
+                or "observation",
                 "pid": client_pid,
                 "ppid": None,
                 "uid": None,

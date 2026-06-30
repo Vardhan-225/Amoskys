@@ -7,11 +7,14 @@ from typing import Dict, Optional, Tuple
 import pytest
 
 from amoskys.agents.Web.argos.adapt import (
-    ArchitectureProfile, fingerprint_architecture,
-    AdaptedStrategy, TacticSpec, pick_strategy,
-    OriginCandidate, discover_origin,
+    AdaptedStrategy,
+    ArchitectureProfile,
+    OriginCandidate,
+    TacticSpec,
+    discover_origin,
+    fingerprint_architecture,
+    pick_strategy,
 )
-
 
 # ──────────────────────────────────────────────────────────────────
 # fingerprint
@@ -36,23 +39,41 @@ class _FakeHTTP:
 
 
 def test_fingerprint_cloudflare_wordfence_wp_mysql_linux():
-    http = _FakeHTTP({
-        "/": (200, {
-            "server":           "cloudflare",
-            "cf-ray":           "abc123",
-            "set-cookie":       "wfwaf-authcookie-deadbeef=1; path=/",
-            "x-powered-by":     "PHP/8.0.30",
-        }, (
-            "<html><head><meta name='generator' content='WordPress 6.4.2'>"
-            "</head><body>powered by wordfence · Linux</body></html>"
-        )),
-        "/does-not-exist-%zz-xyz": (404, {"server": "cloudflare"}, (
-            "<!-- nginx default 404 page -->"
-            "mysql_fetch_array() duplicate entry"
-        )),
-        "/wp-login.php": (200, {"server": "cloudflare"}, "<form id='loginform'></form>"),
-        "/WP-LOGIN.PHP": (404, {"server": "cloudflare"}, ""),  # case-sensitive → Linux
-    })
+    http = _FakeHTTP(
+        {
+            "/": (
+                200,
+                {
+                    "server": "cloudflare",
+                    "cf-ray": "abc123",
+                    "set-cookie": "wfwaf-authcookie-deadbeef=1; path=/",
+                    "x-powered-by": "PHP/8.0.30",
+                },
+                (
+                    "<html><head><meta name='generator' content='WordPress 6.4.2'>"
+                    "</head><body>powered by wordfence · Linux</body></html>"
+                ),
+            ),
+            "/does-not-exist-%zz-xyz": (
+                404,
+                {"server": "cloudflare"},
+                (
+                    "<!-- nginx default 404 page -->"
+                    "mysql_fetch_array() duplicate entry"
+                ),
+            ),
+            "/wp-login.php": (
+                200,
+                {"server": "cloudflare"},
+                "<form id='loginform'></form>",
+            ),
+            "/WP-LOGIN.PHP": (
+                404,
+                {"server": "cloudflare"},
+                "",
+            ),  # case-sensitive → Linux
+        }
+    )
 
     profile = fingerprint_architecture("https://blog.example.com/", http_get=http)
 
@@ -91,9 +112,12 @@ def _prof(**kw):
 
 def test_strategy_wordfence_wp_mysql_linux_cloudflare_verbose():
     p = _prof(
-        waf_names=["Wordfence"], cdn_name="Cloudflare",
-        database="mysql", os_family="linux",
-        framework="wordpress", runtime="php-fpm",
+        waf_names=["Wordfence"],
+        cdn_name="Cloudflare",
+        database="mysql",
+        os_family="linux",
+        framework="wordpress",
+        runtime="php-fpm",
         verbose_errors=True,
     )
     s = pick_strategy(p)
@@ -158,6 +182,7 @@ def test_strategy_to_dict_is_json_safe():
     p = _prof(waf_names=["Cloudflare"], database="mysql", framework="wordpress")
     s = pick_strategy(p)
     import json
+
     json.dumps(s.to_dict())  # must not raise
 
 
@@ -168,6 +193,7 @@ def test_strategy_to_dict_is_json_safe():
 
 def test_origin_ip_belongs_to_edge_detection():
     from amoskys.agents.Web.argos.adapt.origin import _ip_belongs_to_edge
+
     assert _ip_belongs_to_edge("104.21.5.100") == "cloudflare"
     assert _ip_belongs_to_edge("151.101.1.1") == "fastly"
     assert _ip_belongs_to_edge("203.0.113.42") is None  # TEST-NET-3
@@ -177,21 +203,29 @@ def test_discover_origin_soft_fails_offline_and_returns_list():
     """Without a sensible http_get + DNS the function must return an
     empty list (or CT-only candidates) without raising. Gracefully
     handles no-network."""
+
     def bad_get(url, t, h):
         return (0, {}, "__error__:no-net")
 
-    result = discover_origin("nonexistent-host-abc.invalid",
-                             fingerprint_body=None,
-                             http_get=bad_get, max_candidates=5)
+    result = discover_origin(
+        "nonexistent-host-abc.invalid",
+        fingerprint_body=None,
+        http_get=bad_get,
+        max_candidates=5,
+    )
     assert isinstance(result, list)
     # No exception, just empty list
     assert len(result) == 0
 
 
 def test_origin_candidate_serializes_cleanly():
-    c = OriginCandidate(ip="198.51.100.10", source="crt.sh",
-                        hostname="origin.example.com", confidence=70,
-                        evidence=["CT SAN origin.example.com resolved"])
+    c = OriginCandidate(
+        ip="198.51.100.10",
+        source="crt.sh",
+        hostname="origin.example.com",
+        confidence=70,
+        evidence=["CT SAN origin.example.com resolved"],
+    )
     d = c.to_dict()
     assert d["ip"] == "198.51.100.10"
     assert d["source"] == "crt.sh"

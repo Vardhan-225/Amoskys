@@ -34,9 +34,11 @@ class SignalMixin:
                     data.get("status", "open"),
                     data.get("assignee"),
                     json.dumps(data.get("source_event_ids", [])),
-                    json.dumps(data.get("mitre_techniques", []))
-                    if isinstance(data.get("mitre_techniques"), list)
-                    else (data.get("mitre_techniques") or "[]"),
+                    (
+                        json.dumps(data.get("mitre_techniques", []))
+                        if isinstance(data.get("mitre_techniques"), list)
+                        else (data.get("mitre_techniques") or "[]")
+                    ),
                     json.dumps(data.get("indicators", {})),
                 ),
             )
@@ -455,7 +457,9 @@ class SignalMixin:
                     device_tactics.setdefault(device_id, {})
                     for tech in techniques:
                         if isinstance(tech, str) and tech.startswith("T"):
-                            device_tactics[device_id].setdefault(tech, []).append(row[2])
+                            device_tactics[device_id].setdefault(tech, []).append(
+                                row[2]
+                            )
 
                 for device_id, techs in device_tactics.items():
                     if len(techs) >= 2:

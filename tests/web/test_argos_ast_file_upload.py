@@ -33,9 +33,9 @@ def _run(tmp_path, source, name="t.php"):
 
 
 def test_move_uploaded_file_with_post_filename(tmp_path):
-    src = '''<?php
+    src = """<?php
 move_uploaded_file($_FILES["f"]["tmp_name"], "/var/www/uploads/" . $_POST["name"]);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "upload.move_uploaded_file_tainted_dest"
@@ -44,10 +44,10 @@ move_uploaded_file($_FILES["f"]["tmp_name"], "/var/www/uploads/" . $_POST["name"
 
 
 def test_move_uploaded_file_with_files_name(tmp_path):
-    src = '''<?php
+    src = """<?php
 $dest = WP_CONTENT_DIR . "/uploads/" . $_FILES["f"]["name"];
 move_uploaded_file($_FILES["f"]["tmp_name"], $dest);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     # The destination is a variable, not literally containing $_FILES[x][name],
     # so the scanner may miss this unless the taint travels. We flag the
@@ -55,19 +55,19 @@ move_uploaded_file($_FILES["f"]["tmp_name"], $dest);
     # assignment won't trip. Accept the false-negative in v1 — the critical
     # form (inline $_FILES[x][name]) is caught, which is what matters.
     # This test asserts: given a LITERAL inline $_FILES ref, we fire.
-    src2 = '''<?php
+    src2 = """<?php
 move_uploaded_file($_FILES["f"]["tmp_name"], "/tmp/up/" . $_FILES["f"]["name"]);
-?>'''
+?>"""
     findings2 = _run(tmp_path, src2, name="t2.php")
     assert findings2
     assert findings2[0].rule_id == "upload.move_uploaded_file_tainted_dest"
 
 
 def test_move_uploaded_file_pathinfo_on_files(tmp_path):
-    src = '''<?php
+    src = """<?php
 $ext = pathinfo($_FILES["f"]["name"], PATHINFO_EXTENSION);
 move_uploaded_file($_FILES["f"]["tmp_name"], "/data/" . uniqid() . "." . pathinfo($_FILES["f"]["name"], PATHINFO_EXTENSION));
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     # Either move_uploaded_file_tainted_dest (via $_FILES) or
@@ -76,9 +76,9 @@ move_uploaded_file($_FILES["f"]["tmp_name"], "/data/" . uniqid() . "." . pathinf
 
 
 def test_wp_handle_upload_test_form_off(tmp_path):
-    src = '''<?php
+    src = """<?php
 $ok = wp_handle_upload($file, array('test_form' => false));
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "upload.wp_handle_upload_test_form_off"
@@ -86,12 +86,12 @@ $ok = wp_handle_upload($file, array('test_form' => false));
 
 
 def test_upload_mimes_filter_adds_php(tmp_path):
-    src = '''<?php
+    src = """<?php
 add_filter('upload_mimes', function($mimes) {
     $mimes['phtml'] = 'application/x-httpd-php';
     return $mimes;
 });
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "upload.upload_mimes_adds_php"
@@ -99,23 +99,23 @@ add_filter('upload_mimes', function($mimes) {
 
 
 def test_upload_mimes_adds_phar(tmp_path):
-    src = '''<?php
+    src = """<?php
 add_filter('upload_mimes', 'my_mimes');
 function my_mimes($mimes) {
     $mimes['phar'] = 'application/x-php-phar';
     return $mimes;
 }
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert any(f.rule_id == "upload.upload_mimes_adds_php" for f in findings)
 
 
 def test_wp_handle_sideload_tainted(tmp_path):
-    src = '''<?php
+    src = """<?php
 $file = array('name' => 'x.jpg', 'tmp_name' => download($_POST['url']));
 wp_handle_sideload(array('name' => $_POST['n'], 'tmp_name' => $tmp));
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert any(f.rule_id == "upload.sideload_tainted_url" for f in findings)
@@ -123,9 +123,9 @@ wp_handle_sideload(array('name' => $_POST['n'], 'tmp_name' => $tmp));
 
 
 def test_file_put_contents_to_uploads_with_request_data(tmp_path):
-    src = '''<?php
+    src = """<?php
 file_put_contents(WP_CONTENT_DIR . "/uploads/x.txt", $_POST["data"]);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "upload.file_put_contents_tainted"
@@ -133,10 +133,10 @@ file_put_contents(WP_CONTENT_DIR . "/uploads/x.txt", $_POST["data"]);
 
 
 def test_fwrite_to_plugin_dir_with_request_data(tmp_path):
-    src = '''<?php
+    src = """<?php
 $h = fopen(plugin_dir_path(__FILE__) . "cache.txt", "w");
 fwrite($h, $_REQUEST["payload"]);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert findings
     assert findings[0].rule_id == "upload.fwrite_tainted"
@@ -146,10 +146,10 @@ fwrite($h, $_REQUEST["payload"]);
 
 
 def test_safe_move_with_hash_filename(tmp_path):
-    src = '''<?php
+    src = """<?php
 $dst = WP_CONTENT_DIR . "/uploads/" . md5(uniqid()) . ".jpg";
 move_uploaded_file($_FILES["f"]["tmp_name"], $dst);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     # The destination is a variable but doesn't contain request data;
     # scanner conservatively skips. No finding = correct.
@@ -157,20 +157,20 @@ move_uploaded_file($_FILES["f"]["tmp_name"], $dst);
 
 
 def test_safe_upload_mimes_adds_csv(tmp_path):
-    src = '''<?php
+    src = """<?php
 add_filter('upload_mimes', function($m) {
     $m['csv'] = 'text/csv';
     return $m;
 });
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert not findings
 
 
 def test_file_put_contents_to_tmp_is_not_flagged(tmp_path):
-    src = '''<?php
+    src = """<?php
 file_put_contents("/tmp/cache", $_POST["data"]);
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     # /tmp is not a web-reachable marker; severity should be high, not critical.
     assert findings
@@ -178,9 +178,9 @@ file_put_contents("/tmp/cache", $_POST["data"]);
 
 
 def test_constant_only_file_write(tmp_path):
-    src = '''<?php
+    src = """<?php
 file_put_contents(WP_CONTENT_DIR . "/uploads/data.json", json_encode(get_option("x")));
-?>'''
+?>"""
     findings = _run(tmp_path, src)
     assert not findings
 

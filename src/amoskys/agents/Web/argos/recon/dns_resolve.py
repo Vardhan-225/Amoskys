@@ -60,7 +60,7 @@ class DNSResolveSource(ReconSource):
         self,
         resolvers: Optional[List[str]] = None,
         timeout_s: float = 5.0,
-        resolver_fn=None,   # injection point for tests
+        resolver_fn=None,  # injection point for tests
     ) -> None:
         self.resolvers = list(resolvers or DEFAULT_RESOLVERS)
         self.timeout_s = timeout_s
@@ -80,8 +80,9 @@ class DNSResolveSource(ReconSource):
 
         for hostname in hostnames:
             try:
-                ips = self._resolve(hostname, random.choice(self.resolvers),
-                                    self.timeout_s)
+                ips = self._resolve(
+                    hostname, random.choice(self.resolvers), self.timeout_s
+                )
             except Exception as e:  # noqa: BLE001
                 logger.debug("dns_resolve: %s → %s", hostname, e)
                 continue
@@ -117,7 +118,8 @@ def _socket_resolve(hostname: str, resolver: str, timeout_s: float) -> List[str]
     socket.setdefaulttimeout(timeout_s)
     try:
         infos = socket.getaddrinfo(
-            hostname, None,
+            hostname,
+            None,
             proto=socket.IPPROTO_TCP,
         )
     except socket.gaierror:

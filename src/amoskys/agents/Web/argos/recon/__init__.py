@@ -24,6 +24,7 @@ Every active request goes through stealth.RateLimiter. Every request
 is audited to AssetsDB.audit().
 """
 
+from amoskys.agents.Web.argos.recon.asn import ASNEnrichmentSource
 from amoskys.agents.Web.argos.recon.base import (
     ReconContext,
     ReconEvent,
@@ -31,7 +32,6 @@ from amoskys.agents.Web.argos.recon.base import (
     ReconSourceResult,
     StealthClass,
 )
-from amoskys.agents.Web.argos.recon.asn import ASNEnrichmentSource
 from amoskys.agents.Web.argos.recon.cloud_detector import (
     CDNBehavior,
     Classification,

@@ -21,14 +21,13 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-
 _SEV_COLORS = {
     "critical": ("#dc2626", "#fff"),
-    "high":     ("#ea580c", "#fff"),
-    "medium":   ("#ca8a04", "#fff"),
-    "low":      ("#2563eb", "#fff"),
-    "info":     ("#6b7280", "#fff"),
-    "none":     ("#374151", "#fff"),
+    "high": ("#ea580c", "#fff"),
+    "medium": ("#ca8a04", "#fff"),
+    "low": ("#2563eb", "#fff"),
+    "info": ("#6b7280", "#fff"),
+    "none": ("#374151", "#fff"),
 }
 
 
@@ -40,9 +39,9 @@ def _sev_badge(sev: str) -> str:
     bg, fg = _SEV_COLORS.get((sev or "info").lower(), _SEV_COLORS["info"])
     return (
         f'<span style="display:inline-block;padding:2px 10px;border-radius:3px;'
-        f'font-size:11px;font-weight:700;letter-spacing:0.06em;'
+        f"font-size:11px;font-weight:700;letter-spacing:0.06em;"
         f'text-transform:uppercase;background:{bg};color:{fg};">'
-        f'{_esc(sev)}</span>'
+        f"{_esc(sev)}</span>"
     )
 
 
@@ -65,36 +64,44 @@ def _profile_section(profile: Optional[Dict[str, Any]]) -> str:
     osf = profile.get("os") or {}
     cells.append(_kv("CDN", cdn.get("name") or "—"))
     cells.append(_kv("WAF", ", ".join(waf.get("names") or []) or "—"))
-    cells.append(_kv(
-        "Origin server",
-        f"{origin.get('server') or '—'} {origin.get('version') or ''}".strip()))
-    cells.append(_kv(
-        "Runtime",
-        f"{runtime.get('name') or '—'} {runtime.get('version') or ''}".strip()))
+    cells.append(
+        _kv(
+            "Origin server",
+            f"{origin.get('server') or '—'} {origin.get('version') or ''}".strip(),
+        )
+    )
+    cells.append(
+        _kv(
+            "Runtime",
+            f"{runtime.get('name') or '—'} {runtime.get('version') or ''}".strip(),
+        )
+    )
     cells.append(_kv("Database", (profile.get("database") or {}).get("name") or "—"))
     cells.append(_kv("OS", osf.get("family") or "—"))
-    cells.append(_kv(
-        "Framework",
-        f"{fw.get('name') or '—'} {fw.get('version') or ''}".strip()))
-    cells.append(_kv(
-        "Verbose errors",
-        "YES — stack traces leak" if profile.get("verbose_errors") else "no"))
-    cells.append(_kv(
-        "Debug mode",
-        "YES" if profile.get("debug_mode") else "no"))
-    cells.append(_kv(
-        "Probe cost",
-        f"{profile.get('http_requests_used') or 0} GETs · "
-        f"{profile.get('fingerprint_time_ms') or 0}ms"))
+    cells.append(
+        _kv("Framework", f"{fw.get('name') or '—'} {fw.get('version') or ''}".strip())
+    )
+    cells.append(
+        _kv(
+            "Verbose errors",
+            "YES — stack traces leak" if profile.get("verbose_errors") else "no",
+        )
+    )
+    cells.append(_kv("Debug mode", "YES" if profile.get("debug_mode") else "no"))
+    cells.append(
+        _kv(
+            "Probe cost",
+            f"{profile.get('http_requests_used') or 0} GETs · "
+            f"{profile.get('fingerprint_time_ms') or 0}ms",
+        )
+    )
     return f'<div class="grid">{"".join(cells)}</div>'
 
 
 def _strategy_section(strategy: Optional[Dict[str, Any]]) -> str:
     if not strategy:
         return '<p class="muted">No strategy generated.</p>'
-    notes_html = "".join(
-        f"<li>{_esc(n)}</li>" for n in (strategy.get("notes") or [])
-    )
+    notes_html = "".join(f"<li>{_esc(n)}</li>" for n in (strategy.get("notes") or []))
     probe_order = ", ".join(strategy.get("probe_order") or [])
     cascade = " → ".join(strategy.get("encoding_cascade") or [])
     return f"""
@@ -110,14 +117,17 @@ def _strategy_section(strategy: Optional[Dict[str, Any]]) -> str:
 
 def _chains_section(chains: List[Dict[str, Any]]) -> str:
     if not chains:
-        return ('<p class="muted">No exploit chains composed. This means '
-                'either the campaign ran in passive mode and observed no '
-                'exploitable patterns, or the target is well-hardened at '
-                'the architectural layers Argos inspects.</p>')
+        return (
+            '<p class="muted">No exploit chains composed. This means '
+            "either the campaign ran in passive mode and observed no "
+            "exploitable patterns, or the target is well-hardened at "
+            "the architectural layers Argos inspects.</p>"
+        )
     blocks = []
     for i, c in enumerate(chains, 1):
         sev = (c.get("severity") or "info").lower()
-        blocks.append(f"""
+        blocks.append(
+            f"""
         <div class="chain chain-{_esc(sev)}">
           <div class="chain-hd">
             <div class="chain-num">#{i:02d}</div>
@@ -138,7 +148,8 @@ def _chains_section(chains: List[Dict[str, Any]]) -> str:
               {"".join(f"<li>{_esc(e)}</li>" for e in (c.get('evidence_trail') or []))}
             </ul>
           </div>
-        </div>""")
+        </div>"""
+        )
     return "".join(blocks)
 
 
@@ -148,13 +159,15 @@ def _findings_section(findings: List[Dict[str, Any]]) -> str:
     rows = []
     for f in findings:
         sev = (f.get("severity") or "info").lower()
-        rows.append(f"""
+        rows.append(
+            f"""
         <tr>
           <td>{_sev_badge(sev)}</td>
           <td><code>{_esc(f.get('kind'))}</code></td>
           <td><code>{_esc(f.get('location'))}</code></td>
           <td>{_esc(f.get('evidence'))}</td>
-        </tr>""")
+        </tr>"""
+        )
     return f"""
     <table class="findings">
       <thead><tr><th>Severity</th><th>Class</th><th>Location</th><th>Evidence</th></tr></thead>
@@ -167,15 +180,19 @@ def _events_section(events: List[Dict[str, Any]]) -> str:
         return ""
     rows = []
     for e in events:
-        ts = datetime.fromtimestamp(e.get("timestamp", 0), tz=timezone.utc).strftime("%H:%M:%S")
-        rows.append(f"""
+        ts = datetime.fromtimestamp(e.get("timestamp", 0), tz=timezone.utc).strftime(
+            "%H:%M:%S"
+        )
+        rows.append(
+            f"""
         <tr class="e-{_esc(e.get('kind'))}">
           <td class="e-ts">{_esc(ts)}</td>
           <td class="e-seq">#{_esc(e.get('sequence', ''))}</td>
           <td class="e-kind">{_esc(e.get('kind'))}</td>
           <td class="e-stage">{_esc(e.get('stage'))}</td>
           <td class="e-msg">{_esc(e.get('message'))}</td>
-        </tr>""")
+        </tr>"""
+        )
     return f"""
     <details><summary>Full decision trail ({len(events)} events) — click to expand</summary>
       <table class="events">
@@ -187,8 +204,12 @@ def _events_section(events: List[Dict[str, Any]]) -> str:
 
 def _legal_section(report: Dict[str, Any]) -> str:
     consent = report.get("consent_method") or "none"
-    started = datetime.fromtimestamp(report.get("started_at", 0), tz=timezone.utc).isoformat()
-    finished = datetime.fromtimestamp(report.get("finished_at", 0), tz=timezone.utc).isoformat()
+    started = datetime.fromtimestamp(
+        report.get("started_at", 0), tz=timezone.utc
+    ).isoformat()
+    finished = datetime.fromtimestamp(
+        report.get("finished_at", 0), tz=timezone.utc
+    ).isoformat()
     return f"""
     <div class="grid">
       {_kv("Consent method", consent)}
@@ -351,8 +372,11 @@ def render_campaign_html(report: Dict[str, Any]) -> str:
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    header_banner = "TARGET UNDER ACTIVE PENTEST" if mode == "exploit" \
-                     else ("CONFIRMATION SCAN" if mode == "confirm" else "OSINT RECONNAISSANCE")
+    header_banner = (
+        "TARGET UNDER ACTIVE PENTEST"
+        if mode == "exploit"
+        else ("CONFIRMATION SCAN" if mode == "confirm" else "OSINT RECONNAISSANCE")
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">

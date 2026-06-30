@@ -20,9 +20,9 @@ import pytest
 from amoskys.agents.Web.argos.consolidated_report import (
     ConsolidatedReport,
     RenderResult,
+    _h,
     build_report,
     render,
-    _h,
 )
 from amoskys.agents.Web.argos.customer import CustomerService
 from amoskys.agents.Web.argos.operators import OperatorService
@@ -47,8 +47,10 @@ def db(tmp_path):
 @pytest.fixture
 def operator(db):
     return OperatorService(db).register(
-        email="ops@amoskys.com", name="Ops",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="ops@amoskys.com",
+        name="Ops",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
 
 
@@ -66,10 +68,15 @@ def customer_with_surface(db):
         ("api.acme.com", AssetKind.SUBDOMAIN),
         ("www.acme.com", AssetKind.SUBDOMAIN),
     ):
-        db.upsert_asset(SurfaceAsset.new(
-            customer_id=cid, kind=kind, value=value,
-            source="fake", confidence=0.9,
-        ))
+        db.upsert_asset(
+            SurfaceAsset.new(
+                customer_id=cid,
+                kind=kind,
+                value=value,
+                source="fake",
+                confidence=0.9,
+            )
+        )
     return db.get_customer(cid)
 
 
@@ -96,24 +103,42 @@ class _FindingRunner(EngagementRunner):
 
 
 def test_scheduler_persists_findings_to_db(db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "api.acme.com": [
-            {"template_id": "authz-bypass", "severity": "critical",
-             "title": "Unauth REST endpoint", "description": "Leaks admin data.",
-             "tool": "nuclei", "cwe": "CWE-862", "cvss": 9.1,
-             "references": ["https://cwe.mitre.org/data/definitions/862.html"],
-             "mitre_techniques": ["T1190"],
-             "evidence": {"url": "https://api.acme.com/admin"},
-             "detected_at_ns": 1_700_000_000_000_000_000},
-            {"template_id": "xss-reflected", "severity": "medium",
-             "title": "Reflected XSS on search", "description": "Unescaped query param.",
-             "tool": "nuclei", "evidence": {"param": "q"}},
-        ],
-        "www.acme.com": [
-            {"template_id": "exposure", "severity": "low", "title": "Server header leak",
-             "description": "nginx/1.18 banner visible.", "tool": "wpscan"},
-        ],
-    })
+    runner = _FindingRunner(
+        {
+            "api.acme.com": [
+                {
+                    "template_id": "authz-bypass",
+                    "severity": "critical",
+                    "title": "Unauth REST endpoint",
+                    "description": "Leaks admin data.",
+                    "tool": "nuclei",
+                    "cwe": "CWE-862",
+                    "cvss": 9.1,
+                    "references": ["https://cwe.mitre.org/data/definitions/862.html"],
+                    "mitre_techniques": ["T1190"],
+                    "evidence": {"url": "https://api.acme.com/admin"},
+                    "detected_at_ns": 1_700_000_000_000_000_000,
+                },
+                {
+                    "template_id": "xss-reflected",
+                    "severity": "medium",
+                    "title": "Reflected XSS on search",
+                    "description": "Unescaped query param.",
+                    "tool": "nuclei",
+                    "evidence": {"param": "q"},
+                },
+            ],
+            "www.acme.com": [
+                {
+                    "template_id": "exposure",
+                    "severity": "low",
+                    "title": "Server header leak",
+                    "description": "nginx/1.18 banner visible.",
+                    "tool": "wpscan",
+                },
+            ],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -136,16 +161,18 @@ def test_scheduler_persists_findings_to_db(db, operator, customer_with_surface):
 
 
 def test_finding_severity_counts(db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "api.acme.com": [
-            {"severity": "critical", "title": "a", "description": ""},
-            {"severity": "critical", "title": "b", "description": ""},
-            {"severity": "high", "title": "c", "description": ""},
-        ],
-        "acme.com": [
-            {"severity": "low", "title": "d", "description": ""},
-        ],
-    })
+    runner = _FindingRunner(
+        {
+            "api.acme.com": [
+                {"severity": "critical", "title": "a", "description": ""},
+                {"severity": "critical", "title": "b", "description": ""},
+                {"severity": "high", "title": "c", "description": ""},
+            ],
+            "acme.com": [
+                {"severity": "low", "title": "d", "description": ""},
+            ],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -157,12 +184,14 @@ def test_finding_severity_counts(db, operator, customer_with_surface):
 
 
 def test_list_findings_filter_by_severity(db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "api.acme.com": [
-            {"severity": "critical", "title": "a", "description": ""},
-            {"severity": "medium", "title": "b", "description": ""},
-        ],
-    })
+    runner = _FindingRunner(
+        {
+            "api.acme.com": [
+                {"severity": "critical", "title": "a", "description": ""},
+                {"severity": "medium", "title": "b", "description": ""},
+            ],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -176,15 +205,21 @@ def test_list_findings_filter_by_severity(db, operator, customer_with_surface):
 
 
 def test_build_report_assembles_from_db(db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "api.acme.com": [
-            {"severity": "critical", "title": "SQL injection", "description": "UNION-based"},
-            {"severity": "high", "title": "Nonce missing", "description": ""},
-        ],
-        "www.acme.com": [
-            {"severity": "low", "title": "Banner leak", "description": ""},
-        ],
-    })
+    runner = _FindingRunner(
+        {
+            "api.acme.com": [
+                {
+                    "severity": "critical",
+                    "title": "SQL injection",
+                    "description": "UNION-based",
+                },
+                {"severity": "high", "title": "Nonce missing", "description": ""},
+            ],
+            "www.acme.com": [
+                {"severity": "low", "title": "Banner leak", "description": ""},
+            ],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -215,10 +250,17 @@ def test_build_report_raises_on_unknown_queue(db):
 
 
 def test_render_produces_html_always(tmp_path, db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "acme.com": [{"severity": "critical", "title": "Unauth RCE",
-                      "description": "Code execution via plugin X"}],
-    })
+    runner = _FindingRunner(
+        {
+            "acme.com": [
+                {
+                    "severity": "critical",
+                    "title": "Unauth RCE",
+                    "description": "Code execution via plugin X",
+                }
+            ],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -236,11 +278,17 @@ def test_render_produces_html_always(tmp_path, db, operator, customer_with_surfa
     assert result.pdf_path is None
 
 
-def test_render_handles_missing_weasyprint_gracefully(tmp_path, db, operator, customer_with_surface):
+def test_render_handles_missing_weasyprint_gracefully(
+    tmp_path, db, operator, customer_with_surface
+):
     """When weasyprint isn't installed, PDF gets a clear error but HTML still lands."""
-    runner = _FindingRunner({"acme.com": [
-        {"severity": "medium", "title": "Something", "description": ""},
-    ]})
+    runner = _FindingRunner(
+        {
+            "acme.com": [
+                {"severity": "medium", "title": "Something", "description": ""},
+            ]
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -249,6 +297,7 @@ def test_render_handles_missing_weasyprint_gracefully(tmp_path, db, operator, cu
 
     # Simulate weasyprint import failing
     import builtins as _builtins
+
     real_import = _builtins.__import__
 
     def fake_import(name, *args, **kwargs):
@@ -272,15 +321,26 @@ def test_render_escapes_injection_in_customer_name(tmp_path, db, operator):
         seed="evil.com",
         consent_method=ConsentMethod.LAB_SELF,
     )
-    db.upsert_asset(SurfaceAsset.new(
-        customer_id=enrollment.customer.customer_id,
-        kind=AssetKind.DOMAIN, value="evil.com",
-        source="fake", confidence=0.9,
-    ))
-    runner = _FindingRunner({"evil.com": [
-        {"severity": "high", "title": "<img src=x onerror=alert(1)>",
-         "description": "Evil content"},
-    ]})
+    db.upsert_asset(
+        SurfaceAsset.new(
+            customer_id=enrollment.customer.customer_id,
+            kind=AssetKind.DOMAIN,
+            value="evil.com",
+            source="fake",
+            confidence=0.9,
+        )
+    )
+    runner = _FindingRunner(
+        {
+            "evil.com": [
+                {
+                    "severity": "high",
+                    "title": "<img src=x onerror=alert(1)>",
+                    "description": "Evil content",
+                },
+            ]
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(enrollment.customer.customer_id)
     scheduler.run_all(queue.queue_id)
@@ -301,19 +361,28 @@ def test_render_sections_for_skipped_and_failed_assets(
     tmp_path, db, operator, customer_with_surface
 ):
     """Skipped + failed jobs render with explanatory notes."""
+
     class _MixedRunner(EngagementRunner):
         def run(self, asset_value, customer, report_dir, tool_bundle):
             if asset_value == "api.acme.com":
                 raise RuntimeError("nuclei died")
-            return {"engagement_id": f"e-{asset_value}", "findings_count": 0,
-                    "errors": [], "findings": []}
+            return {
+                "engagement_id": f"e-{asset_value}",
+                "findings_count": 0,
+                "errors": [],
+                "findings": [],
+            }
 
     # Inject an out-of-scope asset so one job gets skipped
-    db.upsert_asset(SurfaceAsset.new(
-        customer_id=customer_with_surface.customer_id,
-        kind=AssetKind.SUBDOMAIN, value="foo.example.org",
-        source="fake", confidence=0.9,
-    ))
+    db.upsert_asset(
+        SurfaceAsset.new(
+            customer_id=customer_with_surface.customer_id,
+            kind=AssetKind.SUBDOMAIN,
+            value="foo.example.org",
+            source="fake",
+            confidence=0.9,
+        )
+    )
 
     scheduler = ScanScheduler(db=db, operator=operator, runner=_MixedRunner())
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
@@ -345,9 +414,11 @@ def test_h_escapes_core_chars():
 
 
 def test_report_to_summary_dict(db, operator, customer_with_surface):
-    runner = _FindingRunner({
-        "api.acme.com": [{"severity": "critical", "title": "a", "description": ""}],
-    })
+    runner = _FindingRunner(
+        {
+            "api.acme.com": [{"severity": "critical", "title": "a", "description": ""}],
+        }
+    )
     scheduler = ScanScheduler(db=db, operator=operator, runner=runner)
     queue = scheduler.queue_surface(customer_with_surface.customer_id)
     scheduler.run_all(queue.queue_id)

@@ -337,7 +337,15 @@ class ForensicContextEnricher:
         # ── Process Attribution (for file/persistence events without process context) ──
         if path and not event_data.get("process_name"):
             writer = _resolve_writer_process(path, self._process_cache)
-            for field in ("process_name", "pid", "exe", "cmdline", "ppid", "parent_name", "username"):
+            for field in (
+                "process_name",
+                "pid",
+                "exe",
+                "cmdline",
+                "ppid",
+                "parent_name",
+                "username",
+            ):
                 if writer.get(field) and not event_data.get(field):
                     event_data[field] = writer[field]
 

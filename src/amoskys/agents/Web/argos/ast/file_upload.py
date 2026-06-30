@@ -68,24 +68,33 @@ from amoskys.agents.Web.argos.ast.base import (
 )
 
 # Request-source globals a tainted argument might come from.
-_TAINT_GLOBALS_RE = re.compile(
-    r"\$_(GET|POST|REQUEST|COOKIE|FILES)\b"
-)
+_TAINT_GLOBALS_RE = re.compile(r"\$_(GET|POST|REQUEST|COOKIE|FILES)\b")
 
 # $_FILES[...]['name'] — user-controlled filename (attacker picks it).
-_FILES_NAME_RE = re.compile(
-    r"""\$_FILES\s*\[[^\]]+\]\s*\[\s*['"]name['"]\s*\]"""
-)
+_FILES_NAME_RE = re.compile(r"""\$_FILES\s*\[[^\]]+\]\s*\[\s*['"]name['"]\s*\]""")
 
 # "dangerous" extensions — lowercased. Anything on this list executes on
 # an Apache/Nginx+PHP default install if uploaded into a web-reachable dir.
-_EXECUTABLE_EXTS = frozenset({
-    "php", "php3", "php4", "php5", "php7", "php8",
-    "phtml", "phar", "pht", "phps",
-    "inc",           # often included by other PHP — cheap RCE vector
-    "cgi", "pl", "py", "sh",
-    "htaccess",      # not an extension but a special basename
-})
+_EXECUTABLE_EXTS = frozenset(
+    {
+        "php",
+        "php3",
+        "php4",
+        "php5",
+        "php7",
+        "php8",
+        "phtml",
+        "phar",
+        "pht",
+        "phps",
+        "inc",  # often included by other PHP — cheap RCE vector
+        "cgi",
+        "pl",
+        "py",
+        "sh",
+        "htaccess",  # not an extension but a special basename
+    }
+)
 
 
 def _looks_tainted(text: str) -> bool:
@@ -161,49 +170,61 @@ class FileUploadScanner(ASTScanner):
             dst = call.arg(1) or ""
             src = call.arg(0) or ""
             if _looks_tainted(dst) or _has_files_name(dst):
-                out.append(self._finding(
-                    plugin, source, call.line, dst,
-                    rule_id="upload.move_uploaded_file_tainted_dest",
-                    severity="critical",
-                    title="move_uploaded_file() destination is attacker-controlled",
-                    description=(
-                        "The destination path passed to move_uploaded_file() "
-                        "embeds a request-sourced value (a $_POST/$_GET/"
-                        "$_REQUEST/$_FILES[..]['name']). An attacker can "
-                        "choose the filename — and thus the extension — and "
-                        "drop an executable .php into a web-reachable path. "
-                        "This is classic remote code execution."
-                    ),
-                    recommendation=(
-                        "Derive the destination from a sanitizer: "
-                        "sanitize_file_name(), wp_unique_filename(), and "
-                        "an extension allow-list of your own (do NOT trust "
-                        "upload_mimes alone)."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        dst,
+                        rule_id="upload.move_uploaded_file_tainted_dest",
+                        severity="critical",
+                        title="move_uploaded_file() destination is attacker-controlled",
+                        description=(
+                            "The destination path passed to move_uploaded_file() "
+                            "embeds a request-sourced value (a $_POST/$_GET/"
+                            "$_REQUEST/$_FILES[..]['name']). An attacker can "
+                            "choose the filename — and thus the extension — and "
+                            "drop an executable .php into a web-reachable path. "
+                            "This is classic remote code execution."
+                        ),
+                        recommendation=(
+                            "Derive the destination from a sanitizer: "
+                            "sanitize_file_name(), wp_unique_filename(), and "
+                            "an extension allow-list of your own (do NOT trust "
+                            "upload_mimes alone)."
+                        ),
+                    )
+                )
                 continue
             # Not tainted directly; check whether the destination contains
             # a raw pathinfo()/strrchr() on a $_FILES name — also tainted
             # transitively.
-            if re.search(r"(pathinfo|strrchr|substr|basename|end)\s*\([^)]*\$_FILES", dst):
-                out.append(self._finding(
-                    plugin, source, call.line, dst,
-                    rule_id="upload.move_uploaded_file_no_ext_check",
-                    severity="critical",
-                    title="move_uploaded_file() uses $_FILES-derived extension without allow-list",
-                    description=(
-                        "The destination path is built by extracting the "
-                        "extension from $_FILES[..]['name'] and concatenating "
-                        "it with a trusted prefix. Without an allow-list "
-                        "between the read and the write, any attacker-chosen "
-                        "extension (.phtml, .phar, .php5, etc.) lands."
-                    ),
-                    recommendation=(
-                        "Validate the extension against a whitelist: "
-                        "$ok = array('jpg','png','gif'); "
-                        "if (!in_array(strtolower($ext), $ok, true)) reject."
-                    ),
-                ))
+            if re.search(
+                r"(pathinfo|strrchr|substr|basename|end)\s*\([^)]*\$_FILES", dst
+            ):
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        dst,
+                        rule_id="upload.move_uploaded_file_no_ext_check",
+                        severity="critical",
+                        title="move_uploaded_file() uses $_FILES-derived extension without allow-list",
+                        description=(
+                            "The destination path is built by extracting the "
+                            "extension from $_FILES[..]['name'] and concatenating "
+                            "it with a trusted prefix. Without an allow-list "
+                            "between the read and the write, any attacker-chosen "
+                            "extension (.phtml, .phar, .php5, etc.) lands."
+                        ),
+                        recommendation=(
+                            "Validate the extension against a whitelist: "
+                            "$ok = array('jpg','png','gif'); "
+                            "if (!in_array(strtolower($ext), $ok, true)) reject."
+                        ),
+                    )
+                )
         return out
 
     # ── wp_handle_upload / wp_handle_upload_prefilter ─────────────
@@ -215,30 +236,39 @@ class FileUploadScanner(ASTScanner):
             overrides = call.arg(1) or ""
             inner = overrides.strip()
             if inner.startswith("array(") or inner.startswith("["):
-                body = inner[inner.index("(") + 1: -1] if inner.startswith("array(") else inner[1:-1]
+                body = (
+                    inner[inner.index("(") + 1 : -1]
+                    if inner.startswith("array(")
+                    else inner[1:-1]
+                )
                 # 'test_form' => false disables WP's own checks.
                 if _array_has_key_value(
                     body,
                     "test_form",
                     lambda v: v.lower() in ("false", "0", "'false'", '"false"'),
                 ):
-                    out.append(self._finding(
-                        plugin, source, call.line, overrides,
-                        rule_id="upload.wp_handle_upload_test_form_off",
-                        severity="high",
-                        title="wp_handle_upload called with test_form => false",
-                        description=(
-                            "The test_form override disables WordPress's "
-                            "built-in form/MIME/extension validation. Any "
-                            "plugin-side check has to be rigorous enough to "
-                            "stand alone — most are not."
-                        ),
-                        recommendation=(
-                            "Remove the test_form override, or add "
-                            "'mimes' => array('jpg'=>'image/jpeg', ...) "
-                            "as a strict allow-list."
-                        ),
-                    ))
+                    out.append(
+                        self._finding(
+                            plugin,
+                            source,
+                            call.line,
+                            overrides,
+                            rule_id="upload.wp_handle_upload_test_form_off",
+                            severity="high",
+                            title="wp_handle_upload called with test_form => false",
+                            description=(
+                                "The test_form override disables WordPress's "
+                                "built-in form/MIME/extension validation. Any "
+                                "plugin-side check has to be rigorous enough to "
+                                "stand alone — most are not."
+                            ),
+                            recommendation=(
+                                "Remove the test_form override, or add "
+                                "'mimes' => array('jpg'=>'image/jpeg', ...) "
+                                "as a strict allow-list."
+                            ),
+                        )
+                    )
         return out
 
     # ── upload_mimes filter that adds executable extensions ───────
@@ -260,23 +290,28 @@ class FileUploadScanner(ASTScanner):
             arg1 = call.arg(1) or ""
             combined = arg1 + "\n" + window
             if _contains_dangerous_ext_literal(combined):
-                out.append(self._finding(
-                    plugin, source, call.line, combined[:200],
-                    rule_id="upload.upload_mimes_adds_php",
-                    severity="critical",
-                    title=f"Filter on {arg0} adds an executable extension",
-                    description=(
-                        f"The plugin hooks {arg0} with a callback that adds "
-                        f"a PHP-executable or shell-executable extension to "
-                        f"the allowed list. Uploads of that extension will "
-                        f"succeed and, if the web server parses it, execute "
-                        f"server-side."
-                    ),
-                    recommendation=(
-                        "Remove the filter or restrict it to inert media "
-                        "types only."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        combined[:200],
+                        rule_id="upload.upload_mimes_adds_php",
+                        severity="critical",
+                        title=f"Filter on {arg0} adds an executable extension",
+                        description=(
+                            f"The plugin hooks {arg0} with a callback that adds "
+                            f"a PHP-executable or shell-executable extension to "
+                            f"the allowed list. Uploads of that extension will "
+                            f"succeed and, if the web server parses it, execute "
+                            f"server-side."
+                        ),
+                        recommendation=(
+                            "Remove the filter or restrict it to inert media "
+                            "types only."
+                        ),
+                    )
+                )
         return out
 
     # ── wp_handle_sideload with tainted URL ───────────────────────
@@ -286,23 +321,28 @@ class FileUploadScanner(ASTScanner):
         for call in find_calls(source, "wp_handle_sideload"):
             arg0 = call.arg(0) or ""
             if _looks_tainted(arg0):
-                out.append(self._finding(
-                    plugin, source, call.line, arg0,
-                    rule_id="upload.sideload_tainted_url",
-                    severity="high",
-                    title="wp_handle_sideload called with request-controlled source",
-                    description=(
-                        "wp_handle_sideload fetches a remote resource and "
-                        "writes it into the media library. If the source "
-                        "URL or filename is attacker-controlled, this is "
-                        "SSRF + potential file drop in one call."
-                    ),
-                    recommendation=(
-                        "Validate the URL against an allow-list of hosts "
-                        "and refuse any sideload with an extension outside "
-                        "a hard-coded whitelist."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        arg0,
+                        rule_id="upload.sideload_tainted_url",
+                        severity="high",
+                        title="wp_handle_sideload called with request-controlled source",
+                        description=(
+                            "wp_handle_sideload fetches a remote resource and "
+                            "writes it into the media library. If the source "
+                            "URL or filename is attacker-controlled, this is "
+                            "SSRF + potential file drop in one call."
+                        ),
+                        recommendation=(
+                            "Validate the URL against an allow-list of hosts "
+                            "and refuse any sideload with an extension outside "
+                            "a hard-coded whitelist."
+                        ),
+                    )
+                )
         return out
 
     # ── Raw file writes with tainted content into web-ish paths ───
@@ -340,36 +380,50 @@ class FileUploadScanner(ASTScanner):
                     if fn == "file_put_contents"
                     else "upload.fwrite_tainted"
                 )
-                out.append(self._finding(
-                    plugin, source, call.line, data,
-                    rule_id=rule,
-                    severity=severity,
-                    title=f"{fn}() writes request-sourced data",
-                    description=(
-                        f"{fn}() writes a value that originates from a "
-                        f"PHP request global. "
-                        + ("The destination is inside a web-reachable "
-                           "WordPress directory — this is arbitrary file "
-                           "write with attacker-controlled content. "
-                           "Combined with an executable extension, RCE."
-                           if web_reachable else
-                           "If this path later becomes web-reachable, "
-                           "it is an RCE vector.")
-                    ),
-                    recommendation=(
-                        "Never write request-sourced bytes into a web-"
-                        "reachable path. If caching is required, write "
-                        "to wp-content/uploads/<hardcoded-subdir>/ with "
-                        "a hashed filename and no extension control."
-                    ),
-                ))
+                out.append(
+                    self._finding(
+                        plugin,
+                        source,
+                        call.line,
+                        data,
+                        rule_id=rule,
+                        severity=severity,
+                        title=f"{fn}() writes request-sourced data",
+                        description=(
+                            f"{fn}() writes a value that originates from a "
+                            f"PHP request global. "
+                            + (
+                                "The destination is inside a web-reachable "
+                                "WordPress directory — this is arbitrary file "
+                                "write with attacker-controlled content. "
+                                "Combined with an executable extension, RCE."
+                                if web_reachable
+                                else "If this path later becomes web-reachable, "
+                                "it is an RCE vector."
+                            )
+                        ),
+                        recommendation=(
+                            "Never write request-sourced bytes into a web-"
+                            "reachable path. If caching is required, write "
+                            "to wp-content/uploads/<hardcoded-subdir>/ with "
+                            "a hashed filename and no extension control."
+                        ),
+                    )
+                )
         return out
 
     # ── Finding factory ────────────────────────────────────────────
 
     def _finding(
-        self, plugin, source, line, arg_text,
-        rule_id, severity, title, description,
+        self,
+        plugin,
+        source,
+        line,
+        arg_text,
+        rule_id,
+        severity,
+        title,
+        description,
         recommendation="",
     ) -> ASTFinding:
         snippet = arg_text.strip().replace("\n", " ")[:240]

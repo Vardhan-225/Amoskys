@@ -56,7 +56,7 @@ def _rotate_if_needed() -> None:
         if len(lines) > MAX_LINES:
             # Keep the newest half
             with open(OUTPUT_PATH, "w") as f:
-                f.writelines(lines[-(MAX_LINES // 2):])
+                f.writelines(lines[-(MAX_LINES // 2) :])
     except Exception:
         pass
 
@@ -84,10 +84,12 @@ def main() -> None:
             proc = subprocess.Popen(
                 [
                     TCPDUMP_BIN,
-                    "-i", "any",
+                    "-i",
+                    "any",
                     "-nn",
                     "-l",
-                    "-c", "1000",
+                    "-c",
+                    "1000",
                     "udp port 53 and not src port 53",
                 ],
                 stdout=subprocess.PIPE,

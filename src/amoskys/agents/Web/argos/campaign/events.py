@@ -35,23 +35,23 @@ logger = logging.getLogger("amoskys.argos.campaign.events")
 
 class EventKind:
     STAGE_START = "stage_start"
-    STAGE_END   = "stage_end"
-    PROGRESS    = "progress"
-    FINDING     = "finding"
-    EVIDENCE    = "evidence"
-    DECISION    = "decision"
-    CHAIN       = "chain"
-    LOG         = "log"
-    ERROR       = "error"
-    FATAL       = "fatal"
-    REPORT      = "report"
-    DONE        = "done"
+    STAGE_END = "stage_end"
+    PROGRESS = "progress"
+    FINDING = "finding"
+    EVIDENCE = "evidence"
+    DECISION = "decision"
+    CHAIN = "chain"
+    LOG = "log"
+    ERROR = "error"
+    FATAL = "fatal"
+    REPORT = "report"
+    DONE = "done"
 
 
 @dataclass
 class CampaignEvent:
-    kind: str                       # EventKind.*
-    stage: str                      # "recon", "fingerprint", "chain", ...
+    kind: str  # EventKind.*
+    stage: str  # "recon", "fingerprint", "chain", ...
     message: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
@@ -59,12 +59,12 @@ class CampaignEvent:
 
     def to_dict(self):
         return {
-            "kind":      self.kind,
-            "stage":     self.stage,
-            "message":   self.message,
-            "data":      dict(self.data),
+            "kind": self.kind,
+            "stage": self.stage,
+            "message": self.message,
+            "data": dict(self.data),
             "timestamp": self.timestamp,
-            "sequence":  self.sequence,
+            "sequence": self.sequence,
         }
 
 
@@ -93,15 +93,20 @@ class EventBus:
                     self._subs.remove(fn)
                 except ValueError:
                     pass
+
         return _unsub
 
-    def emit(self, kind: str, stage: str, message: str = "",
-             **data: Any) -> CampaignEvent:
+    def emit(
+        self, kind: str, stage: str, message: str = "", **data: Any
+    ) -> CampaignEvent:
         with self._lock:
             self._seq += 1
             evt = CampaignEvent(
-                kind=kind, stage=stage, message=message,
-                data=dict(data), sequence=self._seq,
+                kind=kind,
+                stage=stage,
+                message=message,
+                data=dict(data),
+                sequence=self._seq,
             )
             self._history.append(evt)
             subs = list(self._subs)
@@ -120,15 +125,23 @@ class EventBus:
         return self.emit(EventKind.STAGE_END, stage, message, **data)
 
     def progress(self, stage: str, done: int, total: int, message: str = "", **data):
-        return self.emit(EventKind.PROGRESS, stage, message,
-                         done=done, total=total, **data)
+        return self.emit(
+            EventKind.PROGRESS, stage, message, done=done, total=total, **data
+        )
 
-    def finding(self, stage: str, kind: str, location: str, severity: str,
-                evidence: str, **data):
-        return self.emit(EventKind.FINDING, stage,
-                         f"[{severity.upper()}] {kind} @ {location}",
-                         finding_kind=kind, location=location,
-                         severity=severity, evidence=evidence, **data)
+    def finding(
+        self, stage: str, kind: str, location: str, severity: str, evidence: str, **data
+    ):
+        return self.emit(
+            EventKind.FINDING,
+            stage,
+            f"[{severity.upper()}] {kind} @ {location}",
+            finding_kind=kind,
+            location=location,
+            severity=severity,
+            evidence=evidence,
+            **data,
+        )
 
     def evidence(self, stage: str, message: str, **data):
         return self.emit(EventKind.EVIDENCE, stage, message, **data)
@@ -137,10 +150,16 @@ class EventBus:
         return self.emit(EventKind.DECISION, stage, message, **data)
 
     def chain(self, name: str, severity: str, cvss: float, narrative: str, **data):
-        return self.emit(EventKind.CHAIN, "chain",
-                         f"[{severity.upper()} / {cvss:.1f}] {name}",
-                         name=name, severity=severity, cvss=cvss,
-                         narrative=narrative, **data)
+        return self.emit(
+            EventKind.CHAIN,
+            "chain",
+            f"[{severity.upper()} / {cvss:.1f}] {name}",
+            name=name,
+            severity=severity,
+            cvss=cvss,
+            narrative=narrative,
+            **data,
+        )
 
     def log(self, stage: str, message: str, **data):
         return self.emit(EventKind.LOG, stage, message, **data)

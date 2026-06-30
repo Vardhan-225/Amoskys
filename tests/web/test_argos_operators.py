@@ -19,6 +19,9 @@ from unittest.mock import patch
 import pytest
 
 from amoskys.agents.Web.argos import operators as operators_mod
+from amoskys.agents.Web.argos.ast import RestAuthzScanner
+from amoskys.agents.Web.argos.corpus import PluginSource
+from amoskys.agents.Web.argos.hunt import Hunt
 from amoskys.agents.Web.argos.operators import (
     AGREEMENT_V1,
     CURRENT_AGREEMENT_VERSION,
@@ -29,11 +32,7 @@ from amoskys.agents.Web.argos.operators import (
     agreement_sha256,
     current_operator_ref,
 )
-from amoskys.agents.Web.argos.hunt import Hunt
-from amoskys.agents.Web.argos.ast import RestAuthzScanner
-from amoskys.agents.Web.argos.corpus import PluginSource
 from amoskys.agents.Web.argos.storage import AssetsDB, OperatorRole
-
 
 # ── Fixtures ───────────────────────────────────────────────────────
 
@@ -68,7 +67,9 @@ def test_register_creates_operator_without_accepting(service, db):
 
 
 def test_register_normalizes_email_lowercase(service):
-    op = service.register(email="AKash@AMOSKYS.com", name="A", role=OperatorRole.ANALYST)
+    op = service.register(
+        email="AKash@AMOSKYS.com", name="A", role=OperatorRole.ANALYST
+    )
     assert op.email == "akash@amoskys.com"
 
 
@@ -107,8 +108,10 @@ def test_has_accepted_current_false_when_no_agreement(service):
 def test_version_bump_forces_reacceptance(service, db):
     """If the current version changes, prior acceptance no longer counts."""
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
     assert service.has_accepted_current_agreement(op.operator_id) is True
 
@@ -124,8 +127,10 @@ def test_version_bump_forces_reacceptance(service, db):
 def test_agreement_sha256_mismatch_invalidates(service, db):
     """If the stored agreement sha256 doesn't match current text, force re-accept."""
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
     # Tamper with the stored agreement_sha256 directly
     conn = db._conn_ctx()
@@ -146,8 +151,10 @@ def test_agreement_sha256_mismatch_invalidates(service, db):
 
 def test_authorize_success_for_admin_admin(service):
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ADMIN, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ADMIN,
+        accept_agreement=True,
     )
     # Admin can do admin things
     got = service.authorize(op.operator_id, OperatorRole.ADMIN, "test")
@@ -156,8 +163,10 @@ def test_authorize_success_for_admin_admin(service):
 
 def test_authorize_success_analyst_for_analyst_requirement(service):
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
     got = service.authorize(op.operator_id, OperatorRole.ANALYST, "test")
     assert got.operator_id == op.operator_id
@@ -172,8 +181,10 @@ def test_authorize_fails_when_agreement_not_accepted(service):
 
 def test_authorize_fails_when_role_insufficient(service):
     op = service.register(
-        email="v@x.com", name="V",
-        role=OperatorRole.VIEWER, accept_agreement=True,
+        email="v@x.com",
+        name="V",
+        role=OperatorRole.VIEWER,
+        accept_agreement=True,
     )
     with pytest.raises(InsufficientRoleError, match="cannot run"):
         service.authorize(op.operator_id, OperatorRole.ANALYST, "hunt")
@@ -181,8 +192,10 @@ def test_authorize_fails_when_role_insufficient(service):
 
 def test_authorize_fails_for_disabled_operator(service, db):
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ADMIN, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ADMIN,
+        accept_agreement=True,
     )
     db.disable_operator(op.operator_id)
     with pytest.raises(PermissionError, match="disabled"):
@@ -204,8 +217,10 @@ def test_authorize_denial_is_audit_logged(service, db):
 
 def test_authorize_touches_last_active(service, db):
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ADMIN, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ADMIN,
+        accept_agreement=True,
     )
     assert db.get_operator(op.operator_id).last_active_at_ns is None
     service.authorize(op.operator_id, OperatorRole.ANALYST, "hunt")
@@ -270,8 +285,10 @@ def test_current_operator_ref_empty_returns_none(monkeypatch):
 def test_hunt_records_operator_in_result_and_json(tmp_path, service):
     """Hunt carries operator identity through to the JSON report."""
     op = service.register(
-        email="analyst@amoskys.com", name="Analyst",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="analyst@amoskys.com",
+        name="Analyst",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
 
     # Make a fake fixture plugin + fake corpus
@@ -285,8 +302,10 @@ def test_hunt_records_operator_in_result_and_json(tmp_path, service):
     root.mkdir(parents=True)
     (root / "m.php").write_text(php)
     fixture = PluginSource(
-        slug="fixture", version="1.0.0",
-        extracted_root=root.parent, plugin_root=root,
+        slug="fixture",
+        version="1.0.0",
+        extracted_root=root.parent,
+        plugin_root=root,
     )
 
     class FakeCorpus:
@@ -313,8 +332,10 @@ def test_hunt_records_operator_in_result_and_json(tmp_path, service):
 
 def test_hunt_writes_audit_entries_when_db_provided(tmp_path, service, db):
     op = service.register(
-        email="a@x.com", name="A",
-        role=OperatorRole.ANALYST, accept_agreement=True,
+        email="a@x.com",
+        name="A",
+        role=OperatorRole.ANALYST,
+        accept_agreement=True,
     )
 
     php = """<?php
@@ -324,8 +345,10 @@ def test_hunt_writes_audit_entries_when_db_provided(tmp_path, service, db):
     root.mkdir(parents=True)
     (root / "m.php").write_text(php)
     fixture = PluginSource(
-        slug="fixture", version="1.0.0",
-        extracted_root=root.parent, plugin_root=root,
+        slug="fixture",
+        version="1.0.0",
+        extracted_root=root.parent,
+        plugin_root=root,
     )
 
     class FakeCorpus:
@@ -355,5 +378,6 @@ def test_hunt_writes_audit_entries_when_db_provided(tmp_path, service, db):
 
 def test_role_ranks_order_correctly():
     from amoskys.agents.Web.argos.operators import _ROLE_RANK
+
     assert _ROLE_RANK[OperatorRole.VIEWER] < _ROLE_RANK[OperatorRole.ANALYST]
     assert _ROLE_RANK[OperatorRole.ANALYST] < _ROLE_RANK[OperatorRole.ADMIN]

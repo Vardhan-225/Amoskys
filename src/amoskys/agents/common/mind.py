@@ -404,10 +404,29 @@ class AgentMind:
         # Fallback: parse key terms from text
         text_lower = text.lower()
         if "malicious" in text_lower:
-            return {"verdict": "malicious", "confidence": 0.8, "escalate": True, "reasoning": text[:300]}
-        elif "clean" in text_lower or "benign" in text_lower or "legitimate" in text_lower:
-            return {"verdict": "clean", "confidence": 0.7, "escalate": False, "reasoning": text[:300]}
-        return {"verdict": "suspicious", "confidence": 0.6, "escalate": True, "reasoning": text[:300]}
+            return {
+                "verdict": "malicious",
+                "confidence": 0.8,
+                "escalate": True,
+                "reasoning": text[:300],
+            }
+        elif (
+            "clean" in text_lower
+            or "benign" in text_lower
+            or "legitimate" in text_lower
+        ):
+            return {
+                "verdict": "clean",
+                "confidence": 0.7,
+                "escalate": False,
+                "reasoning": text[:300],
+            }
+        return {
+            "verdict": "suspicious",
+            "confidence": 0.6,
+            "escalate": True,
+            "reasoning": text[:300],
+        }
 
     def _check_learned(self, pattern_key: str) -> Optional[Dict]:
         """Check if we've seen this pattern before."""
@@ -465,7 +484,11 @@ class AgentMind:
                     verdict.confidence,
                     verdict.reasoning[:500],
                     verdict.escalate,
-                    json.dumps(verdict.probe_adjustment) if verdict.probe_adjustment else None,
+                    (
+                        json.dumps(verdict.probe_adjustment)
+                        if verdict.probe_adjustment
+                        else None
+                    ),
                 ),
             )
             conn.commit()

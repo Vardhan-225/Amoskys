@@ -12,7 +12,6 @@ from amoskys.agents.Web.argos.consent import ArtifactRef
 from amoskys.agents.Web.argos.customer import CustomerService
 from amoskys.agents.Web.argos.storage import AssetsDB, ConsentMethod
 
-
 # ── ArtifactRef round-trip ─────────────────────────────────────────
 
 

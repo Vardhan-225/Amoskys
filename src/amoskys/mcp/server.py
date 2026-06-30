@@ -82,16 +82,20 @@ mcp = FastMCP(
 @mcp.resource("fleet://status")
 def fleet_status_resource() -> str:
     """Current fleet posture — device counts, threat level, active incidents."""
-    from .tools.fleet import fleet_status
     import json
+
+    from .tools.fleet import fleet_status
+
     return json.dumps(fleet_status(), indent=2, default=str)
 
 
 @mcp.resource("fleet://brain")
 def brain_status_resource() -> str:
     """IGRIS Cloud Brain status — cycle count, posture, signals, actions."""
-    from .brain import get_brain_status
     import json
+
+    from .brain import get_brain_status
+
     return json.dumps(get_brain_status(), indent=2, default=str)
 
 
@@ -100,8 +104,8 @@ def brain_status_resource() -> str:
 
 from . import tools  # noqa: F401, E402
 
-
 # ── Startup ────────────────────────────────────────────────────────
+
 
 def main():
     """Entry point — validate config, start brain, run MCP server."""
@@ -116,12 +120,16 @@ def main():
     logger.info("Fleet DB:  %s", cfg.fleet_db)
     logger.info("Transport: SSE on %s:%d", cfg.host, cfg.port)
     logger.info("Auth:      %s", "enabled" if cfg.auth_enabled else "DISABLED")
-    logger.info("Brain:     %s (interval=%ds)",
-                "enabled" if cfg.brain_enabled else "disabled", cfg.brain_interval)
+    logger.info(
+        "Brain:     %s (interval=%ds)",
+        "enabled" if cfg.brain_enabled else "disabled",
+        cfg.brain_interval,
+    )
 
     # Start Cloud Brain
     if cfg.brain_enabled:
         from .brain import start_brain
+
         try:
             start_brain()
             logger.info("IGRIS Cloud Brain started")

@@ -68,7 +68,9 @@ DASHBOARD_RSS_LIMIT_MB = 500
 class ChildProcess:
     """Tracks a child process managed by the watchdog."""
 
-    def __init__(self, name: str, entry_module: str, rss_limit_mb: int, env: dict = None):
+    def __init__(
+        self, name: str, entry_module: str, rss_limit_mb: int, env: dict = None
+    ):
         self.name = name
         self.entry_module = entry_module
         self.rss_limit_mb = rss_limit_mb
@@ -321,7 +323,7 @@ class AMOSKYSWatchdog:
                 child.name,
                 child.entry_module,
                 child.rss_limit_mb,
-        )
+            )
 
         # Start children (staggered: collector → analyzer → dashboard)
         self.start_child(self.collector)

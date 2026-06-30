@@ -640,9 +640,7 @@ class InsertMixin:
                 if len(self._audit_dedup_cache) > 5000:
                     cutoff = ts - window_ns
                     self._audit_dedup_cache = {
-                        k: v
-                        for k, v in self._audit_dedup_cache.items()
-                        if v > cutoff
+                        k: v for k, v in self._audit_dedup_cache.items() if v > cutoff
                     }
 
             cursor = self.db.execute(
@@ -740,8 +738,10 @@ class InsertMixin:
                             "AND content_hash = ? LIMIT 1",
                             (
                                 timestamp_ns,
-                                event_data.get("timestamp_dt",
-                                    datetime.now(timezone.utc).isoformat()),
+                                event_data.get(
+                                    "timestamp_dt",
+                                    datetime.now(timezone.utc).isoformat(),
+                                ),
                                 device_id,
                                 mechanism,
                                 entry_id,
@@ -834,8 +834,10 @@ class InsertMixin:
                             "ORDER BY timestamp_ns DESC LIMIT 1",
                             (
                                 timestamp_ns,
-                                event_data.get("timestamp_dt",
-                                    datetime.now(timezone.utc).isoformat()),
+                                event_data.get(
+                                    "timestamp_dt",
+                                    datetime.now(timezone.utc).isoformat(),
+                                ),
                                 device_id,
                                 path,
                                 new_hash,

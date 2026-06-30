@@ -28,17 +28,17 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 # Re-export the PluginSource type for scanner signatures without a
 # circular import. At runtime we pass duck-typed objects.
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from amoskys.agents.Web.argos.corpus.wporg_svn import PluginSource
 
 
 # ── Findings ───────────────────────────────────────────────────────
+
 
 @dataclass
 class ASTFinding:
@@ -50,14 +50,14 @@ class ASTFinding:
     report time.
     """
 
-    scanner: str         # e.g. "rest_authz"
-    rule_id: str         # e.g. "rest_authz.permission_callback_return_true"
-    severity: str        # info | low | medium | high | critical
+    scanner: str  # e.g. "rest_authz"
+    rule_id: str  # e.g. "rest_authz.permission_callback_return_true"
+    severity: str  # info | low | medium | high | critical
     plugin_slug: str
     plugin_version: str
-    file_path: str       # relative to plugin_root
+    file_path: str  # relative to plugin_root
     line: int
-    snippet: str         # ~200 chars of surrounding source
+    snippet: str  # ~200 chars of surrounding source
     title: str
     description: str
     recommendation: str = ""
@@ -170,17 +170,18 @@ class PHPSource:
 
 # ── Call-site extraction ───────────────────────────────────────────
 
+
 @dataclass
 class PHPCallSite:
     """One parsed call like `register_rest_route( 'ns', '/r', array(...) )`."""
 
-    name: str           # function name (unqualified; we don't track namespaces)
-    args_raw: str       # text between the outermost parens (no enclosing parens)
-    args: List[str]     # top-level args split on unquoted, unbracketed commas
-    start_offset: int   # offset of the function name in source.raw
-    args_start: int     # offset of the '(' in source.raw
-    args_end: int       # offset of the matching ')' in source.raw
-    line: int           # 1-based line of the function name
+    name: str  # function name (unqualified; we don't track namespaces)
+    args_raw: str  # text between the outermost parens (no enclosing parens)
+    args: List[str]  # top-level args split on unquoted, unbracketed commas
+    start_offset: int  # offset of the function name in source.raw
+    args_start: int  # offset of the '(' in source.raw
+    args_end: int  # offset of the matching ')' in source.raw
+    line: int  # 1-based line of the function name
     source: PHPSource
 
     def arg(self, i: int) -> Optional[str]:
@@ -256,7 +257,9 @@ def find_calls(source: PHPSource, name: str) -> List[PHPCallSite]:
 # so they see only structural brackets, never ones embedded in strings.
 
 
-def _match_close(text: str, open_idx: int, open_ch: str, close_ch: str) -> Optional[int]:
+def _match_close(
+    text: str, open_idx: int, open_ch: str, close_ch: str
+) -> Optional[int]:
     """Return the index of the close bracket matching text[open_idx]."""
     depth = 0
     pairs = {"(": ")", "[": "]", "{": "}"}
@@ -274,7 +277,9 @@ def _match_close(text: str, open_idx: int, open_ch: str, close_ch: str) -> Optio
     return None
 
 
-def _split_top_level_ranges(masked: str, sep: str = ",", limit: int = -1) -> List[Tuple[int, int]]:
+def _split_top_level_ranges(
+    masked: str, sep: str = ",", limit: int = -1
+) -> List[Tuple[int, int]]:
     """Find (start, end) offsets of top-level segments split by `sep`.
 
     Operates on MASKED text; returned offsets apply equally to raw
@@ -348,6 +353,7 @@ def _strip_quotes(text: str) -> str:
 
 
 # ── Scanner ABC ────────────────────────────────────────────────────
+
 
 class ASTScanner(ABC):
     """Base class for pattern-based PHP source scanners."""

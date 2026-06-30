@@ -38,16 +38,11 @@ What we DON'T use
   - Any database we cannot re-query freely (keeps the module offline-testable)
 """
 
-from amoskys.agents.Web.argos.prospecting.ct_discovery import (
-    discover_domains_via_ct,
-)
+from amoskys.agents.Web.argos.prospecting.ct_discovery import discover_domains_via_ct
+from amoskys.agents.Web.argos.prospecting.scoring import Prospect, score_prospect
 from amoskys.agents.Web.argos.prospecting.wp_indicator import (
     WPIndicatorResult,
     check_wp_indicator,
-)
-from amoskys.agents.Web.argos.prospecting.scoring import (
-    Prospect,
-    score_prospect,
 )
 from amoskys.agents.Web.argos.prospecting.wp_leads import (
     ProspectingRun,

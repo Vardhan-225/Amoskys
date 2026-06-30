@@ -22,17 +22,19 @@ class MCPConfig:
     port: int = int(os.getenv("MCP_PORT", "8444"))
 
     # ── Auth ───────────────────────────────────────────────────
-    api_keys: frozenset[str] = field(default_factory=lambda: frozenset(
-        k.strip()
-        for k in os.getenv("MCP_API_KEYS", "").split(",")
-        if k.strip()
-    ))
+    api_keys: frozenset[str] = field(
+        default_factory=lambda: frozenset(
+            k.strip() for k in os.getenv("MCP_API_KEYS", "").split(",") if k.strip()
+        )
+    )
     auth_enabled: bool = os.getenv("MCP_AUTH_ENABLED", "true").lower() == "true"
 
     # ── Brain ──────────────────────────────────────────────────
     brain_enabled: bool = os.getenv("MCP_BRAIN_ENABLED", "true").lower() == "true"
     brain_interval: int = int(os.getenv("MCP_BRAIN_INTERVAL", "60"))
-    brain_correlation_window: int = int(os.getenv("MCP_BRAIN_CORRELATION_WINDOW", "300"))
+    brain_correlation_window: int = int(
+        os.getenv("MCP_BRAIN_CORRELATION_WINDOW", "300")
+    )
 
     # ── Limits ─────────────────────────────────────────────────
     max_query_rows: int = int(os.getenv("MCP_MAX_QUERY_ROWS", "500"))

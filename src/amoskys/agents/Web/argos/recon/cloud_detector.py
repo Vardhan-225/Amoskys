@@ -60,8 +60,9 @@ class Provider(str, Enum):
 
 class CDNBehavior(str, Enum):
     """How this provider affects recon strategy."""
-    CDN_PROXY = "cdn_proxy"           # Cloudflare, Akamai, Fastly — origin hidden
-    CLOUD_HOSTING = "cloud_hosting"   # AWS/Azure/GCP — customer may own this IP
+
+    CDN_PROXY = "cdn_proxy"  # Cloudflare, Akamai, Fastly — origin hidden
+    CLOUD_HOSTING = "cloud_hosting"  # AWS/Azure/GCP — customer may own this IP
     UNKNOWN = "unknown"
 
 
@@ -166,116 +167,108 @@ class CloudDetector:
 _EMBEDDED_RANGES: List[Tuple[str, Provider, CDNBehavior]] = [
     # ── Cloudflare (IPv4) — stable, publicly documented ────────────
     # https://www.cloudflare.com/ips-v4
-    ("173.245.48.0/20",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("103.21.244.0/22",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("103.22.200.0/22",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("103.31.4.0/22",      Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("141.101.64.0/18",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("108.162.192.0/18",   Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("190.93.240.0/20",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("188.114.96.0/20",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("197.234.240.0/22",   Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("198.41.128.0/17",    Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("162.158.0.0/15",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("104.16.0.0/13",      Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("104.24.0.0/14",      Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("172.64.0.0/13",      Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("131.0.72.0/22",      Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-
+    ("173.245.48.0/20", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("103.21.244.0/22", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("103.22.200.0/22", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("103.31.4.0/22", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("141.101.64.0/18", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("108.162.192.0/18", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("190.93.240.0/20", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("188.114.96.0/20", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("197.234.240.0/22", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("198.41.128.0/17", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("162.158.0.0/15", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("104.16.0.0/13", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("104.24.0.0/14", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("172.64.0.0/13", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("131.0.72.0/22", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
     # ── Cloudflare (IPv6) ──────────────────────────────────────────
-    ("2400:cb00::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2606:4700::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2803:f800::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2405:b500::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2405:8100::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2a06:98c0::/29",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-    ("2c0f:f248::/32",     Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
-
+    ("2400:cb00::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2606:4700::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2803:f800::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2405:b500::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2405:8100::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2a06:98c0::/29", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
+    ("2c0f:f248::/32", Provider.CLOUDFLARE, CDNBehavior.CDN_PROXY),
     # ── AWS major blocks (sample; not exhaustive) ──────────────────
     # The full AWS feed is ~7 MB. v1 covers the highest-traffic blocks.
-    ("3.0.0.0/8",          Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("13.32.0.0/15",       Provider.AWS, CDNBehavior.CLOUD_HOSTING),   # CloudFront
-    ("13.224.0.0/14",      Provider.AWS, CDNBehavior.CDN_PROXY),       # CloudFront
-    ("18.32.0.0/11",       Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("34.192.0.0/10",      Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("35.71.0.0/16",       Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("52.0.0.0/8",         Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("54.0.0.0/8",         Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("99.78.128.0/17",     Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("107.20.0.0/14",      Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("184.72.0.0/15",      Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-    ("204.236.128.0/17",   Provider.AWS, CDNBehavior.CLOUD_HOSTING),
-
+    ("3.0.0.0/8", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("13.32.0.0/15", Provider.AWS, CDNBehavior.CLOUD_HOSTING),  # CloudFront
+    ("13.224.0.0/14", Provider.AWS, CDNBehavior.CDN_PROXY),  # CloudFront
+    ("18.32.0.0/11", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("34.192.0.0/10", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("35.71.0.0/16", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("52.0.0.0/8", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("54.0.0.0/8", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("99.78.128.0/17", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("107.20.0.0/14", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("184.72.0.0/15", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
+    ("204.236.128.0/17", Provider.AWS, CDNBehavior.CLOUD_HOSTING),
     # ── Azure major blocks (sample) ────────────────────────────────
-    ("13.64.0.0/11",       Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("20.0.0.0/8",         Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("40.64.0.0/10",       Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("51.0.0.0/8",         Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("65.52.0.0/14",       Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("104.40.0.0/13",      Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("137.116.0.0/15",     Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("157.54.0.0/15",      Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-    ("168.61.0.0/16",      Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
-
+    ("13.64.0.0/11", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("20.0.0.0/8", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("40.64.0.0/10", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("51.0.0.0/8", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("65.52.0.0/14", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("104.40.0.0/13", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("137.116.0.0/15", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("157.54.0.0/15", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
+    ("168.61.0.0/16", Provider.AZURE, CDNBehavior.CLOUD_HOSTING),
     # ── Google Cloud + Google services ─────────────────────────────
-    ("8.8.4.0/24",         Provider.GCP, CDNBehavior.CLOUD_HOSTING),  # dns
-    ("8.8.8.0/24",         Provider.GCP, CDNBehavior.CLOUD_HOSTING),  # dns
-    ("34.64.0.0/10",       Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("35.184.0.0/13",      Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("35.192.0.0/14",      Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("35.196.0.0/15",      Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("35.198.0.0/16",      Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("104.196.0.0/14",     Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("107.178.192.0/18",   Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("130.211.0.0/16",     Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("146.148.0.0/17",     Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("162.216.148.0/22",   Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-    ("162.222.176.0/21",   Provider.GCP, CDNBehavior.CLOUD_HOSTING),
-
+    ("8.8.4.0/24", Provider.GCP, CDNBehavior.CLOUD_HOSTING),  # dns
+    ("8.8.8.0/24", Provider.GCP, CDNBehavior.CLOUD_HOSTING),  # dns
+    ("34.64.0.0/10", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("35.184.0.0/13", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("35.192.0.0/14", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("35.196.0.0/15", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("35.198.0.0/16", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("104.196.0.0/14", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("107.178.192.0/18", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("130.211.0.0/16", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("146.148.0.0/17", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("162.216.148.0/22", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
+    ("162.222.176.0/21", Provider.GCP, CDNBehavior.CLOUD_HOSTING),
     # ── Akamai (CDN) ───────────────────────────────────────────────
-    ("23.32.0.0/11",       Provider.AKAMAI, CDNBehavior.CDN_PROXY),
-    ("23.192.0.0/11",      Provider.AKAMAI, CDNBehavior.CDN_PROXY),
-    ("96.16.0.0/15",       Provider.AKAMAI, CDNBehavior.CDN_PROXY),
-    ("184.24.0.0/13",      Provider.AKAMAI, CDNBehavior.CDN_PROXY),
-    ("104.64.0.0/10",      Provider.AKAMAI, CDNBehavior.CDN_PROXY),
-
+    ("23.32.0.0/11", Provider.AKAMAI, CDNBehavior.CDN_PROXY),
+    ("23.192.0.0/11", Provider.AKAMAI, CDNBehavior.CDN_PROXY),
+    ("96.16.0.0/15", Provider.AKAMAI, CDNBehavior.CDN_PROXY),
+    ("184.24.0.0/13", Provider.AKAMAI, CDNBehavior.CDN_PROXY),
+    ("104.64.0.0/10", Provider.AKAMAI, CDNBehavior.CDN_PROXY),
     # ── Fastly (CDN) ───────────────────────────────────────────────
-    ("23.235.32.0/20",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("43.249.72.0/22",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("103.244.50.0/24",    Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("103.245.222.0/23",   Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("103.245.224.0/24",   Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("146.75.0.0/17",      Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("151.101.0.0/16",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("157.52.64.0/18",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("167.82.0.0/17",      Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("167.82.128.0/20",    Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("167.82.160.0/20",    Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("167.82.224.0/20",    Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("172.111.64.0/18",    Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("185.31.16.0/22",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("199.27.72.0/21",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-    ("199.232.0.0/16",     Provider.FASTLY, CDNBehavior.CDN_PROXY),
-
+    ("23.235.32.0/20", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("43.249.72.0/22", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("103.244.50.0/24", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("103.245.222.0/23", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("103.245.224.0/24", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("146.75.0.0/17", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("151.101.0.0/16", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("157.52.64.0/18", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("167.82.0.0/17", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("167.82.128.0/20", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("167.82.160.0/20", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("167.82.224.0/20", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("172.111.64.0/18", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("185.31.16.0/22", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("199.27.72.0/21", Provider.FASTLY, CDNBehavior.CDN_PROXY),
+    ("199.232.0.0/16", Provider.FASTLY, CDNBehavior.CDN_PROXY),
     # ── DigitalOcean (small hosting) ───────────────────────────────
-    ("45.55.0.0/16",       Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("138.68.0.0/16",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("157.230.0.0/16",     Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("159.65.0.0/16",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("159.89.0.0/16",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("165.22.0.0/16",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("167.99.0.0/16",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("178.62.0.0/17",      Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-    ("206.189.0.0/16",     Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
-
+    ("45.55.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("138.68.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("157.230.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("159.65.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("159.89.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("165.22.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("167.99.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("178.62.0.0/17", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
+    ("206.189.0.0/16", Provider.DIGITALOCEAN, CDNBehavior.CLOUD_HOSTING),
     # ── Linode ────────────────────────────────────────────────────
-    ("50.116.0.0/16",      Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("66.175.208.0/20",    Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("96.126.96.0/19",     Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("139.162.0.0/16",     Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("172.104.0.0/15",     Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("173.255.192.0/18",   Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
-    ("198.58.96.0/19",     Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("50.116.0.0/16", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("66.175.208.0/20", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("96.126.96.0/19", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("139.162.0.0/16", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("172.104.0.0/15", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("173.255.192.0/18", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
+    ("198.58.96.0/19", Provider.LINODE, CDNBehavior.CLOUD_HOSTING),
 ]
 
 

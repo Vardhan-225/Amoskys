@@ -24,7 +24,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 
@@ -64,11 +64,14 @@ class SubfinderTool(Tool):
 
         cmd: List[str] = [
             "subfinder",
-            "-d", clean,
+            "-d",
+            clean,
             "-silent",
             "-json",
-            "-o", str(out_path),
-            "-timeout", "10",
+            "-o",
+            str(out_path),
+            "-timeout",
+            "10",
         ]
         if self.recursive:
             cmd.append("-recursive")

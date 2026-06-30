@@ -85,8 +85,9 @@ class QualityMixin:
         # For SECURITY events (probe detections), validate detection-quality
         # fields instead: the event must carry meaningful detection metadata.
         # For OBSERVATION events (raw data), the domain router handles schema.
-        is_security_event = (event.HasField("security_event")
-                             if hasattr(event, "HasField") else False)
+        is_security_event = (
+            event.HasField("security_event") if hasattr(event, "HasField") else False
+        )
 
         if is_security_event:
             # Detection events: validate that the probe produced useful output

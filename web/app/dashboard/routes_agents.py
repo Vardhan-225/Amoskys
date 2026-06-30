@@ -1798,6 +1798,7 @@ def agent_live_data(agent_id):
     if os.environ.get("AMOSKYS_OPS_SERVER"):
         try:
             from .routes_command_center import _ops_get
+
             data = _ops_get("/api/v1/devices")
             if data and data.get("devices"):
                 dev = data["devices"][0]

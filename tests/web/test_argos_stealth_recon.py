@@ -10,16 +10,14 @@ from __future__ import annotations
 
 import io
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from amoskys.agents.Web.argos.recon.stealth import (
-    StealthRecon,
-    StealthFinding,
-)
+from amoskys.agents.Web.argos.recon.stealth import StealthFinding, StealthRecon
 
 
-def _mock_response(status: int = 200, body: str = "",
-                   headers: dict = None, url: str = None):
+def _mock_response(
+    status: int = 200, body: str = "", headers: dict = None, url: str = None
+):
     """Build a mock that behaves like urllib.request.urlopen's context
     manager return value."""
     resp = MagicMock()
@@ -39,6 +37,7 @@ def _run_with_routes(routes: dict):
     routes: dict of path → (status, body, headers)
     Paths not listed return (404, '', {}).
     """
+
     def fake_urlopen(req, timeout=None):
         url = req.full_url if hasattr(req, "full_url") else req
         path = url.split("://", 1)[-1].split("/", 1)[-1]
@@ -56,8 +55,10 @@ def _run_with_routes(routes: dict):
 
 
 def test_readme_html_leaks_version():
-    html = ("<!DOCTYPE html><html><body>"
-            "<p>This is WordPress Version 6.4.2</p></body></html>")
+    html = (
+        "<!DOCTYPE html><html><body>"
+        "<p>This is WordPress Version 6.4.2</p></body></html>"
+    )
     dossier = _run_with_routes({"/readme.html": (200, html, {})})
     hits = [f for f in dossier.findings if f.check_id == "wp.readme_html"]
     assert hits
@@ -75,15 +76,17 @@ def test_wp_login_reachable():
 
 
 def test_rest_api_index_leaks_plugin_namespaces():
-    body = json.dumps({
-        "namespaces": [
-            "wp/v2",
-            "oembed/1.0",
-            "contact-form-7/v1",
-            "woocommerce/v3",
-            "yoast/v1",
-        ],
-    })
+    body = json.dumps(
+        {
+            "namespaces": [
+                "wp/v2",
+                "oembed/1.0",
+                "contact-form-7/v1",
+                "woocommerce/v3",
+                "yoast/v1",
+            ],
+        }
+    )
     dossier = _run_with_routes({"/wp-json/": (200, body, {})})
     hits = [f for f in dossier.findings if f.check_id == "wp.rest_index"]
     assert hits
@@ -92,8 +95,10 @@ def test_rest_api_index_leaks_plugin_namespaces():
 
 
 def test_meta_generator_leaks_version():
-    html = ('<html><head><meta name="generator" content="WordPress 6.3.1"/>'
-            '</head><body>hi</body></html>')
+    html = (
+        '<html><head><meta name="generator" content="WordPress 6.3.1"/>'
+        "</head><body>hi</body></html>"
+    )
     dossier = _run_with_routes({"/": (200, html, {})})
     hits = [f for f in dossier.findings if f.check_id == "wp.meta_generator"]
     assert hits
@@ -166,13 +171,19 @@ def test_plugin_inventory_from_asset_urls():
 
 
 def test_infra_headers_disclose_stack():
-    dossier = _run_with_routes({
-        "/": (200, "<html></html>", {
-            "Server": "nginx/1.24.0",
-            "X-Powered-By": "PHP/8.3.1",
-            "cf-ray": "abc123-DFW",
-        }),
-    })
+    dossier = _run_with_routes(
+        {
+            "/": (
+                200,
+                "<html></html>",
+                {
+                    "Server": "nginx/1.24.0",
+                    "X-Powered-By": "PHP/8.3.1",
+                    "cf-ray": "abc123-DFW",
+                },
+            ),
+        }
+    )
     hits = [f for f in dossier.findings if f.check_id == "infra.headers"]
     assert hits
     assert hits[0].severity == "info"
@@ -183,10 +194,12 @@ def test_infra_headers_disclose_stack():
 
 
 def test_rest_users_endpoint_leaks():
-    body = json.dumps([
-        {"id": 1, "slug": "admin",  "name": "Admin User"},
-        {"id": 2, "slug": "editor", "name": "Editor"},
-    ])
+    body = json.dumps(
+        [
+            {"id": 1, "slug": "admin", "name": "Admin User"},
+            {"id": 2, "slug": "editor", "name": "Editor"},
+        ]
+    )
     dossier = _run_with_routes({"/wp-json/wp/v2/users": (200, body, {})})
     hits = [f for f in dossier.findings if f.check_id == "users.wp_rest"]
     assert hits
@@ -197,9 +210,15 @@ def test_rest_users_endpoint_leaks():
 
 def test_author_redirect_leaks_login():
     # urllib's follow-redirects behavior — the response.url is the landing page.
-    dossier = _run_with_routes({
-        "/?author=1": (200, "<html></html>", {}),  # would redirect to /author/login/
-    })
+    dossier = _run_with_routes(
+        {
+            "/?author=1": (
+                200,
+                "<html></html>",
+                {},
+            ),  # would redirect to /author/login/
+        }
+    )
     # Without a real redirect, the check won't fire. Verify it doesn't crash.
     assert isinstance(dossier.findings, list)
 
@@ -248,10 +267,12 @@ def test_every_finding_has_mandate_and_references():
 </head><body>
 <script src="https://cdn.other.com/x.js"></script>
 </body></html>"""
-    dossier = _run_with_routes({
-        "/": (200, html, {"Server": "nginx"}),
-        "/readme.html": (200, "WordPress Version 6.3.1", {}),
-    })
+    dossier = _run_with_routes(
+        {
+            "/": (200, html, {"Server": "nginx"}),
+            "/readme.html": (200, "WordPress Version 6.3.1", {}),
+        }
+    )
     assert dossier.findings
     for f in dossier.findings:
         assert f.mandate, f"finding {f.check_id} missing mandate"

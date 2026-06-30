@@ -16,7 +16,7 @@ class Severity(str, Enum):
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
-    WARN = "warn"          # Aegis emits 'warn' (WordPress convention)
+    WARN = "warn"  # Aegis emits 'warn' (WordPress convention)
     HIGH = "high"
     CRITICAL = "critical"
 
@@ -38,7 +38,9 @@ class RequestContext(BaseModel):
 class EventEnvelope(BaseModel):
     """Canonical event envelope, v1 schema."""
 
-    schema_version: str = Field(..., description="Envelope schema version, currently '1'")
+    schema_version: str = Field(
+        ..., description="Envelope schema version, currently '1'"
+    )
     event_id: str
     event_type: str
     event_timestamp_ns: int
@@ -49,7 +51,9 @@ class EventEnvelope(BaseModel):
     plugin_version: Optional[str] = None
 
     # Per-origin metadata
-    origin: Optional[Origin] = None  # aegis emits implicit via the plugin, argos sets it
+    origin: Optional[Origin] = (
+        None  # aegis emits implicit via the plugin, argos sets it
+    )
 
     # Chain integrity
     prev_sig: Optional[str] = None
@@ -68,7 +72,9 @@ class EventEnvelope(BaseModel):
         # Must be a dotted namespace like "aegis.auth.login_failed" or "argos.finding.cve"
         parts = v.split(".")
         if len(parts) < 2 or not parts[0].isalnum():
-            raise ValueError(f"event_type must be dotted (e.g. 'aegis.auth.login_failed'), got: {v}")
+            raise ValueError(
+                f"event_type must be dotted (e.g. 'aegis.auth.login_failed'), got: {v}"
+            )
         return v
 
     @field_validator("schema_version")

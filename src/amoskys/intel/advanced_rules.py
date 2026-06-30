@@ -105,9 +105,7 @@ def rule_apt_initial_access_chain(
         return None
 
     # Step 2: Find discovery commands within 10 min of auth
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     for auth_event in auth_events:
         auth_time = auth_event.timestamp
@@ -200,9 +198,7 @@ def rule_fileless_attack(
 
     Fileless attacks avoid writing to disk, making them harder to detect.
     """
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     flow_events = [e for e in events if e.flow_event]
 
@@ -312,9 +308,7 @@ def rule_log_tampering(
 
     import re
 
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     audit_events = [e for e in events if e.audit_event]
 
@@ -426,9 +420,7 @@ def rule_security_tool_disable(
 
     import re
 
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     for proc_event in process_events:
         cmdline = proc_event.process_event.get("cmdline", "")
@@ -493,9 +485,7 @@ def rule_credential_dumping_chain(
 
     import re
 
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     audit_events = [e for e in events if e.audit_event]
 
@@ -691,9 +681,7 @@ def rule_internal_reconnaissance(
     """
     flow_events = [e for e in events if e.flow_event]
 
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     # Check for reconnaissance commands
     recon_commands = [
@@ -802,9 +790,7 @@ def rule_staged_exfiltration(
 
     This is a classic data theft pattern.
     """
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     flow_events = [e for e in events if e.flow_event]
 

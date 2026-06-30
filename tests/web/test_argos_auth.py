@@ -10,19 +10,26 @@ import time
 
 import pytest
 
-from amoskys.agents.Web.argos.auth import (
-    # jwt
-    decode_jwt_unsafe, attack_alg_none, attack_key_confusion,
-    attack_weak_secret, attack_kid_injection, attack_jku_spoofing,
-    scan_jwt, JWTReport,
-    # session
-    forge_wp_auth_cookie, analyze_session_entropy, analyze_reset_tokens,
-    scan_sessions, SessionReport,
-    # ratelimit
-    bypass_case_variation, bypass_param_pollution, bypass_header_rotation,
-    probe_ratelimit, RateLimitReport,
+from amoskys.agents.Web.argos.auth import (  # jwt; session; ratelimit
+    JWTReport,
+    RateLimitReport,
+    SessionReport,
+    analyze_reset_tokens,
+    analyze_session_entropy,
+    attack_alg_none,
+    attack_jku_spoofing,
+    attack_key_confusion,
+    attack_kid_injection,
+    attack_weak_secret,
+    bypass_case_variation,
+    bypass_header_rotation,
+    bypass_param_pollution,
+    decode_jwt_unsafe,
+    forge_wp_auth_cookie,
+    probe_ratelimit,
+    scan_jwt,
+    scan_sessions,
 )
-
 
 # ── JWT helpers ──────────────────────────────────────────────────
 
@@ -89,6 +96,7 @@ def test_attack_key_confusion_signs_with_public_key():
     signing_input = f"{parts[0]}.{parts[1]}".encode()
     expected = hmac.new(fake_pub_pem.encode(), signing_input, hashlib.sha256).digest()
     from amoskys.agents.Web.argos.auth.jwt import _b64url_decode
+
     assert _b64url_decode(parts[2]) == expected
 
 
@@ -164,7 +172,10 @@ def test_scan_jwt_runs_applicable_techniques():
 
 def test_scan_jwt_includes_rs_confusion_when_pubkey_supplied():
     tok = _make_hs256({"sub": "admin"})
-    rep = scan_jwt(tok, rsa_public_key_pem="-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----")
+    rep = scan_jwt(
+        tok,
+        rsa_public_key_pem="-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----",
+    )
     assert any(f.technique == "rs_hs_confusion" for f in rep.findings)
 
 
@@ -195,8 +206,14 @@ def test_forge_wp_auth_cookie_uses_password_fragment():
     # The pass_frag is substr(password_hash, 8, 4) — bytes 8..12
     # chars 0-3: "$P$B", 4-7: "XXXX", 8-11: "UNIQ" → frag = "UNIQ"
     pwd = "$P$B" + "X" * 4 + "UNIQUEFRAG" + "YYY"
-    f = forge_wp_auth_cookie(username="u", password_hash=pwd,
-                              auth_key="k", auth_salt="s", expiration=1, token="t" * 64)
+    f = forge_wp_auth_cookie(
+        username="u",
+        password_hash=pwd,
+        auth_key="k",
+        auth_salt="s",
+        expiration=1,
+        token="t" * 64,
+    )
     assert "UNIQ" in f.evidence
 
 
@@ -212,6 +229,7 @@ def test_analyze_session_entropy_flags_weak_tokens():
 
 def test_analyze_session_entropy_ok_for_random_tokens():
     import secrets
+
     strong = [secrets.token_hex(32) for _ in range(10)]
     f = analyze_session_entropy(strong)
     # mean entropy of hex tokens ~3.9-4.0 bits/char → info (above 3.5)
@@ -236,6 +254,7 @@ def test_analyze_reset_tokens_detects_timestamp_bleed():
 
 def test_analyze_reset_tokens_ok_on_random():
     import secrets
+
     tokens = [(secrets.token_hex(16), 1_700_000_000 + i) for i in range(5)]
     f = analyze_reset_tokens(tokens)
     # token_hex is random hex strings; ordering is unpredictable so likely non-monotonic
@@ -312,14 +331,20 @@ class _FakeSender:
 def test_probe_ratelimit_detects_429(monkeypatch):
     # Patch time.sleep so the test is fast
     import amoskys.agents.Web.argos.auth.ratelimit as rl
+
     monkeypatch.setattr(rl.time, "sleep", lambda _s: None)
     scripted = [
         *[(200, {}, "", 10) for _ in range(4)],
         (429, {"Retry-After": "60"}, "", 10),
     ]
     sender = _FakeSender(scripted)
-    rep = probe_ratelimit("https://t/", "/api/login", sender=sender, max_requests=20,
-                           request_interval_s=0.0)
+    rep = probe_ratelimit(
+        "https://t/",
+        "/api/login",
+        sender=sender,
+        max_requests=20,
+        request_interval_s=0.0,
+    )
     assert rep.limit_requests == 5
     threshold = [f for f in rep.findings if f.technique == "ratelimit_threshold"]
     assert threshold
@@ -328,35 +353,47 @@ def test_probe_ratelimit_detects_429(monkeypatch):
 
 def test_probe_ratelimit_returns_no_limit_when_never_throttled(monkeypatch):
     import amoskys.agents.Web.argos.auth.ratelimit as rl
+
     monkeypatch.setattr(rl.time, "sleep", lambda _s: None)
     scripted = [(200, {}, "", 10) for _ in range(10)]
     sender = _FakeSender(scripted)
-    rep = probe_ratelimit("https://t/", "/api", sender=sender, max_requests=10,
-                           request_interval_s=0.0)
+    rep = probe_ratelimit(
+        "https://t/", "/api", sender=sender, max_requests=10, request_interval_s=0.0
+    )
     assert rep.limit_requests is None
     assert any("no 429 observed" in f.evidence for f in rep.findings)
 
 
 def test_bypass_header_rotation_counts_non_429_successes(monkeypatch):
     import amoskys.agents.Web.argos.auth.ratelimit as rl
+
     monkeypatch.setattr(rl.time, "sleep", lambda _s: None)
     # All succeed → bypass!
     scripted = [(200, {}, "", 10) for _ in range(30)]
     sender = _FakeSender(scripted)
-    f = bypass_header_rotation("https://t/", "/api/login",
-                                confirmed_limit_requests=5, attempt_count=30,
-                                sender=sender)
+    f = bypass_header_rotation(
+        "https://t/",
+        "/api/login",
+        confirmed_limit_requests=5,
+        attempt_count=30,
+        sender=sender,
+    )
     assert f.severity == "high"
     assert f.metadata["bypassed"] is True
 
 
 def test_bypass_header_rotation_reports_info_when_no_bypass(monkeypatch):
     import amoskys.agents.Web.argos.auth.ratelimit as rl
+
     monkeypatch.setattr(rl.time, "sleep", lambda _s: None)
     scripted = [(429, {}, "", 10) for _ in range(30)]
     sender = _FakeSender(scripted)
-    f = bypass_header_rotation("https://t/", "/api/login",
-                                confirmed_limit_requests=5, attempt_count=30,
-                                sender=sender)
+    f = bypass_header_rotation(
+        "https://t/",
+        "/api/login",
+        confirmed_limit_requests=5,
+        attempt_count=30,
+        sender=sender,
+    )
     assert f.severity == "info"
     assert f.metadata["bypassed"] is False

@@ -32,7 +32,10 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
-from amoskys.agents.os.macos.auth.collector import MacOSAuthCollector, StreamingAuthCollector
+from amoskys.agents.os.macos.auth.collector import (
+    MacOSAuthCollector,
+    StreamingAuthCollector,
+)
 from amoskys.agents.os.macos.auth.probes import create_auth_probes
 from amoskys.config import get_config
 

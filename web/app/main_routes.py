@@ -5,7 +5,14 @@ Flask Routes and Views
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, redirect, render_template, send_from_directory
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    send_from_directory,
+)
 
 main_bp = Blueprint("main", __name__)
 
@@ -122,6 +129,7 @@ def deploy_download_pkg_file(download_id):
 
     # Verify the download_id exists (don't consume it — config endpoint does that)
     from web.app.dashboard.routes_deploy import _pending_downloads
+
     if download_id not in _pending_downloads:
         return "Download expired or not found", 404
 
@@ -132,6 +140,7 @@ def deploy_download_pkg_file(download_id):
     for p in pkg_candidates:
         if p.exists():
             from flask import send_file
+
             return send_file(str(p), as_attachment=True, download_name="AMOSKYS.pkg")
 
     return "Package not found", 404
@@ -159,4 +168,6 @@ def deploy_install_script():
         if path.exists():
             return Response(path.read_text(), mimetype="text/x-shellscript")
 
-    return Response("# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404)
+    return Response(
+        "# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404
+    )

@@ -45,7 +45,6 @@ from amoskys.agents.Web.argos.storage import (
     SurfaceAsset,
 )
 
-
 # ── Storage layer ──────────────────────────────────────────────────
 
 
@@ -62,7 +61,9 @@ def test_db_initialize_sets_0600_perms(tmp_path):
     d.initialize()
     mode = path.stat().st_mode & 0o777
     # Must not be world/group readable
-    assert mode & (stat.S_IRGRP | stat.S_IROTH) == 0, f"perms too permissive: {oct(mode)}"
+    assert (
+        mode & (stat.S_IRGRP | stat.S_IROTH) == 0
+    ), f"perms too permissive: {oct(mode)}"
 
 
 def test_db_refuses_world_readable_file(tmp_path):
@@ -74,7 +75,9 @@ def test_db_refuses_world_readable_file(tmp_path):
 
 
 def test_customer_crud_roundtrip(db):
-    c = Customer.new("Acme Corp", "acme.com", ConsentMethod.DNS_TXT, consent_token="t-123")
+    c = Customer.new(
+        "Acme Corp", "acme.com", ConsentMethod.DNS_TXT, consent_token="t-123"
+    )
     db.create_customer(c)
 
     got = db.get_customer(c.customer_id)
@@ -93,10 +96,20 @@ def test_upsert_asset_deduplicates_and_merges_confidence(db):
     c = Customer.new("Acme", "acme.com", ConsentMethod.DNS_TXT, "t")
     db.create_customer(c)
 
-    a1 = SurfaceAsset.new(c.customer_id, AssetKind.SUBDOMAIN, "api.acme.com",
-                          source="ct_logs.crtsh", confidence=0.7)
-    a2 = SurfaceAsset.new(c.customer_id, AssetKind.SUBDOMAIN, "api.acme.com",
-                          source="dns_resolve", confidence=0.95)
+    a1 = SurfaceAsset.new(
+        c.customer_id,
+        AssetKind.SUBDOMAIN,
+        "api.acme.com",
+        source="ct_logs.crtsh",
+        confidence=0.7,
+    )
+    a2 = SurfaceAsset.new(
+        c.customer_id,
+        AssetKind.SUBDOMAIN,
+        "api.acme.com",
+        source="dns_resolve",
+        confidence=0.95,
+    )
     id1 = db.upsert_asset(a1)
     id2 = db.upsert_asset(a2)
 
@@ -146,7 +159,8 @@ def test_rate_limiter_halves_rps_on_block():
 def test_rate_limiter_blocks_after_threshold():
     fake_now = [0.0]
 
-    def now(): return fake_now[0]
+    def now():
+        return fake_now[0]
 
     def sleep(s):  # fast-forward virtual time instead of actually sleeping
         fake_now[0] += s
@@ -154,7 +168,8 @@ def test_rate_limiter_blocks_after_threshold():
     rl = AdaptiveRateLimiter(
         "target",
         RateLimiterConfig(block_threshold=2, initial_rps=1.0, backoff_base_s=1.0),
-        now_fn=now, sleep_fn=sleep,
+        now_fn=now,
+        sleep_fn=sleep,
     )
     rl.wait()
     rl.observe(429)
@@ -178,7 +193,8 @@ def test_rate_limiter_respects_retry_after():
     fake_now = [100.0]
     sleeps = []
 
-    def now(): return fake_now[0]
+    def now():
+        return fake_now[0]
 
     def sleep(s):
         sleeps.append(s)
@@ -187,13 +203,16 @@ def test_rate_limiter_respects_retry_after():
     rl = AdaptiveRateLimiter(
         "target",
         RateLimiterConfig(block_threshold=5, initial_rps=1.0, backoff_base_s=30.0),
-        now_fn=now, sleep_fn=sleep,
+        now_fn=now,
+        sleep_fn=sleep,
     )
     rl.wait()  # first token free
     rl.observe(429, retry_after_s=7.0)
     rl.wait()  # should sleep ~7s
     # sleeps has jitter so accept a band
-    assert any(5.0 <= s <= 9.5 for s in sleeps), f"expected retry-after-driven sleep; got {sleeps}"
+    assert any(
+        5.0 <= s <= 9.5 for s in sleeps
+    ), f"expected retry-after-driven sleep; got {sleeps}"
 
 
 # ── Stealth: identity pool ─────────────────────────────────────────
@@ -233,12 +252,12 @@ def test_session_headers_include_sec_ch_ua_when_appropriate():
 
 
 def test_ct_logs_emits_subdomains_from_mock_response():
-    mock_json = b'''[
+    mock_json = b"""[
         {"id": 1, "name_value": "www.acme.com", "issuer_ca_id": 1},
         {"id": 2, "name_value": "api.acme.com\\nadmin.acme.com", "issuer_ca_id": 2},
         {"id": 3, "name_value": "*.acme.com", "issuer_ca_id": 3},
         {"id": 4, "name_value": "unrelated.example.org", "issuer_ca_id": 4}
-    ]'''
+    ]"""
 
     def fake_get(url, timeout):
         assert "acme.com" in url
@@ -262,12 +281,14 @@ def test_ct_logs_handles_crtsh_503():
     import urllib.error
 
     def flaky_get(url, timeout):
-        raise urllib.error.HTTPError(url, 503, "Service Unavailable", hdrs=None, fp=None)
+        raise urllib.error.HTTPError(
+            url, 503, "Service Unavailable", hdrs=None, fp=None
+        )
 
     source = CertTransparencyLogs(http_get=flaky_get, max_retries=1)
-    events = list(source.run(
-        ReconContext(customer_id="c", run_id="r", seed="acme.com")
-    ))
+    events = list(
+        source.run(ReconContext(customer_id="c", run_id="r", seed="acme.com"))
+    )
     assert events == []  # soft-fails, no crash
 
 
@@ -276,11 +297,15 @@ def test_ct_logs_handles_crtsh_503():
 
 def test_dns_resolve_emits_ipv4_per_host():
     def fake_resolve(hostname, resolver, timeout):
-        return {"acme.com": ["203.0.113.1"],
-                "api.acme.com": ["198.51.100.10", "198.51.100.11"]}.get(hostname, [])
+        return {
+            "acme.com": ["203.0.113.1"],
+            "api.acme.com": ["198.51.100.10", "198.51.100.11"],
+        }.get(hostname, [])
 
     ctx = ReconContext(
-        customer_id="c", run_id="r", seed="acme.com",
+        customer_id="c",
+        run_id="r",
+        seed="acme.com",
         known_subdomains=["api.acme.com"],
     )
     source = DNSResolveSource(resolver_fn=fake_resolve)
@@ -294,17 +319,31 @@ def test_dns_resolve_emits_ipv4_per_host():
 def test_asn_enrichment_emits_from_bulk_rows():
     def fake_cymru(ips, timeout):
         return [
-            {"asn": "15169", "ip": "8.8.8.8", "prefix": "8.8.8.0/24",
-             "cc": "US", "registry": "arin", "allocated": "",
-             "as_name": "GOOGLE"},
-            {"asn": "13335", "ip": "1.1.1.1", "prefix": "1.1.1.0/24",
-             "cc": "US", "registry": "apnic", "allocated": "",
-             "as_name": "CLOUDFLARENET"},
+            {
+                "asn": "15169",
+                "ip": "8.8.8.8",
+                "prefix": "8.8.8.0/24",
+                "cc": "US",
+                "registry": "arin",
+                "allocated": "",
+                "as_name": "GOOGLE",
+            },
+            {
+                "asn": "13335",
+                "ip": "1.1.1.1",
+                "prefix": "1.1.1.0/24",
+                "cc": "US",
+                "registry": "apnic",
+                "allocated": "",
+                "as_name": "CLOUDFLARENET",
+            },
         ]
 
     source = ASNEnrichmentSource(connect_fn=fake_cymru)
     ctx = ReconContext(
-        customer_id="c", run_id="r", seed="acme.com",
+        customer_id="c",
+        run_id="r",
+        seed="acme.com",
         known_ips=["8.8.8.8", "1.1.1.1"],
     )
     events = list(source.run(ctx))
@@ -344,16 +383,43 @@ def test_orchestrator_runs_sources_in_stealth_order(db):
             order_seen.append(self.stealth_class.value)
             return super().run(context)
 
-    passive = TraceSource("p", StealthClass.PASSIVE, [
-        ReconEvent(kind=AssetKind.SUBDOMAIN, value="www.acme.com", source="p", confidence=0.9)
-    ])
-    active = TraceSource("a", StealthClass.ACTIVE, [
-        ReconEvent(kind=AssetKind.SERVICE, value="www.acme.com:443", source="a", confidence=0.8)
-    ])
-    resolver = TraceSource("r", StealthClass.RESOLVER, [
-        ReconEvent(kind=AssetKind.IPV4, value="203.0.113.5", source="r", confidence=0.9,
-                   parent_value="www.acme.com")
-    ])
+    passive = TraceSource(
+        "p",
+        StealthClass.PASSIVE,
+        [
+            ReconEvent(
+                kind=AssetKind.SUBDOMAIN,
+                value="www.acme.com",
+                source="p",
+                confidence=0.9,
+            )
+        ],
+    )
+    active = TraceSource(
+        "a",
+        StealthClass.ACTIVE,
+        [
+            ReconEvent(
+                kind=AssetKind.SERVICE,
+                value="www.acme.com:443",
+                source="a",
+                confidence=0.8,
+            )
+        ],
+    )
+    resolver = TraceSource(
+        "r",
+        StealthClass.RESOLVER,
+        [
+            ReconEvent(
+                kind=AssetKind.IPV4,
+                value="203.0.113.5",
+                source="r",
+                confidence=0.9,
+                parent_value="www.acme.com",
+            )
+        ],
+    )
 
     # Pass in reverse order; orchestrator must reorder to passive→resolver→active
     orch = AttackSurfaceMap(db=db, sources=[active, resolver, passive])
@@ -374,20 +440,39 @@ def test_orchestrator_persists_events_and_propagates_context(db):
             captured_known.append(list(context.known_subdomains))
             return super().run(context)
 
-    passive = _StubSource("p", StealthClass.PASSIVE, [
-        ReconEvent(kind=AssetKind.SUBDOMAIN, value="api.acme.com", source="p", confidence=0.9)
-    ])
-    resolver = CheckingResolver("r", StealthClass.RESOLVER, [
-        ReconEvent(kind=AssetKind.IPV4, value="203.0.113.1", source="r", confidence=0.9,
-                   parent_value="api.acme.com"),
-    ])
+    passive = _StubSource(
+        "p",
+        StealthClass.PASSIVE,
+        [
+            ReconEvent(
+                kind=AssetKind.SUBDOMAIN,
+                value="api.acme.com",
+                source="p",
+                confidence=0.9,
+            )
+        ],
+    )
+    resolver = CheckingResolver(
+        "r",
+        StealthClass.RESOLVER,
+        [
+            ReconEvent(
+                kind=AssetKind.IPV4,
+                value="203.0.113.1",
+                source="r",
+                confidence=0.9,
+                parent_value="api.acme.com",
+            ),
+        ],
+    )
 
     orch = AttackSurfaceMap(db=db, sources=[passive, resolver])
     result = orch.run(c)
 
     assert result.total_assets == 2
-    assert "api.acme.com" in captured_known[0], \
-        "resolver must see the subdomain the passive source emitted"
+    assert (
+        "api.acme.com" in captured_known[0]
+    ), "resolver must see the subdomain the passive source emitted"
 
     # DB counts reflect one subdomain + one ipv4
     counts = db.asset_counts(c.customer_id)
@@ -407,9 +492,11 @@ def test_orchestrator_continues_after_source_failure(db):
         def run(self, context):
             raise RuntimeError("boom")
 
-    ok_source = _StubSource("ok", StealthClass.RESOLVER, [
-        ReconEvent(kind=AssetKind.IPV4, value="1.2.3.4", source="ok", confidence=0.9)
-    ])
+    ok_source = _StubSource(
+        "ok",
+        StealthClass.RESOLVER,
+        [ReconEvent(kind=AssetKind.IPV4, value="1.2.3.4", source="ok", confidence=0.9)],
+    )
 
     orch = AttackSurfaceMap(db=db, sources=[CrashingSource(), ok_source])
     result = orch.run(c)
@@ -431,13 +518,16 @@ def test_full_customer_flow_enroll_verify_recon(tmp_path):
 
     # Use a fake orchestrator that returns predetermined events
     class FakeOrchestrator:
-        def __init__(self, _db): self._db = _db
+        def __init__(self, _db):
+            self._db = _db
 
         def run(self, customer):
             from amoskys.agents.Web.argos.recon.orchestrator import AttackSurfaceResult
 
             # Write assets directly via the db
-            from amoskys.agents.Web.argos.storage import SurfaceAsset, AssetKind as K
+            from amoskys.agents.Web.argos.storage import AssetKind as K
+            from amoskys.agents.Web.argos.storage import SurfaceAsset
+
             for val, kind in [
                 ("acme.com", K.DOMAIN),
                 ("www.acme.com", K.SUBDOMAIN),
@@ -445,9 +535,15 @@ def test_full_customer_flow_enroll_verify_recon(tmp_path):
                 ("203.0.113.1", K.IPV4),
                 ("AS15169", K.ASN),
             ]:
-                self._db.upsert_asset(SurfaceAsset.new(
-                    customer.customer_id, kind, val, source="fake", confidence=0.9,
-                ))
+                self._db.upsert_asset(
+                    SurfaceAsset.new(
+                        customer.customer_id,
+                        kind,
+                        val,
+                        source="fake",
+                        confidence=0.9,
+                    )
+                )
 
             result = AttackSurfaceResult(
                 run_id="fake-run",
@@ -501,7 +597,9 @@ def test_verify_consent_dns_txt_success(tmp_path):
         assert name == "_amoskys-verify.acme.com"
         return [f"amoskys-verify={token}"]
 
-    ok, msg = service.verify_consent(enrollment.customer.customer_id, resolver_fn=fake_resolver)
+    ok, msg = service.verify_consent(
+        enrollment.customer.customer_id, resolver_fn=fake_resolver
+    )
     assert ok
     assert "verified" in msg.lower()
 
@@ -515,6 +613,8 @@ def test_verify_consent_dns_txt_missing_token(tmp_path):
     def fake_resolver(name):
         return ["amoskys-verify=some-other-token"]
 
-    ok, msg = service.verify_consent(enrollment.customer.customer_id, resolver_fn=fake_resolver)
+    ok, msg = service.verify_consent(
+        enrollment.customer.customer_id, resolver_fn=fake_resolver
+    )
     assert not ok
     assert "does not contain" in msg

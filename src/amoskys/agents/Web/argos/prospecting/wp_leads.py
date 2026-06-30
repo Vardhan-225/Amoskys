@@ -32,44 +32,37 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from amoskys.agents.Web.argos.legitimacy import LegitimacyProfile
-from amoskys.agents.Web.argos.prospecting.ct_discovery import (
-    discover_domains_via_ct,
-)
-from amoskys.agents.Web.argos.prospecting.scoring import (
-    Prospect,
-    score_prospect,
-)
-from amoskys.agents.Web.argos.prospecting.wp_indicator import (
-    check_wp_indicator,
-)
+from amoskys.agents.Web.argos.prospecting.ct_discovery import discover_domains_via_ct
+from amoskys.agents.Web.argos.prospecting.scoring import Prospect, score_prospect
+from amoskys.agents.Web.argos.prospecting.wp_indicator import check_wp_indicator
 
 logger = logging.getLogger("amoskys.argos.prospecting")
 
 
 @dataclass
 class ProspectingRun:
-    seed:            str
-    ran_at:          float
-    duration_s:      float
+    seed: str
+    ran_at: float
+    duration_s: float
     ct_domains_seen: int
     ct_domains_queried: int
-    http_requests:   int
-    prospects:       List[Prospect] = field(default_factory=list)
-    skipped:         List[str] = field(default_factory=list)
+    http_requests: int
+    prospects: List[Prospect] = field(default_factory=list)
+    skipped: List[str] = field(default_factory=list)
 
     def top(self, n: int = 10) -> List[Prospect]:
         return sorted(self.prospects, key=lambda p: -p.score)[:n]
 
     def to_dict(self) -> dict:
         return {
-            "seed":               self.seed,
-            "ran_at":             self.ran_at,
-            "duration_s":         self.duration_s,
-            "ct_domains_seen":    self.ct_domains_seen,
+            "seed": self.seed,
+            "ran_at": self.ran_at,
+            "duration_s": self.duration_s,
+            "ct_domains_seen": self.ct_domains_seen,
             "ct_domains_queried": self.ct_domains_queried,
-            "http_requests":      self.http_requests,
-            "prospects":          [p.to_dict() for p in self.top(50)],
-            "skipped_count":      len(self.skipped),
+            "http_requests": self.http_requests,
+            "prospects": [p.to_dict() for p in self.top(50)],
+            "skipped_count": len(self.skipped),
         }
 
 
@@ -77,14 +70,25 @@ class ProspectingRun:
 
 # Hard-exclude list — always skipped even if they score well.
 _EXCLUDED_SUFFIXES = (
-    ".gov", ".mil", ".edu",  # government / academic — not our ICP
-    "hackerone.com", "bugcrowd.com", "intigriti.com",  # bug bounty hosts
+    ".gov",
+    ".mil",
+    ".edu",  # government / academic — not our ICP
+    "hackerone.com",
+    "bugcrowd.com",
+    "intigriti.com",  # bug bounty hosts
 )
 _EXCLUDED_DOMAINS = {
-    "wordpress.org", "wordpress.com", "w.org",
-    "automattic.com", "wp.com", "wp.org",
-    "wpengine.com", "kinsta.com", "cloudways.com",
-    "wpbeginner.com", "wpmudev.com",
+    "wordpress.org",
+    "wordpress.com",
+    "w.org",
+    "automattic.com",
+    "wp.com",
+    "wp.org",
+    "wpengine.com",
+    "kinsta.com",
+    "cloudways.com",
+    "wpbeginner.com",
+    "wpmudev.com",
     "woocommerce.com",
     # WP-ecosystem leaders — explicitly out of our ICP.
 }
@@ -100,14 +104,16 @@ def _is_excluded(host: str) -> bool:
     return False
 
 
-def find_wp_prospects(seed: str,
-                      want: int = 20,
-                      min_score: int = 40,
-                      max_candidates: int = 80,
-                      legitimacy: Optional[LegitimacyProfile] = None,
-                      http_get_crtsh=None,
-                      http_fetch_indicator=None,
-                      pacing_s: float = 2.5) -> ProspectingRun:
+def find_wp_prospects(
+    seed: str,
+    want: int = 20,
+    min_score: int = 40,
+    max_candidates: int = 80,
+    legitimacy: Optional[LegitimacyProfile] = None,
+    http_get_crtsh=None,
+    http_fetch_indicator=None,
+    pacing_s: float = 2.5,
+) -> ProspectingRun:
     """End-to-end discovery → qualification → ranking.
 
     Args:
@@ -146,9 +152,14 @@ def find_wp_prospects(seed: str,
     if not candidates:
         logger.warning("prospecting: no candidates after exclusion filter")
         return ProspectingRun(
-            seed=seed, ran_at=t0, duration_s=round(time.time() - t0, 2),
-            ct_domains_seen=ct_seen, ct_domains_queried=0,
-            http_requests=0, prospects=[], skipped=[],
+            seed=seed,
+            ran_at=t0,
+            duration_s=round(time.time() - t0, 2),
+            ct_domains_seen=ct_seen,
+            ct_domains_queried=0,
+            http_requests=0,
+            prospects=[],
+            skipped=[],
         )
 
     # 2. Per-candidate qualification.
@@ -157,8 +168,9 @@ def find_wp_prospects(seed: str,
     for host in candidates[:max_candidates]:
         queried += 1
         try:
-            ind = check_wp_indicator(host, legitimacy=lp,
-                                     http_fetch=http_fetch_indicator)
+            ind = check_wp_indicator(
+                host, legitimacy=lp, http_fetch=http_fetch_indicator
+            )
             http_used += ind.http_requests_used
             if ind.errors:
                 logger.debug("skip %s: %s", host, ind.errors)
@@ -190,9 +202,14 @@ def find_wp_prospects(seed: str,
     prospects.sort(key=lambda p: -p.score)
 
     return ProspectingRun(
-        seed=seed, ran_at=t0, duration_s=round(time.time() - t0, 2),
-        ct_domains_seen=ct_seen, ct_domains_queried=queried,
-        http_requests=http_used, prospects=prospects, skipped=skipped,
+        seed=seed,
+        ran_at=t0,
+        duration_s=round(time.time() - t0, 2),
+        ct_domains_seen=ct_seen,
+        ct_domains_queried=queried,
+        http_requests=http_used,
+        prospects=prospects,
+        skipped=skipped,
     )
 
 
@@ -234,8 +251,9 @@ def find_wp_prospects_from_domain_list(
     for host in candidates[:max_candidates]:
         queried += 1
         try:
-            ind = check_wp_indicator(host, legitimacy=lp,
-                                     http_fetch=http_fetch_indicator)
+            ind = check_wp_indicator(
+                host, legitimacy=lp, http_fetch=http_fetch_indicator
+            )
             http_used += ind.http_requests_used
             if ind.errors:
                 skipped.append(f"{host}: {ind.errors[0]}")
@@ -265,7 +283,11 @@ def find_wp_prospects_from_domain_list(
 
     return ProspectingRun(
         seed=f"domain-list[{len(domains)}]",
-        ran_at=t0, duration_s=round(time.time() - t0, 2),
-        ct_domains_seen=ct_seen, ct_domains_queried=queried,
-        http_requests=http_used, prospects=prospects, skipped=skipped,
+        ran_at=t0,
+        duration_s=round(time.time() - t0, 2),
+        ct_domains_seen=ct_seen,
+        ct_domains_queried=queried,
+        http_requests=http_used,
+        prospects=prospects,
+        skipped=skipped,
     )

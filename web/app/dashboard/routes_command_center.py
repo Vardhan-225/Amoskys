@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 import requests as http_client
-
 from flask import Response, jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
@@ -69,6 +68,7 @@ def _get_fleet_db() -> sqlite3.Connection | None:
 
 # ── Pages ──────────────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/command-center")
 @require_login
 def command_center_page():
@@ -116,7 +116,9 @@ def cc_device_detail(device_id):
     if data:
         return jsonify({"available": True, **data})
 
-    return jsonify({"available": False, "message": "Device not found or ops server unreachable"})
+    return jsonify(
+        {"available": False, "message": "Device not found or ops server unreachable"}
+    )
 
 
 @dashboard_bp.route("/api/command-center/device/<device_id>/telemetry")
@@ -159,6 +161,7 @@ def cc_device_export(device_id):
 
 # ── API Endpoints ──────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/api/command-center/status")
 @require_login
 def cc_fleet_status():
@@ -184,10 +187,12 @@ def cc_fleet_status():
     # Fallback to local fleet.db
     db = _get_fleet_db()
     if db is None:
-        return jsonify({
-            "available": False,
-            "message": "Operations server unreachable. Agents may still be shipping — check back in a moment.",
-        })
+        return jsonify(
+            {
+                "available": False,
+                "message": "Operations server unreachable. Agents may still be shipping — check back in a moment.",
+            }
+        )
 
     try:
         now = time.time()
@@ -210,9 +215,12 @@ def cc_fleet_status():
             e_prm = ("__none__",)
 
         # Device counts
-        total = db.execute("SELECT COUNT(*) FROM devices WHERE 1=1" + d_org, d_prm).fetchone()[0]
+        total = db.execute(
+            "SELECT COUNT(*) FROM devices WHERE 1=1" + d_org, d_prm
+        ).fetchone()[0]
         online = db.execute(
-            "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + d_org, (now - 300,) + d_prm
+            "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + d_org,
+            (now - 300,) + d_prm,
         ).fetchone()[0]
 
         # Event stats (last 24h)
@@ -223,12 +231,14 @@ def cc_fleet_status():
         ).fetchone()[0]
 
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + e_org,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8"
+            + e_org,
             (day_ago_ns,) + e_prm,
         ).fetchone()[0]
 
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + e_org,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8"
+            + e_org,
             (day_ago_ns,) + e_prm,
         ).fetchone()[0]
 
@@ -236,7 +246,9 @@ def cc_fleet_status():
         top_categories = db.execute(
             """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
                FROM security_events
-               WHERE timestamp_ns > ? AND risk_score > 0""" + e_org + """
+               WHERE timestamp_ns > ? AND risk_score > 0"""
+            + e_org
+            + """
                GROUP BY event_category
                ORDER BY cnt DESC LIMIT 10""",
             (day_ago_ns,) + e_prm,
@@ -246,7 +258,8 @@ def cc_fleet_status():
         mitre_rows = db.execute(
             """SELECT mitre_techniques FROM security_events
                WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-               AND mitre_techniques != '[]'""" + e_org,
+               AND mitre_techniques != '[]'"""
+            + e_org,
             (day_ago_ns,) + e_prm,
         ).fetchall()
 
@@ -286,46 +299,52 @@ def cc_fleet_status():
 
         devices = []
         for r in device_rows:
-            status = "online" if r["last_seen"] and r["last_seen"] > now - 300 else "offline"
-            devices.append({
-                "device_id": r["device_id"],
-                "hostname": r["hostname"] or r["device_id"][:12],
-                "os": r["os"],
-                "os_version": r["os_version"],
-                "arch": r["arch"],
-                "agent_version": r["agent_version"],
-                "status": status,
-                "last_seen": r["last_seen"],
-                "first_seen": r["first_seen"],
-                "event_count": r["event_count"] or 0,
-                "max_risk": r["max_risk"] or 0,
-                "critical_count": r["critical_count"] or 0,
-                "high_count": r["high_count"] or 0,
-            })
+            status = (
+                "online" if r["last_seen"] and r["last_seen"] > now - 300 else "offline"
+            )
+            devices.append(
+                {
+                    "device_id": r["device_id"],
+                    "hostname": r["hostname"] or r["device_id"][:12],
+                    "os": r["os"],
+                    "os_version": r["os_version"],
+                    "arch": r["arch"],
+                    "agent_version": r["agent_version"],
+                    "status": status,
+                    "last_seen": r["last_seen"],
+                    "first_seen": r["first_seen"],
+                    "event_count": r["event_count"] or 0,
+                    "max_risk": r["max_risk"] or 0,
+                    "critical_count": r["critical_count"] or 0,
+                    "high_count": r["high_count"] or 0,
+                }
+            )
 
         db.close()
 
-        return jsonify({
-            "available": True,
-            "fleet": {
-                "total_devices": total,
-                "online": online,
-                "offline": total - online,
-            },
-            "last_24h": {
-                "total_events": total_events,
-                "critical": critical,
-                "high": high,
-            },
-            "top_categories": [
-                {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
-                for r in top_categories
-            ],
-            "top_mitre_techniques": [
-                {"technique": t, "count": c} for t, c in top_techniques
-            ],
-            "devices": devices,
-        })
+        return jsonify(
+            {
+                "available": True,
+                "fleet": {
+                    "total_devices": total,
+                    "online": online,
+                    "offline": total - online,
+                },
+                "last_24h": {
+                    "total_events": total_events,
+                    "critical": critical,
+                    "high": high,
+                },
+                "top_categories": [
+                    {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
+                    for r in top_categories
+                ],
+                "top_mitre_techniques": [
+                    {"technique": t, "count": c} for t, c in top_techniques
+                ],
+                "devices": devices,
+            }
+        )
 
     except Exception as e:
         logger.error("Command Center status failed: %s", e)
@@ -343,7 +362,9 @@ def cc_device_events(device_id):
     min_risk = request.args.get("min_risk", 0.0, type=float)
     data = _ops_get(f"/api/v1/devices/{device_id}", {"limit": limit})
     if data and "recent_events" in data:
-        return jsonify({"events": data["recent_events"], "count": len(data["recent_events"])})
+        return jsonify(
+            {"events": data["recent_events"], "count": len(data["recent_events"])}
+        )
 
     # Fallback to local
     db = _get_fleet_db()
@@ -374,29 +395,33 @@ def cc_device_events(device_id):
                     parsed = json.loads(raw)
                     if isinstance(parsed, str):
                         parsed = json.loads(parsed)
-                    mitre = [t for t in parsed if isinstance(t, str) and t.startswith("T")]
+                    mitre = [
+                        t for t in parsed if isinstance(t, str) and t.startswith("T")
+                    ]
             except (json.JSONDecodeError, TypeError):
                 pass
 
-            events.append({
-                "id": r["id"],
-                "timestamp": r["timestamp_dt"],
-                "category": r["event_category"],
-                "risk_score": r["risk_score"],
-                "confidence": r["confidence"],
-                "description": r["description"],
-                "agent": r["collection_agent"],
-                "mitre": mitre,
-                "process": r["process_name"],
-                "remote_ip": r["remote_ip"],
-                "username": r["username"],
-                "domain": r["domain"],
-                "path": r["path"],
-                "detection_source": r["detection_source"],
-                "probe": r["probe_name"],
-                "geo_country": r["geo_src_country"],
-                "asn_org": r["asn_src_org"],
-            })
+            events.append(
+                {
+                    "id": r["id"],
+                    "timestamp": r["timestamp_dt"],
+                    "category": r["event_category"],
+                    "risk_score": r["risk_score"],
+                    "confidence": r["confidence"],
+                    "description": r["description"],
+                    "agent": r["collection_agent"],
+                    "mitre": mitre,
+                    "process": r["process_name"],
+                    "remote_ip": r["remote_ip"],
+                    "username": r["username"],
+                    "domain": r["domain"],
+                    "path": r["path"],
+                    "detection_source": r["detection_source"],
+                    "probe": r["probe_name"],
+                    "geo_country": r["geo_src_country"],
+                    "asn_org": r["asn_src_org"],
+                }
+            )
 
         db.close()
         return jsonify({"events": events, "count": len(events)})
@@ -423,16 +448,18 @@ def cc_live_feed():
         # Transform to match the feed format
         events = []
         for e in data["events"][:limit]:
-            events.append({
-                "id": e.get("id", 0),
-                "timestamp": e.get("timestamp_dt", ""),
-                "category": e.get("event_category", ""),
-                "risk_score": e.get("risk_score", 0),
-                "agent": e.get("collection_agent", ""),
-                "process": e.get("process_name", ""),
-                "hostname": e.get("device_id", "")[:12],
-                "device_id": e.get("device_id", ""),
-            })
+            events.append(
+                {
+                    "id": e.get("id", 0),
+                    "timestamp": e.get("timestamp_dt", ""),
+                    "category": e.get("event_category", ""),
+                    "risk_score": e.get("risk_score", 0),
+                    "agent": e.get("collection_agent", ""),
+                    "process": e.get("process_name", ""),
+                    "hostname": e.get("device_id", "")[:12],
+                    "device_id": e.get("device_id", ""),
+                }
+            )
         return jsonify({"events": events})
 
     # Fallback to local
@@ -470,22 +497,26 @@ def cc_live_feed():
                     parsed = json.loads(raw)
                     if isinstance(parsed, str):
                         parsed = json.loads(parsed)
-                    mitre = [t for t in parsed if isinstance(t, str) and t.startswith("T")]
+                    mitre = [
+                        t for t in parsed if isinstance(t, str) and t.startswith("T")
+                    ]
             except (json.JSONDecodeError, TypeError):
                 pass
 
-            events.append({
-                "id": r["id"],
-                "timestamp": r["timestamp_dt"],
-                "category": r["event_category"],
-                "risk_score": r["risk_score"],
-                "agent": r["collection_agent"],
-                "process": r["process_name"],
-                "mitre": mitre,
-                "description": r["description"],
-                "hostname": r["hostname"] or r["device_id"][:12],
-                "device_id": r["device_id"],
-            })
+            events.append(
+                {
+                    "id": r["id"],
+                    "timestamp": r["timestamp_dt"],
+                    "category": r["event_category"],
+                    "risk_score": r["risk_score"],
+                    "agent": r["collection_agent"],
+                    "process": r["process_name"],
+                    "mitre": mitre,
+                    "description": r["description"],
+                    "hostname": r["hostname"] or r["device_id"][:12],
+                    "device_id": r["device_id"],
+                }
+            )
 
         db.close()
         return jsonify({"events": events})

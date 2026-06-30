@@ -70,6 +70,7 @@ class CustomerNotFoundError(LookupError):
 @dataclass
 class EnrollmentResult:
     """What a caller gets back from `enroll()` — includes instructions."""
+
     customer: Customer
     instructions: str
 
@@ -83,7 +84,9 @@ class CustomerService:
     Stateless; can be constructed anywhere AssetsDB is accessible.
     """
 
-    def __init__(self, db: AssetsDB, surface_map: Optional[AttackSurfaceMap] = None) -> None:
+    def __init__(
+        self, db: AssetsDB, surface_map: Optional[AttackSurfaceMap] = None
+    ) -> None:
         self.db = db
         self.surface_map = surface_map or AttackSurfaceMap(db=db)
 
@@ -189,14 +192,18 @@ class CustomerService:
             self.db.mark_consent_verified(customer_id)
             return True, "lab_self consent: verified."
 
-        if customer.consent_method in (ConsentMethod.EMAIL, ConsentMethod.SIGNED_CONTRACT):
+        if customer.consent_method in (
+            ConsentMethod.EMAIL,
+            ConsentMethod.SIGNED_CONTRACT,
+        ):
             # Operator attests possession of an out-of-band artifact.
             # We already recorded the artifact reference at enroll time;
             # verify just activates consent.
             artifact = ArtifactRef.from_json(customer.consent_token)
             artifact_desc = (
                 f"{artifact.ref_type}={artifact.ref_value!r}"
-                if artifact else "(no artifact on file)"
+                if artifact
+                else "(no artifact on file)"
             )
             self._log_consent(
                 customer_id,

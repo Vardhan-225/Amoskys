@@ -598,9 +598,7 @@ def rule_suspicious_process_tree(
     Returns:
         Incident if pattern detected, None otherwise
     """
-    process_events = [
-        e for e in events if e.process_event
-    ]
+    process_events = [e for e in events if e.process_event]
 
     if not process_events:
         return None
@@ -643,9 +641,7 @@ def rule_suspicious_process_tree(
             has_network = False
             network_dest = None
 
-            for flow_event in [
-                e for e in events if e.flow_event
-            ]:
+            for flow_event in [e for e in events if e.flow_event]:
                 time_diff = abs(
                     (flow_event.timestamp - event.timestamp).total_seconds()
                 )
@@ -1158,9 +1154,7 @@ def rule_clickfix_attack(
     techniques = set()
     for e in clickfix_events:
         if e.security_event and e.security_event.get("mitre_techniques"):
-            techniques.update(
-                _parse_mitre_cell(e.security_event["mitre_techniques"])
-            )
+            techniques.update(_parse_mitre_cell(e.security_event["mitre_techniques"]))
 
     start_ts = min(e.timestamp for e in clickfix_events)
     end_ts = max(e.timestamp for e in clickfix_events)
