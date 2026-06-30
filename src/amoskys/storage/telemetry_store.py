@@ -20,6 +20,7 @@ Supports the 3-layer ML architecture:
 import logging
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from amoskys.storage._ts_caching import _ReadPool, _TTLCache
@@ -61,9 +62,7 @@ class TelemetryStore(
 
         if readonly:
             # Lightweight init — fleet_cache / read-only dashboard mode
-            self.db = sqlite3.connect(
-                db_path, check_same_thread=False, timeout=5.0
-            )
+            self.db = sqlite3.connect(db_path, check_same_thread=False, timeout=5.0)
             self.db.row_factory = sqlite3.Row
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA query_only=ON")
@@ -92,9 +91,11 @@ class TelemetryStore(
                     logger.error(
                         "DATABASE CORRUPTED: %s — %s. "
                         "Backing up and creating fresh DB.",
-                        db_path, result[0],
+                        db_path,
+                        result[0],
                     )
                     import shutil
+
                     backup = f"{db_path}.corrupted.{int(time.time())}"
                     shutil.move(db_path, backup)
                     logger.info("Corrupted DB backed up to %s", backup)
@@ -104,11 +105,10 @@ class TelemetryStore(
                         if wal_path.exists():
                             wal_path.unlink()
             except Exception as e:
-                logger.warning(
-                    "Integrity check failed (%s) — attempting fresh DB", e
-                )
+                logger.warning("Integrity check failed (%s) — attempting fresh DB", e)
                 try:
                     import shutil
+
                     backup = f"{db_path}.corrupted.{int(time.time())}"
                     shutil.move(db_path, backup)
                     for suffix in ("-wal", "-shm"):

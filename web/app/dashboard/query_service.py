@@ -20,7 +20,8 @@ def _escape_like(value: str) -> str:
 
 
 def _quote_ident(value: str) -> str:
-    return f"\"{value.replace('\"', '\"\"')}\""
+    escaped = value.replace('"', '""')
+    return '"' + escaped + '"'
 
 
 def _cutoff_ns(hours: int) -> int:
@@ -412,6 +413,7 @@ class DashboardQueryService:
             ct = proc.get("create_time")
             if ct:
                 import time as _time
+
                 proc["age_seconds"] = round(_time.time() - float(ct))
         return rows
 

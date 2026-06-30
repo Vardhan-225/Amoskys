@@ -476,6 +476,7 @@ def network_device_location():
     if _os.environ.get("AMOSKYS_OPS_SERVER"):
         try:
             from .routes_command_center import _ops_get
+
             data = _ops_get("/api/v1/devices")
             if data and data.get("devices"):
                 public_ip = data["devices"][0].get("public_ip")
@@ -487,7 +488,7 @@ def network_device_location():
             pass
 
     # Local mode: try flow_events source geo
-    store = get_telemetry_store()
+    store = _get_store()
     if store:
         try:
             row = store.db.execute(
@@ -498,11 +499,16 @@ def network_device_location():
                    ORDER BY timestamp_ns DESC LIMIT 1"""
             ).fetchone()
             if row and row[0]:
-                return jsonify({
-                    "lat": float(row[0]), "lon": float(row[1]),
-                    "city": row[2] or "", "country": row[3] or "",
-                    "org": row[4] or "", "ip": row[5] or "",
-                })
+                return jsonify(
+                    {
+                        "lat": float(row[0]),
+                        "lon": float(row[1]),
+                        "city": row[2] or "",
+                        "country": row[3] or "",
+                        "org": row[4] or "",
+                        "ip": row[5] or "",
+                    }
+                )
         except Exception:
             pass
 
@@ -513,6 +519,7 @@ def _geoip_lookup(ip: str):
     """Resolve an IP to lat/lon/city/country using local GeoIP databases."""
     try:
         from amoskys.enrichment.geoip import GeoIPEnricher
+
         enricher = GeoIPEnricher()
         result = enricher.lookup(ip)
         if result and result.get("latitude"):
@@ -530,12 +537,14 @@ def _geoip_lookup(ip: str):
     # Fallback: try ipinfo.io for the specific device IP (not the server's IP)
     try:
         import requests
+
         resp = requests.get(f"https://ipinfo.io/{ip}/json", timeout=3)
         if resp.ok:
             d = resp.json()
             loc = d.get("loc", "0,0").split(",")
             return {
-                "lat": float(loc[0]), "lon": float(loc[1]),
+                "lat": float(loc[0]),
+                "lon": float(loc[1]),
                 "city": d.get("city", ""),
                 "country": d.get("country", ""),
                 "region": d.get("region", ""),
@@ -562,6 +571,7 @@ def network_geo_points():
     # Also grab flows that have country but no lat/lon — use centroid
     try:
         import time
+
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         rows = store.db.execute(
             "SELECT geo_dst_country, COUNT(*) as cnt, "
@@ -576,12 +586,18 @@ def network_geo_points():
         for r in rows:
             centroid = _COUNTRY_CENTROIDS.get(r[0])
             if centroid:
-                points.append({
-                    "lat": centroid[0], "lon": centroid[1],
-                    "country": r[0], "city": "",
-                    "count": r[1], "bytes": r[2] or 0,
-                    "asn_org": r[3] or "", "threat": bool(r[4]),
-                })
+                points.append(
+                    {
+                        "lat": centroid[0],
+                        "lon": centroid[1],
+                        "country": r[0],
+                        "city": "",
+                        "count": r[1],
+                        "bytes": r[2] or 0,
+                        "asn_org": r[3] or "",
+                        "threat": bool(r[4]),
+                    }
+                )
     except Exception:
         pass
 
@@ -590,22 +606,54 @@ def network_geo_points():
 
 # Country centroids for flows with country but no lat/lon
 _COUNTRY_CENTROIDS = {
-    "US": (39.8, -98.5), "GB": (51.5, -0.1), "DE": (51.2, 10.4),
-    "FR": (46.2, 2.2), "JP": (35.7, 139.7), "AU": (-25.3, 133.8),
-    "NL": (52.1, 5.3), "IE": (53.1, -7.7), "CA": (56.1, -106.3),
-    "BR": (-14.2, -51.9), "IN": (20.6, 78.9), "SG": (1.4, 103.8),
-    "KR": (35.9, 127.8), "SE": (60.1, 18.6), "CH": (46.8, 8.2),
-    "IT": (41.9, 12.6), "ES": (40.5, -3.7), "RU": (61.5, 105.3),
-    "CN": (35.9, 104.2), "HK": (22.3, 114.2), "ZA": (-30.6, 22.9),
-    "MX": (23.6, -102.6), "AR": (-38.4, -63.6), "CL": (-35.7, -71.5),
-    "PL": (51.9, 19.1), "NO": (60.5, 8.5), "FI": (61.9, 25.7),
-    "DK": (56.3, 9.5), "AT": (47.5, 14.6), "BE": (50.5, 4.5),
-    "PT": (39.4, -8.2), "CZ": (49.8, 15.5), "RO": (45.9, 25.0),
-    "IL": (31.0, 34.8), "TW": (23.7, 121.0), "NZ": (-40.9, 174.9),
-    "TH": (15.9, 100.9), "MY": (4.2, 101.9), "PH": (12.9, 121.8),
-    "ID": (-0.8, 113.9), "VN": (14.1, 108.3), "AE": (23.4, 53.8),
-    "SA": (23.9, 45.1), "NG": (9.1, 8.7), "EG": (26.8, 30.8),
-    "CO": (4.6, -74.3), "UA": (48.4, 31.2), "TR": (39.0, 35.2),
+    "US": (39.8, -98.5),
+    "GB": (51.5, -0.1),
+    "DE": (51.2, 10.4),
+    "FR": (46.2, 2.2),
+    "JP": (35.7, 139.7),
+    "AU": (-25.3, 133.8),
+    "NL": (52.1, 5.3),
+    "IE": (53.1, -7.7),
+    "CA": (56.1, -106.3),
+    "BR": (-14.2, -51.9),
+    "IN": (20.6, 78.9),
+    "SG": (1.4, 103.8),
+    "KR": (35.9, 127.8),
+    "SE": (60.1, 18.6),
+    "CH": (46.8, 8.2),
+    "IT": (41.9, 12.6),
+    "ES": (40.5, -3.7),
+    "RU": (61.5, 105.3),
+    "CN": (35.9, 104.2),
+    "HK": (22.3, 114.2),
+    "ZA": (-30.6, 22.9),
+    "MX": (23.6, -102.6),
+    "AR": (-38.4, -63.6),
+    "CL": (-35.7, -71.5),
+    "PL": (51.9, 19.1),
+    "NO": (60.5, 8.5),
+    "FI": (61.9, 25.7),
+    "DK": (56.3, 9.5),
+    "AT": (47.5, 14.6),
+    "BE": (50.5, 4.5),
+    "PT": (39.4, -8.2),
+    "CZ": (49.8, 15.5),
+    "RO": (45.9, 25.0),
+    "IL": (31.0, 34.8),
+    "TW": (23.7, 121.0),
+    "NZ": (-40.9, 174.9),
+    "TH": (15.9, 100.9),
+    "MY": (4.2, 101.9),
+    "PH": (12.9, 121.8),
+    "ID": (-0.8, 113.9),
+    "VN": (14.1, 108.3),
+    "AE": (23.4, 53.8),
+    "SA": (23.9, 45.1),
+    "NG": (9.1, 8.7),
+    "EG": (26.8, 30.8),
+    "CO": (4.6, -74.3),
+    "UA": (48.4, 31.2),
+    "TR": (39.0, 35.2),
 }
 
 
