@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMOSKYS — Device</title>
+<style>
+:root{
+  --bg0:#05070d; --bg1:#0a1018; --bg2:#0e1622; --panel:rgba(18,28,42,.55);
+  --panel-solid:#101a28; --line:rgba(120,160,200,.14); --line-2:rgba(120,160,200,.28);
+  --ink:#eaf2fb; --ink-2:#9fb2c8; --ink-3:#6b8099; --ink-4:#4a5c72;
+  --cyan:#35e0f0; --cyan-dim:#1c8ea0;
+  --calm:#3ad29f; --calm-bg:rgba(58,210,159,.12);
+  --amber:#ffb038; --amber-bg:rgba(255,176,56,.12);
+  --red:#ff4d5e; --red-bg:rgba(255,77,94,.12);
+  --violet:#8b7bff; --proc:#35e0f0; --net:#8b7bff; --dns:#ffb038; --corr:#3ad29f;
+  --mono:'SF Mono',ui-monospace,'JetBrains Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --r:16px; --r-sm:11px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg0);
+  background-image:radial-gradient(1100px 560px at 82% -10%,rgba(53,224,240,.08),transparent 60%),
+    radial-gradient(800px 460px at 4% 106%,rgba(139,123,255,.07),transparent 55%);
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+.mono{font-family:var(--mono)} .tnum{font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;
+  background:linear-gradient(180deg,rgba(5,7,13,.92),rgba(5,7,13,.62));backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.14em;font-size:15px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.back{font-size:13px;color:var(--ink-3);border:1px solid var(--line);padding:7px 13px;border-radius:999px}
+.back:hover{color:var(--cyan);border-color:var(--line-2)}
+.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid var(--line);
+  border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--ink-2)}
+.pill b{color:var(--ink)}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 26px 90px}
+.dev-head{display:flex;align-items:center;gap:18px;margin-bottom:20px;flex-wrap:wrap}
+.dev-ico{width:56px;height:56px;border-radius:15px;background:linear-gradient(145deg,rgba(53,224,240,.16),rgba(139,123,255,.12));
+  display:grid;place-items:center;font-size:26px;border:1px solid var(--line-2)}
+.dev-head h1{font-size:24px;font-weight:730;letter-spacing:-.01em}
+.dev-head .sub{color:var(--ink-3);font-size:13px;margin-top:3px;font-family:var(--mono)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+@media(max-width:820px){.cards{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;backdrop-filter:blur(12px)}
+.card .lab{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.card .big{font-size:26px;font-weight:720;margin-top:8px;display:flex;align-items:center;gap:10px}
+.card .sub{font-size:12px;color:var(--ink-3);margin-top:5px}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.dot.calm{background:var(--calm);box-shadow:0 0 10px var(--calm)} .dot.amber{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.dot.red{background:var(--red);box-shadow:0 0 10px var(--red)}
+.lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}
+@media(max-width:820px){.lanes{grid-template-columns:repeat(2,1fr)}}
+.lane{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;position:relative;overflow:hidden}
+.lane::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
+.lane.process::before{background:var(--proc)} .lane.network::before{background:var(--net)}
+.lane.dns::before{background:var(--dns)} .lane.correlation::before{background:var(--corr)}
+.lane .ico{font-size:15px;margin-bottom:9px;opacity:.9}
+.lane .num{font-size:22px;font-weight:700}
+.lane .lab{font-size:12px;color:var(--ink-3);margin-top:2px}
+.lane .fl{font-size:11px;margin-top:7px}
+.lane .fl.on{color:var(--amber)} .lane .fl.off{color:var(--calm)}
+.sec-h{display:flex;align-items:baseline;gap:12px;margin:4px 2px 14px}
+.sec-h h2{font-size:17px;font-weight:680;letter-spacing:-.01em}
+.sec-h span{color:var(--ink-3);font-size:13px}
+.legend{display:flex;gap:14px;margin-left:auto;font-size:11.5px;color:var(--ink-2)}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+/* the cross-domain stream — the moat */
+.stream{position:relative;margin-left:8px}
+.stream::before{content:"";position:absolute;left:118px;top:6px;bottom:6px;width:2px;
+  background:linear-gradient(180deg,transparent,var(--line-2) 8%,var(--line-2) 92%,transparent)}
+@media(max-width:640px){.stream::before{display:none}}
+.ev{display:grid;grid-template-columns:104px 30px 1fr;gap:0;align-items:start;padding:9px 0;position:relative}
+.ev .t{font-family:var(--mono);font-size:11px;color:var(--ink-4);text-align:right;padding-right:16px;padding-top:3px;white-space:nowrap}
+.ev .rail{position:relative;display:grid;place-items:center;padding-top:2px}
+.ev .node{width:13px;height:13px;border-radius:50%;border:2px solid var(--bg0);z-index:2}
+.ev.process .node{background:var(--proc)} .ev.network .node{background:var(--net)}
+.ev.dns .node{background:var(--dns)} .ev.correlation .node{background:var(--corr)}
+.ev.amber .node,.ev.red .node{box-shadow:0 0 0 4px var(--amber-bg)}
+.ev .card2{background:var(--panel);border:1px solid var(--line);border-left-width:3px;border-radius:12px;
+  padding:11px 15px;margin-left:8px;transition:.15s}
+.ev.amber .card2{border-left-color:var(--amber)} .ev.red .card2{border-left-color:var(--red)}
+.ev.calm .card2{border-left-color:transparent}
+.ev .card2:hover{border-color:var(--line-2);background:rgba(24,36,54,.6)}
+.ev .row1{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.ev .dom{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:5px;font-weight:600}
+.ev.process .dom{background:rgba(53,224,240,.12);color:var(--proc)} .ev.network .dom{background:rgba(139,123,255,.14);color:var(--net)}
+.ev.dns .dom{background:rgba(255,176,56,.12);color:var(--dns)} .ev.correlation .dom{background:rgba(58,210,159,.12);color:var(--corr)}
+.ev .ttl{font-size:13.5px;font-weight:600}
+.ev .mit{font-size:10px;color:var(--violet);border:1px solid rgba(139,123,255,.3);border-radius:5px;padding:1px 6px}
+.ev .dtl{font-size:12px;color:var(--ink-3);margin-top:4px;font-family:var(--mono);word-break:break-word}
+.empty{color:var(--ink-3);text-align:center;padding:50px;font-size:14px}
+.foot{color:var(--ink-4);font-size:12px;text-align:center;margin-top:44px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>AMOSKYS</div>
+  <a class="back" href="/dashboard/command">← Command</a>
+  <div class="grow"></div>
+  <div class="pill" id="agentpill">◐ agents <b id="agents">—</b></div>
+  <div class="pill">updated <b id="ago">—</b></div>
+</div>
+
+<div class="wrap">
+  <div class="dev-head">
+    <div class="dev-ico">◐</div>
+    <div>
+      <h1 id="dname">—</h1>
+      <div class="sub" id="did">—</div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="lab">Active risk · live</div>
+      <div class="big"><span id="ar">—</span><span class="dot" id="ardot"></span></div>
+      <div class="sub" id="arsub">threats happening now</div>
+    </div>
+    <div class="card">
+      <div class="lab">Exposure · posture</div>
+      <div class="big"><span id="exp">—</span><span class="dot" id="expdot"></span></div>
+      <div class="sub" id="expsub">hygiene &amp; open doors</div>
+    </div>
+    <div class="card">
+      <div class="lab">Correlations found</div>
+      <div class="big"><span id="corr">—</span></div>
+      <div class="sub">signals only cross-domain analysis reveals</div>
+    </div>
+  </div>
+
+  <div class="sec-h" style="margin-bottom:12px"><h2>Sensor domains</h2><span>raw collectors — the brain correlates across them</span></div>
+  <div class="lanes" id="lanes"></div>
+
+  <div class="sec-h">
+    <h2>Cross-domain activity</h2><span>one unified nervous system, newest first</span>
+    <div class="legend">
+      <span><i style="background:var(--proc)"></i>process</span>
+      <span><i style="background:var(--net)"></i>network</span>
+      <span><i style="background:var(--dns)"></i>dns</span>
+      <span><i style="background:var(--corr)"></i>correlation</span>
+    </div>
+  </div>
+  <div class="stream" id="stream"></div>
+
+  <div class="foot" id="foot">rendered from real telemetry</div>
+</div>
+
+<script>
+let D = window.AMOSKYS_DEVICE || null;
+const $=s=>document.querySelector(s);
+const bandColor=b=>b==='red'?'var(--red)':b==='amber'?'var(--amber)':'var(--calm)';
+const ICO={cpu:'▣',globe:'◍',dns:'⟐',shield:'⬡'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function render(){
+  if(!D){$('#dname').textContent='Telemetry unavailable';return;}
+  const v=D.verdict||{}, ex=D.exposure||{};
+  $('#dname').textContent=D.device.name||'device';
+  $('#did').textContent=D.device.id||'—';
+  $('#ago').textContent=fmtAgo(D.generated_at);
+  // active risk
+  $('#ar').textContent=v.active_risk!=null?v.active_risk:'—';
+  $('#ardot').className='dot '+(v.band||'calm');
+  $('#ar').style.color=bandColor(v.band);
+  $('#arsub').textContent=(v.headline||'')+(v.requires_investigation?' · '+v.requires_investigation+' need investigation':' · 0 need investigation');
+  // exposure
+  $('#exp').textContent=ex.label||'—';
+  $('#exp').style.color=bandColor(ex.band);
+  $('#expdot').className='dot '+(ex.band||'calm');
+  $('#expsub').textContent=ex.note||'hygiene & open doors';
+  // correlations
+  const corrLane=(D.lanes||[]).find(l=>l.key==='correlation')||{};
+  $('#corr').textContent=(corrLane.count||0).toLocaleString();
+  // agents (we report the domains actively collecting)
+  const active=(D.lanes||[]).filter(l=>l.count>0).length;
+  $('#agents').textContent=active+'/'+(D.lanes||[]).length+' active';
+  // lanes
+  $('#lanes').innerHTML=(D.lanes||[]).map(l=>{
+    const on=l.flagged>0;
+    return '<div class="lane '+l.key+'"><div class="ico">'+(ICO[l.icon]||'●')+'</div>'
+      +'<div class="num tnum">'+(l.count||0).toLocaleString()+'</div>'
+      +'<div class="lab">'+esc(l.label)+'</div>'
+      +'<div class="fl '+(on?'on':'off')+'">'+(on?l.flagged+' flagged by brain':'clean')+'</div></div>';
+  }).join('');
+  // stream
+  const st=D.stream||[];
+  $('#stream').innerHTML = st.length? st.map(s=>{
+    const mit=(s.mitre||[]).slice(0,2).map(m=>'<span class="mit">'+esc(m)+'</span>').join('');
+    return '<div class="ev '+s.domain+' '+s.band+'">'
+      +'<div class="t">'+fmtTime(s.ts)+'</div>'
+      +'<div class="rail"><div class="node"></div></div>'
+      +'<div class="card2"><div class="row1"><span class="dom">'+esc(s.domain)+'</span>'
+        +'<span class="ttl">'+esc(s.title)+'</span>'+mit+'</div>'
+        +(s.detail?'<div class="dtl">'+esc(s.detail)+'</div>':'')+'</div></div>';
+  }).join('') : '<div class="empty">No recent activity for this device.</div>';
+  $('#foot').textContent='rendered from real telemetry · '+(D.device.events||0)+' correlations · '+st.length+' recent events shown';
+}
+function fmtTime(s){try{return new Date(s).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(e){return ''}}
+function fmtAgo(s){try{const m=Math.max(0,Math.round((Date.now()-new Date(s).getTime())/60000));return m<60?m+'m ago':Math.round(m/60)+'h ago'}catch(e){return '—'}}
+
+async function load(){
+  try{
+    const r=await fetch('/dashboard/api/device'+location.search,{cache:'no-store',headers:{'Accept':'application/json'}});
+    if(r.ok){const d=await r.json(); if(d&&d.device) D=d;}
+  }catch(e){console.warn('device fetch failed',e);}
+  render();
+}
+load();
+</script>
+</body>
+</html>

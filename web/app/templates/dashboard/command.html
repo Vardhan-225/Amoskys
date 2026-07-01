@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMOSKYS — Command</title>
+<style>
+:root{
+  /* ── surfaces ── */
+  --bg0:#05070d; --bg1:#0a1018; --bg2:#0e1622; --panel:rgba(18,28,42,.55);
+  --panel-solid:#101a28; --line:rgba(120,160,200,.14); --line-2:rgba(120,160,200,.28);
+  /* ── ink ── */
+  --ink:#eaf2fb; --ink-2:#9fb2c8; --ink-3:#6b8099; --ink-4:#4a5c72;
+  /* ── brand + bands (colourblind-safe: paired with icon+label) ── */
+  --cyan:#35e0f0; --cyan-dim:#1c8ea0;
+  --calm:#3ad29f; --calm-bg:rgba(58,210,159,.12);
+  --amber:#ffb038; --amber-bg:rgba(255,176,56,.12);
+  --red:#ff4d5e; --red-bg:rgba(255,77,94,.12);
+  --violet:#8b7bff;
+  /* ── type ── */
+  --mono:'SF Mono',ui-monospace,'JetBrains Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --r:16px; --r-sm:11px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans); color:var(--ink); background:var(--bg0);
+  background-image:
+    radial-gradient(1200px 600px at 78% -8%, rgba(53,224,240,.10), transparent 60%),
+    radial-gradient(900px 500px at 8% 108%, rgba(139,123,255,.08), transparent 55%);
+  overflow-x:hidden; -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:var(--mono)} .tnum{font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── top bar ── */
+.topbar{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;
+  padding:14px 26px;background:linear-gradient(180deg,rgba(5,7,13,.92),rgba(5,7,13,.66));
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.14em;font-size:15px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);
+  box-shadow:0 0 0 0 rgba(53,224,240,.6);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(53,224,240,.55)}70%{box-shadow:0 0 0 9px rgba(53,224,240,0)}100%{box-shadow:0 0 0 0 rgba(53,224,240,0)}}
+.brand small{color:var(--ink-3);font-weight:500;letter-spacing:.02em;font-size:11px;margin-left:2px}
+.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid var(--line);
+  border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--ink-2)}
+.pill b{color:var(--ink);font-weight:600}
+.live{color:var(--calm)} .live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--calm);margin-right:6px;box-shadow:0 0 8px var(--calm)}
+.heartbeat{display:flex;align-items:flex-end;gap:2px;height:26px}
+.heartbeat i{width:3px;background:linear-gradient(180deg,var(--cyan),var(--cyan-dim));border-radius:2px;opacity:.75}
+
+/* ── layout ── */
+.wrap{max-width:1480px;margin:0 auto;padding:22px 26px 80px}
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;margin-bottom:20px}
+@media(max-width:1080px){.hero{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  backdrop-filter:blur(12px);position:relative;overflow:hidden}
+.card-h{display:flex;align-items:center;gap:10px;padding:16px 20px 0}
+.card-h h3{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.card-h .tag{margin-left:auto;font-size:11px;color:var(--ink-3)}
+
+/* ── globe ── */
+.globe-card{min-height:520px;padding:0}
+#globe{width:100%;height:520px;cursor:grab}
+#globe:active{cursor:grabbing}
+.globe-fallback{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;color:var(--ink-3);text-align:center;padding:40px}
+.globe-legend{position:absolute;left:18px;bottom:16px;display:flex;gap:14px;font-size:11.5px;color:var(--ink-2);z-index:2}
+.globe-legend span{display:flex;align-items:center;gap:6px}
+.globe-legend i{width:9px;height:9px;border-radius:50%}
+.globe-cap{position:absolute;right:18px;top:16px;text-align:right;font-size:11px;color:var(--ink-3);z-index:2;max-width:180px}
+.globe-tt{position:fixed;z-index:60;pointer-events:none;background:var(--panel-solid);border:1px solid var(--line-2);
+  border-radius:10px;padding:9px 12px;font-size:12px;opacity:0;transition:opacity .12s;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.globe-tt b{color:var(--cyan)} .globe-tt .k{color:var(--ink-3)}
+
+/* ── verdict ── */
+.verdict{display:flex;flex-direction:column;gap:16px;padding:20px}
+.verdict-top{display:flex;gap:20px;align-items:center}
+.ring{--v:51;--c:var(--amber);position:relative;width:132px;height:132px;flex:0 0 132px}
+.ring svg{transform:rotate(-90deg)}
+.ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .val b{font-size:38px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums}
+.ring .val small{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+.verdict-txt h1{font-size:27px;font-weight:730;letter-spacing:-.01em;line-height:1.1}
+.verdict-txt p{color:var(--ink-2);font-size:13.5px;margin-top:7px;max-width:34ch;line-height:1.5}
+.band-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;
+  font-size:11.5px;font-weight:600;letter-spacing:.03em;margin-top:11px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid var(--line);padding-top:16px}
+.split .m{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:13px 15px}
+.split .m .lab{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.split .m .big{font-size:19px;font-weight:680;margin-top:5px;display:flex;align-items:center;gap:8px}
+.split .m .sub{font-size:11.5px;color:var(--ink-3);margin-top:3px}
+.factors{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.chip{font-size:11px;padding:4px 9px;border-radius:7px;background:var(--bg2);border:1px solid var(--line);color:var(--ink-2)}
+
+/* ── nervous-system strip ── */
+.nerve{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:820px){.nerve{grid-template-columns:repeat(2,1fr)}}
+.nerve .n{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;
+  position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default}
+.nerve .n:hover{border-color:var(--line-2);transform:translateY(-2px)}
+.nerve .n .ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;margin-bottom:11px;
+  background:rgba(53,224,240,.10);color:var(--cyan)}
+.nerve .n .num{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums}
+.nerve .n .lab{font-size:12px;color:var(--ink-3);margin-top:2px}
+.nerve .n .flag{position:absolute;top:14px;right:14px;font-size:11px;padding:2px 8px;border-radius:6px}
+.nerve .n.clean .ico{background:var(--calm-bg);color:var(--calm)}
+
+/* ── queue ── */
+.queue-h{display:flex;align-items:baseline;gap:12px;margin:6px 2px 12px}
+.queue-h h2{font-size:17px;font-weight:680;letter-spacing:-.01em}
+.queue-h span{color:var(--ink-3);font-size:13px}
+.queue{display:flex;flex-direction:column;gap:11px}
+.inc{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;
+  background:var(--panel);border:1px solid var(--line);border-left-width:3px;border-radius:var(--r);
+  padding:16px 20px;cursor:pointer;transition:border-color .18s,background .18s,transform .1s}
+.inc:hover{background:rgba(24,36,54,.7);border-color:var(--line-2)}
+.inc:active{transform:scale(.995)}
+.inc.calm{border-left-color:var(--calm)} .inc.amber{border-left-color:var(--amber)} .inc.red{border-left-color:var(--red)}
+.inc .sev{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:18px}
+.inc.calm .sev{background:var(--calm-bg)} .inc.amber .sev{background:var(--amber-bg)} .inc.red .sev{background:var(--red-bg)}
+.inc .body .t{font-size:15px;font-weight:600;letter-spacing:-.005em}
+.inc .body .meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;align-items:center}
+.inc .body .meta .mchip{font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--bg2);
+  border:1px solid var(--line);color:var(--ink-3)}
+.inc .body .meta .mitre{color:var(--violet);border-color:rgba(139,123,255,.3)}
+.inc .right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.vpill{font-size:11.5px;font-weight:650;padding:5px 11px;border-radius:999px;white-space:nowrap}
+.vpill.calm{background:var(--calm-bg);color:var(--calm)} .vpill.amber{background:var(--amber-bg);color:var(--amber)}
+.vpill.red{background:var(--red-bg);color:var(--red)}
+.inc .right .cnt{font-size:11px;color:var(--ink-3)}
+
+/* ── suppressed banner ── */
+.suppress{display:flex;align-items:center;gap:14px;margin-top:18px;padding:15px 20px;border-radius:var(--r);
+  background:linear-gradient(90deg,rgba(58,210,159,.08),transparent);border:1px solid rgba(58,210,159,.18)}
+.suppress .ic{width:34px;height:34px;border-radius:9px;background:var(--calm-bg);color:var(--calm);display:grid;place-items:center}
+.suppress .tx{flex:1;font-size:13.5px;color:var(--ink-2)} .suppress .tx b{color:var(--ink)}
+.suppress button{background:transparent;border:1px solid var(--line-2);color:var(--ink-2);padding:8px 14px;
+  border-radius:9px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s}
+.suppress button:hover{border-color:var(--calm);color:var(--calm)}
+
+/* ── flyout ── */
+.scrim{position:fixed;inset:0;background:rgba(3,5,9,.6);backdrop-filter:blur(3px);opacity:0;
+  pointer-events:none;transition:opacity .25s;z-index:70}
+.scrim.on{opacity:1;pointer-events:auto}
+.flyout{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);z-index:80;
+  background:linear-gradient(180deg,var(--bg1),var(--bg0));border-left:1px solid var(--line-2);
+  transform:translateX(100%);transition:transform .32s cubic-bezier(.4,0,.1,1);display:flex;flex-direction:column;
+  box-shadow:-30px 0 80px rgba(0,0,0,.5)}
+.flyout.on{transform:translateX(0)}
+.fly-h{padding:22px 24px 18px;border-bottom:1px solid var(--line)}
+.fly-h .close{float:right;background:var(--bg2);border:1px solid var(--line);color:var(--ink-2);width:32px;height:32px;
+  border-radius:9px;cursor:pointer;font-size:16px;line-height:1}
+.fly-h .close:hover{color:var(--ink)}
+.fly-h h2{font-size:20px;font-weight:700;letter-spacing:-.01em;margin-right:44px;line-height:1.25}
+.fly-b{padding:22px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:20px}
+.fly-sec .h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px}
+.why{font-size:14px;line-height:1.6;color:var(--ink-2)}
+.evrow{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.evrow .k{color:var(--ink-3);width:120px;flex:0 0 120px} .evrow .v{color:var(--ink)}
+.verdict-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vbtn{padding:13px;border-radius:11px;border:1px solid var(--line-2);background:var(--bg2);color:var(--ink);
+  cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;text-align:left;transition:.15s;display:flex;
+  flex-direction:column;gap:3px}
+.vbtn small{font-weight:400;color:var(--ink-3);font-size:11px}
+.vbtn:hover{border-color:var(--cyan)} .vbtn.sel{border-color:var(--cyan);background:rgba(53,224,240,.10)}
+.vbtn.exp:hover,.vbtn.exp.sel{border-color:var(--calm);background:var(--calm-bg)}
+.vbtn.threat:hover,.vbtn.threat.sel{border-color:var(--red);background:var(--red-bg)}
+.timeline{position:relative;padding-left:20px}
+.timeline::before{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:var(--line-2)}
+.tl{position:relative;padding:0 0 14px 0;font-size:13px}
+.tl::before{content:"";position:absolute;left:-18px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--cyan)}
+.tl .ts{color:var(--ink-3);font-size:11.5px}
+.hunt{width:100%;padding:13px;border-radius:11px;border:1px dashed var(--line-2);background:transparent;
+  color:var(--cyan);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;transition:.15s}
+.hunt:hover{background:rgba(53,224,240,.07);border-style:solid}
+.foot{color:var(--ink-4);font-size:12px;text-align:center;margin-top:40px;line-height:1.7}
+.foot b{color:var(--ink-3)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>AMOSKYS <small>· nervous system for your machine</small></div>
+  <div class="grow"></div>
+  <div class="pill" id="devpill">◐ <b>—</b></div>
+  <div class="pill"><span class="live">live</span> · updated <b id="ago">—</b></div>
+  <div class="pill" style="padding:7px 11px"><div class="heartbeat" id="hb"></div></div>
+</div>
+
+<div class="wrap">
+  <!-- HERO -->
+  <div class="hero">
+    <div class="card globe-card">
+      <div id="globe"></div>
+      <div class="globe-fallback" id="gfb">
+        <div style="font-size:34px">🛰️</div>
+        <div>3D view needs WebGL.<br>Your data is safe below — the globe is just the map.</div>
+      </div>
+      <div class="globe-cap" id="gcap"></div>
+      <div class="globe-legend">
+        <span><i style="background:var(--calm)"></i>known-good</span>
+        <span><i style="background:var(--amber)"></i>worth a look</span>
+        <span><i style="background:var(--cyan)"></i>your device</span>
+      </div>
+    </div>
+
+    <div class="card verdict">
+      <div class="verdict-top">
+        <div class="ring" id="ring">
+          <svg width="132" height="132" viewBox="0 0 132 132">
+            <circle cx="66" cy="66" r="58" fill="none" stroke="rgba(120,160,200,.13)" stroke-width="9"/>
+            <circle id="ringarc" cx="66" cy="66" r="58" fill="none" stroke="var(--amber)" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="364" stroke-dashoffset="364"/>
+          </svg>
+          <div class="val"><b id="rv">0</b><small>risk / 100</small></div>
+        </div>
+        <div class="verdict-txt">
+          <h1 id="vhead">—</h1>
+          <p id="vsub">Reading your machine…</p>
+          <div class="band-chip" id="vband"></div>
+        </div>
+      </div>
+      <div class="split">
+        <div class="m">
+          <div class="lab">Exposure · posture</div>
+          <div class="big" id="expv">—</div>
+          <div class="sub">hygiene &amp; open doors</div>
+        </div>
+        <div class="m">
+          <div class="lab">Active risk · live</div>
+          <div class="big" id="actv">—</div>
+          <div class="sub">threats happening now</div>
+        </div>
+      </div>
+      <div>
+        <div class="lab" style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px">Why this score</div>
+        <div class="factors" id="vfactors"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NERVOUS SYSTEM -->
+  <div class="nerve" id="nerve"></div>
+
+  <!-- QUEUE -->
+  <div class="queue-h"><h2>What to look at</h2><span id="qsub"></span></div>
+  <div class="queue" id="queue"></div>
+
+  <div class="suppress">
+    <div class="ic">✓</div>
+    <div class="tx"><b id="supn">0</b> events auto-classified as <b>expected activity</b> — your dev tools, macOS daemons, deploy workflow and known services. AMOSKYS kept them out of your way.</div>
+    <button onclick="alert('In the live app this opens the full auto-cleared log with the suppression reason for each event.')">Review cleared</button>
+  </div>
+
+  <div class="foot">
+    AMOSKYS · honest by design — a scary label alone never drives the number, only corroboration does.<br>
+    <b id="fclr">—</b> auto-cleared · <b id="freq">—</b> require investigation · rendered from real telemetry (<span id="fdev">—</span>)
+  </div>
+</div>
+
+<!-- FLYOUT -->
+<div class="scrim" id="scrim" onclick="closeFly()"></div>
+<div class="flyout" id="flyout" role="dialog" aria-modal="true">
+  <div class="fly-h">
+    <button class="close" onclick="closeFly()" aria-label="Close">✕</button>
+    <div class="band-chip" id="fband" style="margin:0 0 10px"></div>
+    <h2 id="ftitle">—</h2>
+  </div>
+  <div class="fly-b" id="flybody"></div>
+</div>
+
+<div class="globe-tt" id="gtt"></div>
+
+<script src="/static/vendor/globe.gl.min.js"></script>
+<script>
+let M = window.AMOSKYS_MODEL || null;
+const $ = s => document.querySelector(s);
+const SEV_ICON = {calm:'✓',amber:'!',red:'▲'};
+const bandColor = b => b==='red'?'var(--red)':b==='amber'?'var(--amber)':'var(--calm)';
+const bandBg = b => b==='red'?'var(--red-bg)':b==='amber'?'var(--amber-bg)':'var(--calm-bg)';
+/* escape any telemetry-derived string before it touches innerHTML (untrusted host data) */
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function boot(){
+  if(!M){document.body.innerHTML='<p style="padding:40px;color:#9fb2c8">model not loaded</p>';return;}
+  renderTop(); renderVerdict(); renderNerve(); renderQueue(); renderGlobe();
+}
+
+/* ── top bar ── */
+function renderTop(){
+  $('#devpill').innerHTML = '◐ <b>'+esc(M.device.name)+'</b>';
+  $('#fdev').textContent = M.device.name+' · '+M.totals.security_events+' correlations';
+  const gen = new Date(M.generated_at);
+  const mins = Math.max(0,Math.round((Date.now()-gen.getTime())/60000));
+  $('#ago').textContent = mins<60? mins+'m ago' : Math.round(mins/60)+'h ago';
+  if(M.verdict){ $('#fclr').textContent=(M.verdict.suppressed_count||0).toLocaleString();
+    $('#freq').textContent=M.verdict.requires_investigation||0; }
+  // heartbeat from timeline
+  const tl = (M.timeline||[]).slice(-26); const mx = Math.max(1,...tl.map(t=>t.count));
+  $('#hb').innerHTML = tl.map(t=>'<i style="height:'+(4+22*t.count/mx)+'px"></i>').join('');
+}
+
+/* ── verdict ── */
+function renderVerdict(){
+  const v=M.verdict;
+  $('#vhead').textContent=v.headline;
+  $('#vsub').textContent=v.sub_line;
+  const c=bandColor(v.band);
+  const arc=$('#ringarc'); const circ=364;
+  arc.style.stroke=c;
+  setTimeout(()=>{arc.style.transition='stroke-dashoffset 1.1s cubic-bezier(.3,0,.2,1)';
+    arc.style.strokeDashoffset=circ*(1-v.active_risk/100);},120);
+  // count up
+  let n=0; const t=setInterval(()=>{n+=Math.max(1,Math.round(v.active_risk/22));
+    if(n>=v.active_risk){n=v.active_risk;clearInterval(t)}$('#rv').textContent=n;},26);
+  const vb=$('#vband'); vb.style.background=bandBg(v.band); vb.style.color=c;
+  vb.textContent = (v.band==='calm'?'● CALM':v.band==='amber'?'● WORTH A LOOK':'● ACT NOW');
+  // exposure vs active
+  $('#expv').innerHTML='Good <span style="color:var(--calm);font-size:14px">●</span>';
+  $('#actv').innerHTML=v.active_risk+' <span style="color:'+c+';font-size:14px">●</span>';
+  $('#actv').style.color=c;
+  $('#vfactors').innerHTML = (v.top_factors&&v.top_factors.length)
+    ? v.top_factors.map(f=>'<span class="chip">'+esc(f.label)+'</span>').join('')
+      + '<span class="chip" style="border-color:rgba(58,210,159,.3);color:var(--calm)">+'+v.suppressed_count+' auto-cleared</span>'
+    : '<span class="chip">no signals above baseline</span>';
+  $('#supn').textContent=v.suppressed_count;
+}
+
+/* ── nervous system ── */
+const ICO={cpu:'▣',globe:'◍',dns:'⟐',shield:'⬡',filter:'✓'};
+function renderNerve(){
+  $('#nerve').innerHTML = M.domains.map(d=>{
+    const clean = d.suspicious===0;
+    const flag = d.key==='suppressed'
+      ? '<span class="flag" style="background:var(--calm-bg);color:var(--calm)">cleared</span>'
+      : (d.suspicious>0?'<span class="flag" style="background:var(--amber-bg);color:var(--amber)">'+d.suspicious+' flagged</span>'
+                       :'<span class="flag" style="background:var(--calm-bg);color:var(--calm)">clean</span>');
+    return '<div class="n '+(clean?'clean':'')+'">'
+      +'<div class="ico">'+(ICO[d.icon]||'●')+'</div>'
+      +'<div class="num tnum">'+d.count.toLocaleString()+'</div>'
+      +'<div class="lab">'+esc(d.label)+'</div>'+flag+'</div>';
+  }).join('');
+}
+
+/* ── queue ── */
+function renderQueue(){
+  const inc=M.incidents;
+  $('#qsub').textContent = inc.filter(i=>i.band!=='calm').length+' to review · '+inc.filter(i=>i.band==='calm').length+' expected';
+  $('#queue').innerHTML = inc.map((i,ix)=>{
+    const mitre=(i.mitre||[]).slice(0,3).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join('');
+    const facts=(i.factors||[]).slice(0,3).map(f=>'<span class="mchip">'+esc(f)+'</span>').join('');
+    return '<div class="inc '+i.band+'" onclick="openFly('+ix+')">'
+      +'<div class="sev">'+SEV_ICON[i.band]+'</div>'
+      +'<div class="body"><div class="t">'+esc(i.title)+'</div>'
+        +'<div class="meta">'+mitre+facts+'</div></div>'
+      +'<div class="right"><span class="vpill '+i.band+'">'+esc(i.verdict_label)+'</span>'
+        +'<span class="cnt tnum">'+i.count+' event'+(i.count!==1?'s':'')+'</span></div>'
+      +'</div>';
+  }).join('');
+}
+
+/* ── flyout ── */
+let selVerdict={};
+function openFly(ix){
+  const i=M.incidents[ix]; window._fi=i;
+  const c=bandColor(i.band);
+  const fb=$('#fband'); fb.style.background=bandBg(i.band); fb.style.color=c;
+  fb.textContent=i.verdict_label.toUpperCase();
+  $('#ftitle').textContent=i.title;
+  const mitre=(i.mitre||[]).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join(' ')||'—';
+  const facts=(i.factors||[]).map(f=>'<span class="chip">'+esc(f)+'</span>').join('');
+  const sel=selVerdict[i.id]||i.verdict;
+  const vbtn=(k,cls,lab,sub)=>'<button class="vbtn '+cls+(sel===k?' sel':'')+'" onclick="setV(\''+i.id+'\',\''+k+'\',this)"><span>'+lab+'</span><small>'+sub+'</small></button>';
+  $('#flybody').innerHTML=
+    '<div class="fly-sec"><div class="h">The correlation</div><div class="why">'+esc(i.why)+'</div></div>'
+    +'<div class="fly-sec"><div class="h">Evidence</div>'
+      +'<div class="evrow"><span class="k">Events correlated</span><span class="v tnum">'+i.count+'</span></div>'
+      +'<div class="evrow"><span class="k">MITRE ATT&CK</span><span class="v">'+mitre+'</span></div>'
+      +(i.first?'<div class="evrow"><span class="k">First seen</span><span class="v mono">'+fmt(i.first)+'</span></div>':'')
+      +(i.last?'<div class="evrow"><span class="k">Last seen</span><span class="v mono">'+fmt(i.last)+'</span></div>':'')
+      +'</div>'
+    +'<div class="fly-sec"><div class="h">Signals</div><div class="factors">'+facts+'</div></div>'
+    +'<div class="fly-sec"><div class="h">Your verdict — teaches AMOSKYS</div>'
+      +'<div class="verdict-btns">'
+        +vbtn('expected','exp','Expected activity','suppress this pattern')
+        +vbtn('suspicious','','Suspicious','keep watching')
+        +vbtn('threat','threat','Threat','escalate + alert')
+        +vbtn('dismiss','','Not now','leave unset')
+      +'</div>'
+      +'<div id="vfeed" style="font-size:12px;color:var(--ink-3);margin-top:10px;min-height:16px"></div></div>'
+    +'<button class="hunt" onclick="alert(\'In the live app: pivots to Hunt pre-filtered to this process/destination across all domains.\')">⌕ Hunt for related activity</button>';
+  $('#scrim').classList.add('on'); $('#flyout').classList.add('on');
+}
+function setV(id,k,el){
+  selVerdict[id]=k;
+  [...el.parentNode.children].forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
+  const msg={expected:'✓ Learned. AMOSKYS will auto-clear this pattern next time — the queue gets quieter.',
+    suspicious:'◐ Kept on the watchlist. You\'ll see it if it escalates.',
+    threat:'▲ Escalated. In the live app this fires an alert and pins the incident.',
+    dismiss:'Left unset.'}[k];
+  $('#vfeed').textContent=msg;
+  $('#vfeed').style.color = k==='expected'?'var(--calm)':k==='threat'?'var(--red)':'var(--ink-3)';
+}
+function closeFly(){$('#scrim').classList.remove('on');$('#flyout').classList.remove('on')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFly()});
+function fmt(s){try{return new Date(s).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return s}}
+
+/* ── globe ── */
+function renderGlobe(){
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(typeof Globe==='undefined'){ $('#gfb').style.display='flex'; return; }
+  const dev=M.globe.device, dests=M.globe.destinations;
+  $('#gcap').innerHTML='<b style="color:var(--cyan)">'+dests.length+'</b> live destinations<br>'
+    +'<span style="color:var(--ink-4)">real egress, coloured by verdict</span>';
+  const arcs=dests.map(d=>({startLat:dev.lat,startLng:dev.lon,endLat:d.lat,endLng:d.lon,
+    band:d.band,d:d}));
+  let globe;
+  try{
+    globe = Globe()($('#globe'))
+      .backgroundColor('rgba(0,0,0,0)')
+      .globeImageUrl(null).showGlobe(true).showGraticules(true)
+      .showAtmosphere(true).atmosphereColor('#35e0f0').atmosphereAltitude(0.20)
+      .arcsData(arcs)
+      .arcColor(a=>a.band==='amber'?['rgba(255,176,56,.9)','rgba(255,176,56,.15)']:['rgba(58,210,159,.85)','rgba(53,224,240,.12)'])
+      .arcStroke(a=>a.band==='amber'?0.7:0.4)
+      .arcAltitudeAutoScale(0.42)
+      .arcDashLength(0.5).arcDashGap(0.22)
+      .arcDashAnimateTime(reduce?0:d=>2600)
+      .arcsTransitionDuration(0)
+      .pointsData(dests)
+      .pointLat('lat').pointLng('lon')
+      .pointColor(d=>d.band==='amber'?'#ffb038':'#3ad29f')
+      .pointAltitude(d=>0.01+Math.min(0.14,d.flows/400))
+      .pointRadius(d=>d.band==='amber'?0.5:0.32)
+      .pointsMerge(false)
+      .onPointHover(showTT).onPointClick(focusDest);
+    // device marker (cyan ring) as an extra ring layer
+    globe.ringsData([{lat:dev.lat,lng:dev.lon}])
+      .ringColor(()=>t=>`rgba(53,224,240,${1-t})`)
+      .ringMaxRadius(3.2).ringPropagationSpeed(reduce?0:1.4).ringRepeatPeriod(reduce?0:1400);
+    const mat=globe.globeMaterial();
+    mat.color.set('#0a1524'); mat.emissive.set('#06111e'); mat.emissiveIntensity=0.35; mat.shininess=0.6;
+    // framing + gentle rotation
+    globe.pointOfView({lat:28,lng:-95,altitude:2.3},0);
+    const ctr=globe.controls(); ctr.autoRotate=!reduce; ctr.autoRotateSpeed=0.42; ctr.enableZoom=true;
+    // responsive size
+    const fit=()=>{const el=$('#globe');globe.width(el.clientWidth).height(el.clientHeight)};
+    fit(); window.addEventListener('resize',fit);
+  }catch(err){ console.error(err); $('#gfb').style.display='flex'; }
+}
+function showTT(d){
+  const tt=$('#gtt');
+  if(!d){tt.style.opacity=0;return;}
+  tt.style.opacity=1;
+  tt.innerHTML='<b>'+esc(d.org||d.org_raw||'unattributed')+'</b><br>'
+    +'<span class="k">'+esc((d.city?d.city+', ':'')+(d.country||'—'))+'</span><br>'
+    +'<span class="k">flows</span> '+(+d.flows||0)+' · <span class="k">'+(d.band==='amber'?'worth a look':'known-good')+'</span>';
+  document.onmousemove=e=>{tt.style.left=(e.clientX+16)+'px';tt.style.top=(e.clientY+16)+'px';};
+}
+function focusDest(d){
+  // find matching incident (the foreign one)
+  const ix=M.incidents.findIndex(i=>i.dest && Math.abs(i.dest.lat-d.lat)<0.5);
+  if(ix>=0) openFly(ix);
+}
+
+/* ── live loader: fetch the honest model, degrade gracefully ── */
+async function load(){
+  try{
+    const res = await fetch('/dashboard/api/insight',{headers:{'Accept':'application/json'},cache:'no-store'});
+    if(res.ok){ const data = await res.json(); if(data && data.verdict) M = data; }
+  }catch(e){ console.warn('insight fetch failed, using inline fallback',e); }
+  if(!M){
+    document.querySelector('#vhead').textContent='Telemetry unavailable';
+    document.querySelector('#vsub').textContent='Could not load the model. Retrying shortly…';
+    setTimeout(load, 6000); return;
+  }
+  boot();
+  // gentle live refresh every 45s (matches server cache TTL)
+  clearInterval(window._refresh);
+  window._refresh = setInterval(async()=>{
+    try{ const r=await fetch('/dashboard/api/insight',{cache:'no-store'});
+      if(r.ok){const d=await r.json(); if(d&&d.verdict){M=d; renderTop(); renderVerdict(); renderNerve(); renderQueue();}} }
+    catch(e){}
+  }, 45000);
+}
+load();
+</script>
+</body>
+</html>

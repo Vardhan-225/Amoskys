@@ -11,10 +11,20 @@ _DEVICES_URL = "/dashboard/devices"
 @dashboard_bp.route("/")
 @require_login
 def dashboard_home():
-    """Landing page — overview (or setup if first login)."""
+    """Landing page — the redesigned Command dashboard (honest verdict + live
+    self-hosted globe + correlated incident queue). Replaces the old overview,
+    which stays available at /dashboard/overview-classic."""
     user = get_current_user()
     if user and not user.setup_completed:
         return redirect("/dashboard/setup")
+    return render_template("dashboard/command.html", user=user)
+
+
+@dashboard_bp.route("/overview-classic")
+@require_login
+def dashboard_overview_classic():
+    """The previous overview page, kept as a fallback."""
+    user = get_current_user()
     return render_template("dashboard/overview.html", user=user)
 
 
