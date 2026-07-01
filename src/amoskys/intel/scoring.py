@@ -1231,6 +1231,7 @@ class ScoringEngine:
         # "suspicious" (≥0.40) on the single-device fleet where every attack
         # pattern is "familiar". Applied BEFORE the trust caps below, so a
         # trusted apple_system/self actor still wins and is pulled back down.
+        capped_uncorroborated = False
         floor = _CATEGORY_RISK_FLOORS.get(cat_key, 0.0)
         if floor > 0.0 and composite < floor:
             # ── Corroboration gate (2026-07-01) ──────────────────────────────
@@ -1261,6 +1262,11 @@ class ScoringEngine:
             # (roadmap increment 2) can assert a real, ordered, same-actor chain.
             corroborated = bool(event.get("threat_intel_match")) or foreign
             effective_floor = floor if corroborated else min(floor, _SUSPICIOUS_THRESHOLD)
+            # Remember that the brain deliberately capped an uncorroborated scary
+            # label, so the never-downgrade rule below cannot resurrect the
+            # agent's raw 'malicious' stamp and undo the calibration.
+            if not corroborated:
+                capped_uncorroborated = True
             if composite < effective_floor:
                 behav_factors.append(
                     {
@@ -1304,8 +1310,12 @@ class ScoringEngine:
         # EXCEPT for trusted actors where we know the classification is wrong.
         _SEVERITY_ORDER = {"legitimate": 0, "suspicious": 1, "malicious": 2}
         original = event.get("final_classification", "legitimate")
-        if trust_disposition == "unknown":
-            # Only apply the never-downgrade rule for unknown processes
+        if trust_disposition == "unknown" and not capped_uncorroborated:
+            # Only apply the never-downgrade rule for unknown processes — and
+            # NEVER for a floored category we just capped for lack of corroboration.
+            # Otherwise the probe's raw CRITICAL->'malicious' stamp resurrects the
+            # exact over-attribution the corroboration gate exists to remove
+            # (this is why 756 uncorroborated 'malicious' survived the first pass).
             if _SEVERITY_ORDER.get(original, 0) > _SEVERITY_ORDER.get(
                 classification, 0
             ):
