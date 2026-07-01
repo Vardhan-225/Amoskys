@@ -243,9 +243,10 @@ def threat_feed():
 @dashboard_bp.route("/reliability")
 @require_login
 def reliability_dashboard():
-    """Agent Reliability (AMRDR) - Drift detection and trust weights"""
-    user = get_current_user()
-    return render_template("dashboard/reliability.html", user=user)
+    """Agent reliability → IGRIS (consolidated). The standalone reliability page
+    rendered a hardcoded no-op tracker (fake data); IGRIS carries the real
+    supervisory/reliability view."""
+    return redirect("/dashboard/igris")
 
 
 @dashboard_bp.route("/igris")
