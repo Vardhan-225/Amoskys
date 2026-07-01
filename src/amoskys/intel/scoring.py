@@ -1200,10 +1200,16 @@ class ScoringEngine:
         # where 100% of events read risk>0 / max 1.0. A known-bad threat-intel hit
         # always escalates and surfaces. The raw probe value is kept under
         # risk_score_raw for forensics. (AMOSKYS calibration move 1, 2026-06-18.)
-        if event.get("threat_intel_match") and _SEVERITY_ORDER.get(classification, 0) < 2:
+        if (
+            event.get("threat_intel_match")
+            and _SEVERITY_ORDER.get(classification, 0) < 2
+        ):
             classification = "malicious"
-        _band = {"legitimate": (0.0, 0.30), "suspicious": (0.35, 0.69),
-                 "malicious": (0.70, 1.0)}
+        _band = {
+            "legitimate": (0.0, 0.30),
+            "suspicious": (0.35, 0.69),
+            "malicious": (0.70, 1.0),
+        }
         _lo, _hi = _band.get(classification, (0.0, 0.30))
         _reconciled = min(_hi, max(_lo, composite))
         if event.get("threat_intel_match"):

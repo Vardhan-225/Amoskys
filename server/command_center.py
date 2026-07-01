@@ -376,7 +376,8 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # column already exists
     # Command queue table (MCP server → device agent)
-    db.executescript("""
+    db.executescript(
+        """
         CREATE TABLE IF NOT EXISTS device_commands (
             id TEXT PRIMARY KEY,
             device_id TEXT NOT NULL,
@@ -395,7 +396,8 @@ def init_db():
             ON device_commands(device_id, status);
         CREATE INDEX IF NOT EXISTS idx_commands_expires
             ON device_commands(expires_at);
-    """)
+    """
+    )
 
     db.commit()
     db.close()
@@ -404,8 +406,10 @@ def init_db():
 
 # ── Auth ───────────────────────────────────────────────────────────
 
+
 def require_device_auth(f):
     """Validate device API key from Authorization header."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.headers.get("Authorization", "")
@@ -443,6 +447,7 @@ def require_device_auth(f):
 
 
 # ── API Endpoints ──────────────────────────────────────────────────
+
 
 @app.route("/api/v1/register", methods=["POST"])
 def register_device():
@@ -501,20 +506,29 @@ def register_device():
 
         # If device_id changed (reinstall), return the api_key so agent can use it
         if original_device_id != device_id:
-            logger.info("Device re-registered: %s → %s (%s)", original_device_id[:8], device_id[:8], hostname)
-            return jsonify({
-                "status": "registered",
-                "device_id": device_id,
-                "api_key": existing["api_key"],
-            })
+            logger.info(
+                "Device re-registered: %s → %s (%s)",
+                original_device_id[:8],
+                device_id[:8],
+                hostname,
+            )
+            return jsonify(
+                {
+                    "status": "registered",
+                    "device_id": device_id,
+                    "api_key": existing["api_key"],
+                }
+            )
 
         # Always return api_key so agent can recover after wipe/reinstall
         logger.debug("Heartbeat: %s (%s)", device_id[:8], hostname)
-        return jsonify({
-            "status": "registered",
-            "device_id": device_id,
-            "api_key": existing["api_key"],
-        })
+        return jsonify(
+            {
+                "status": "registered",
+                "device_id": device_id,
+                "api_key": existing["api_key"],
+            }
+        )
 
     # New device — resolve org from payload or deployment token
     org_id = data.get("org_id") or None  # Sent directly by shipper
@@ -527,10 +541,12 @@ def register_device():
         org_id, user_id = _resolve_token_org(token_hash)
 
     if org_id:
-            logger.info(
-                "Token validated: device=%s org=%s user=%s",
-                device_id[:8], org_id[:8], (user_id or "")[:8],
-            )
+        logger.info(
+            "Token validated: device=%s org=%s user=%s",
+            device_id[:8],
+            org_id[:8],
+            (user_id or "")[:8],
+        )
 
     # Generate API key
     api_key = secrets.token_hex(32)
@@ -565,11 +581,13 @@ def register_device():
         (org_id or "global")[:8],
     )
 
-    return jsonify({
-        "status": "registered",
-        "device_id": device_id,
-        "api_key": api_key,
-    })
+    return jsonify(
+        {
+            "status": "registered",
+            "device_id": device_id,
+            "api_key": api_key,
+        }
+    )
 
 
 def _resolve_token_org(token_hash: str) -> tuple[str | None, str | None]:
@@ -676,7 +694,7 @@ def receive_telemetry():
     if source_ids:
         # Query in batches of 500 to avoid SQLite variable limit
         for i in range(0, len(source_ids), 500):
-            batch = source_ids[i:i + 500]
+            batch = source_ids[i : i + 500]
             placeholders = ",".join("?" * len(batch))
             try:
                 rows = db.execute(
@@ -723,7 +741,11 @@ def receive_telemetry():
             failed += 1
             logger.error(
                 "INGEST_DROP: table=%s device=%s source_id=%s err=%s: %s",
-                table, device_id[:8], source_id, type(e).__name__, e,
+                table,
+                device_id[:8],
+                source_id,
+                type(e).__name__,
+                e,
             )
 
     db.commit()
@@ -732,12 +754,19 @@ def receive_telemetry():
         # Pipeline-health summary — only when data was actually dropped.
         logger.error(
             "ingest: received=%d stored=%d failed=%d table=%s device=%s",
-            len(events), stored, failed, table, device_id[:8],
+            len(events),
+            stored,
+            failed,
+            table,
+            device_id[:8],
         )
 
     logger.info(
         "Received %d/%d %s events from %s",
-        stored, len(events), table, device_id[:8],
+        stored,
+        len(events),
+        table,
+        device_id[:8],
     )
 
     return jsonify({"status": "ok", "stored": stored, "failed": failed})
@@ -755,63 +784,180 @@ def delete_device(device_id):
 # Allowed columns per table (whitelist for INSERT safety)
 ALLOWED_TABLES = {
     "security_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "event_category", "event_action", "event_outcome",
-        "risk_score", "confidence", "mitre_techniques",
-        "geometric_score", "temporal_score", "behavioral_score",
-        "final_classification", "description", "indicators",
-        "collection_agent", "enrichment_status", "threat_intel_match",
-        "geo_src_country", "geo_src_city", "geo_src_latitude", "geo_src_longitude",
-        "asn_src_org", "asn_src_number", "asn_src_network_type",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "event_category",
+        "event_action",
+        "event_outcome",
+        "risk_score",
+        "confidence",
+        "mitre_techniques",
+        "geometric_score",
+        "temporal_score",
+        "behavioral_score",
+        "final_classification",
+        "description",
+        "indicators",
+        "collection_agent",
+        "enrichment_status",
+        "threat_intel_match",
+        "geo_src_country",
+        "geo_src_city",
+        "geo_src_latitude",
+        "geo_src_longitude",
+        "asn_src_org",
+        "asn_src_number",
+        "asn_src_network_type",
         "event_timestamp_ns",
-        "event_id", "remote_ip", "remote_port", "process_name", "pid",
-        "exe", "cmdline", "username", "protocol", "domain", "path", "sha256",
-        "probe_name", "detection_source", "received_at",
+        "event_id",
+        "remote_ip",
+        "remote_port",
+        "process_name",
+        "pid",
+        "exe",
+        "cmdline",
+        "username",
+        "protocol",
+        "domain",
+        "path",
+        "sha256",
+        "probe_name",
+        "detection_source",
+        "received_at",
     },
     "process_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "pid", "exe", "cmdline", "ppid", "username", "name",
-        "parent_name", "status", "cpu_percent", "memory_percent",
-        "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "pid",
+        "exe",
+        "cmdline",
+        "ppid",
+        "username",
+        "name",
+        "parent_name",
+        "status",
+        "cpu_percent",
+        "memory_percent",
+        "collection_agent",
+        "received_at",
     },
     "flow_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "src_ip", "dst_ip", "src_port", "dst_port", "protocol",
-        "bytes_tx", "bytes_rx", "pid", "process_name",
-        "geo_dst_latitude", "geo_dst_longitude", "geo_dst_country",
-        "geo_dst_city", "asn_dst_org", "threat_intel_match",
-        "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "dst_port",
+        "protocol",
+        "bytes_tx",
+        "bytes_rx",
+        "pid",
+        "process_name",
+        "geo_dst_latitude",
+        "geo_dst_longitude",
+        "geo_dst_country",
+        "geo_dst_city",
+        "asn_dst_org",
+        "threat_intel_match",
+        "collection_agent",
+        "received_at",
     },
     "dns_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "domain", "record_type", "response_code", "risk_score",
-        "process_name", "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "domain",
+        "record_type",
+        "response_code",
+        "risk_score",
+        "process_name",
+        "collection_agent",
+        "received_at",
     },
     "persistence_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "mechanism", "path", "change_type", "label",
-        "sha256", "risk_score", "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "mechanism",
+        "path",
+        "change_type",
+        "label",
+        "sha256",
+        "risk_score",
+        "collection_agent",
+        "received_at",
     },
     "fim_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "path", "file_extension", "change_type", "new_hash",
-        "owner_uid", "is_suid", "mtime", "size",
-        "risk_score", "event_type", "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "path",
+        "file_extension",
+        "change_type",
+        "new_hash",
+        "owner_uid",
+        "is_suid",
+        "mtime",
+        "size",
+        "risk_score",
+        "event_type",
+        "collection_agent",
+        "received_at",
     },
     "audit_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "event_type", "pid", "ppid", "uid", "username",
-        "risk_score", "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "event_type",
+        "pid",
+        "ppid",
+        "uid",
+        "username",
+        "risk_score",
+        "collection_agent",
+        "received_at",
     },
     "observation_events": {
-        "source_id", "device_id", "org_id",
-        "event_id", "domain", "event_timestamp_ns",
-        "raw_attributes_json", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "event_id",
+        "domain",
+        "event_timestamp_ns",
+        "raw_attributes_json",
+        "received_at",
     },
     "peripheral_events": {
-        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
-        "peripheral_device_id", "event_type", "device_name",
-        "device_type", "vendor_id", "risk_score", "collection_agent", "received_at",
+        "source_id",
+        "device_id",
+        "org_id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "peripheral_device_id",
+        "event_type",
+        "device_name",
+        "device_type",
+        "vendor_id",
+        "risk_score",
+        "collection_agent",
+        "received_at",
     },
 }
 
@@ -843,19 +989,21 @@ def list_devices():
             (r["device_id"],),
         ).fetchone()[0]
 
-        devices.append({
-            "device_id": r["device_id"],
-            "hostname": r["hostname"],
-            "os": r["os"],
-            "os_version": r["os_version"],
-            "arch": r["arch"],
-            "agent_version": r["agent_version"],
-            "first_seen": r["first_seen"],
-            "last_seen": r["last_seen"],
-            "status": r["status"],
-            "public_ip": r["public_ip"],
-            "security_event_count": sec_count,
-        })
+        devices.append(
+            {
+                "device_id": r["device_id"],
+                "hostname": r["hostname"],
+                "os": r["os"],
+                "os_version": r["os_version"],
+                "arch": r["arch"],
+                "agent_version": r["agent_version"],
+                "first_seen": r["first_seen"],
+                "last_seen": r["last_seen"],
+                "status": r["status"],
+                "public_ip": r["public_ip"],
+                "security_event_count": sec_count,
+            }
+        )
 
     return jsonify({"devices": devices, "total": len(devices)})
 
@@ -883,20 +1031,22 @@ def device_detail(device_id):
         (device_id,),
     ).fetchall()
 
-    return jsonify({
-        "device": {
-            "device_id": device["device_id"],
-            "hostname": device["hostname"],
-            "os": device["os"],
-            "os_version": device["os_version"],
-            "arch": device["arch"],
-            "agent_version": device["agent_version"],
-            "first_seen": device["first_seen"],
-            "last_seen": device["last_seen"],
-            "status": device["status"],
-        },
-        "recent_events": [dict(e) for e in events],
-    })
+    return jsonify(
+        {
+            "device": {
+                "device_id": device["device_id"],
+                "hostname": device["hostname"],
+                "os": device["os"],
+                "os_version": device["os_version"],
+                "arch": device["arch"],
+                "agent_version": device["agent_version"],
+                "first_seen": device["first_seen"],
+                "last_seen": device["last_seen"],
+                "status": device["status"],
+            },
+            "recent_events": [dict(e) for e in events],
+        }
+    )
 
 
 @app.route("/api/v1/devices/<device_id>/telemetry", methods=["GET"])
@@ -948,7 +1098,15 @@ def device_telemetry(device_id):
         avg_risk = sum((e["risk_score"] or 0) for e in sec_events) / total_events
         max_risk = max((e["risk_score"] or 0) for e in sec_events)
         posture_score = round(1.0 - (avg_risk * 0.6 + max_risk * 0.4), 2)
-        posture = "critical" if posture_score < 0.3 else "at_risk" if posture_score < 0.6 else "guarded" if posture_score < 0.8 else "safe"
+        posture = (
+            "critical"
+            if posture_score < 0.3
+            else (
+                "at_risk"
+                if posture_score < 0.6
+                else "guarded" if posture_score < 0.8 else "safe"
+            )
+        )
     else:
         posture_score = 1.0
         posture = "safe"
@@ -1020,63 +1178,86 @@ def device_telemetry(device_id):
         (device_id, day_ago_ns),
     ).fetchall()
 
-    return jsonify({
-        "device": {
-            "device_id": device["device_id"],
-            "hostname": device["hostname"],
-            "os": device["os"],
-            "os_version": device["os_version"],
-            "arch": device["arch"],
-            "agent_version": device["agent_version"],
-            "first_seen": device["first_seen"],
-            "last_seen": device["last_seen"],
-            "status": "online" if device["last_seen"] and device["last_seen"] > now - 300 else "offline",
-        },
-        "posture": {
-            "score": posture_score,
-            "level": posture,
-            "avg_risk": round(avg_risk, 3),
-            "max_risk": round(max_risk, 3),
-        },
-        "summary": {
-            "total_events": total_events,
-            "critical": critical,
-            "high": high,
-            "medium": medium,
-            "low": low,
-        },
-        "categories": [
-            {"category": r[0], "count": r[1], "avg_risk": round(r[2] or 0, 3), "max_risk": round(r[3] or 0, 3)}
-            for r in categories
-        ],
-        "mitre_techniques": sorted(
-            [{"technique": t, "count": c} for t, c in technique_counts.items()],
-            key=lambda x: -x["count"],
-        )[:15],
-        "agents": [
-            {"name": r[0], "event_count": r[1]}
-            for r in agents
-        ],
-        "processes": [
-            {"name": r[0], "pid": r[1], "exe": r[2], "cmdline": r[3], "username": r[4], "count": r[5]}
-            for r in processes
-        ],
-        "connections": [
-            {"dst_ip": r[0], "dst_port": r[1], "protocol": r[2], "process": r[3],
-             "count": r[4], "bytes_tx": r[5] or 0, "bytes_rx": r[6] or 0,
-             "country": r[7], "asn": r[8]}
-            for r in connections
-        ],
-        "dns": [
-            {"domain": r[0], "count": r[1], "avg_risk": round(r[2] or 0, 3)}
-            for r in dns
-        ],
-        "timeline": [
-            {"hour": r[0], "count": r[1], "critical": r[2] or 0, "high": r[3] or 0}
-            for r in timeline
-        ],
-        "recent_events": [dict(e) for e in sec_events[:50]],
-    })
+    return jsonify(
+        {
+            "device": {
+                "device_id": device["device_id"],
+                "hostname": device["hostname"],
+                "os": device["os"],
+                "os_version": device["os_version"],
+                "arch": device["arch"],
+                "agent_version": device["agent_version"],
+                "first_seen": device["first_seen"],
+                "last_seen": device["last_seen"],
+                "status": (
+                    "online"
+                    if device["last_seen"] and device["last_seen"] > now - 300
+                    else "offline"
+                ),
+            },
+            "posture": {
+                "score": posture_score,
+                "level": posture,
+                "avg_risk": round(avg_risk, 3),
+                "max_risk": round(max_risk, 3),
+            },
+            "summary": {
+                "total_events": total_events,
+                "critical": critical,
+                "high": high,
+                "medium": medium,
+                "low": low,
+            },
+            "categories": [
+                {
+                    "category": r[0],
+                    "count": r[1],
+                    "avg_risk": round(r[2] or 0, 3),
+                    "max_risk": round(r[3] or 0, 3),
+                }
+                for r in categories
+            ],
+            "mitre_techniques": sorted(
+                [{"technique": t, "count": c} for t, c in technique_counts.items()],
+                key=lambda x: -x["count"],
+            )[:15],
+            "agents": [{"name": r[0], "event_count": r[1]} for r in agents],
+            "processes": [
+                {
+                    "name": r[0],
+                    "pid": r[1],
+                    "exe": r[2],
+                    "cmdline": r[3],
+                    "username": r[4],
+                    "count": r[5],
+                }
+                for r in processes
+            ],
+            "connections": [
+                {
+                    "dst_ip": r[0],
+                    "dst_port": r[1],
+                    "protocol": r[2],
+                    "process": r[3],
+                    "count": r[4],
+                    "bytes_tx": r[5] or 0,
+                    "bytes_rx": r[6] or 0,
+                    "country": r[7],
+                    "asn": r[8],
+                }
+                for r in connections
+            ],
+            "dns": [
+                {"domain": r[0], "count": r[1], "avg_risk": round(r[2] or 0, 3)}
+                for r in dns
+            ],
+            "timeline": [
+                {"hour": r[0], "count": r[1], "critical": r[2] or 0, "high": r[3] or 0}
+                for r in timeline
+            ],
+            "recent_events": [dict(e) for e in sec_events[:50]],
+        }
+    )
 
 
 @app.route("/api/v1/events", methods=["GET"])
@@ -1115,12 +1296,14 @@ def query_events():
     params.extend([limit, offset])
 
     rows = db.execute(query, params).fetchall()
-    return jsonify({
-        "events": [dict(r) for r in rows],
-        "count": len(rows),
-        "limit": limit,
-        "offset": offset,
-    })
+    return jsonify(
+        {
+            "events": [dict(r) for r in rows],
+            "count": len(rows),
+            "limit": limit,
+            "offset": offset,
+        }
+    )
 
 
 @app.route("/api/v1/fleet/status", methods=["GET"])
@@ -1138,9 +1321,12 @@ def fleet_status():
         org_params = [org_id]
 
     # Device counts
-    total = db.execute(f"SELECT COUNT(*) FROM devices WHERE 1=1{org_filter}", org_params).fetchone()[0]
+    total = db.execute(
+        f"SELECT COUNT(*) FROM devices WHERE 1=1{org_filter}", org_params
+    ).fetchone()[0]
     online = db.execute(
-        f"SELECT COUNT(*) FROM devices WHERE last_seen > ?{org_filter}", [now - 300] + org_params
+        f"SELECT COUNT(*) FROM devices WHERE last_seen > ?{org_filter}",
+        [now - 300] + org_params,
     ).fetchone()[0]
     offline = total - online
 
@@ -1222,44 +1408,46 @@ def fleet_status():
         [day_ago_ns] + dev_params,
     ).fetchall()
 
-    return jsonify({
-        "fleet": {
-            "total_devices": total,
-            "online": online,
-            "offline": offline,
-        },
-        "last_24h": {
-            "total_events": total_events,
-            "critical": critical,
-            "high": high,
-        },
-        "top_categories": [
-            {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
-            for r in top_categories
-        ],
-        "top_mitre_techniques": [
-            {"technique": t, "count": c} for t, c in top_techniques
-        ],
-        "devices": [
-            {
-                "device_id": r["device_id"],
-                "hostname": r["hostname"],
-                "os": r["os"],
-                "arch": r["arch"],
-                "agent_version": r["agent_version"],
-                "status": r["status"],
-                "last_seen": r["last_seen"],
-                "public_ip": r["public_ip"],
-                "org_id": r["org_id"],
-                "event_count": r["event_count"],
-                "max_risk": r["max_risk"],
-                "critical_count": r["critical_count"],
-                "high_count": r["high_count"],
-            }
-            for r in device_summary
-        ],
-        "timestamp": now,
-    })
+    return jsonify(
+        {
+            "fleet": {
+                "total_devices": total,
+                "online": online,
+                "offline": offline,
+            },
+            "last_24h": {
+                "total_events": total_events,
+                "critical": critical,
+                "high": high,
+            },
+            "top_categories": [
+                {"category": r[0], "count": r[1], "avg_risk": round(r[2], 3)}
+                for r in top_categories
+            ],
+            "top_mitre_techniques": [
+                {"technique": t, "count": c} for t, c in top_techniques
+            ],
+            "devices": [
+                {
+                    "device_id": r["device_id"],
+                    "hostname": r["hostname"],
+                    "os": r["os"],
+                    "arch": r["arch"],
+                    "agent_version": r["agent_version"],
+                    "status": r["status"],
+                    "last_seen": r["last_seen"],
+                    "public_ip": r["public_ip"],
+                    "org_id": r["org_id"],
+                    "event_count": r["event_count"],
+                    "max_risk": r["max_risk"],
+                    "critical_count": r["critical_count"],
+                    "high_count": r["high_count"],
+                }
+                for r in device_summary
+            ],
+            "timestamp": now,
+        }
+    )
 
 
 # ── Fleet Dashboard (minimal HTML) ────────────────────────────────
@@ -1402,6 +1590,7 @@ def dashboard():
 
 # ── Health ─────────────────────────────────────────────────────────
 
+
 @app.route("/api/v1/bulk-export", methods=["GET"])
 def bulk_export():
     """Export event tables for fleet sync — time-based, not count-based.
@@ -1418,9 +1607,14 @@ def bulk_export():
 
     # Tables with timestamp_ns column
     ts_tables = [
-        "security_events", "process_events", "flow_events",
-        "dns_events", "persistence_events", "audit_events",
-        "fim_events", "peripheral_events",
+        "security_events",
+        "process_events",
+        "flow_events",
+        "dns_events",
+        "persistence_events",
+        "audit_events",
+        "fim_events",
+        "peripheral_events",
     ]
     # Tables without standard timestamp_ns
     other_tables = ["observation_events"]
@@ -1478,6 +1672,7 @@ def health():
 
 # ── Maintenance ────────────────────────────────────────────────────
 
+
 def _start_maintenance():
     """Start background maintenance thread for data hygiene."""
     import threading
@@ -1505,11 +1700,23 @@ def _run_maintenance():
     # 1. Retention: delete events older than 7 days
     cutoff_ns = int((now - 7 * 86400) * 1e9)
     total_deleted = 0
-    for table in ["security_events", "process_events", "flow_events", "dns_events",
-                   "persistence_events", "fim_events", "audit_events",
-                   "observation_events", "peripheral_events"]:
+    for table in [
+        "security_events",
+        "process_events",
+        "flow_events",
+        "dns_events",
+        "persistence_events",
+        "fim_events",
+        "audit_events",
+        "observation_events",
+        "peripheral_events",
+    ]:
         try:
-            ts_col = "timestamp_ns" if table != "observation_events" else "event_timestamp_ns"
+            ts_col = (
+                "timestamp_ns"
+                if table != "observation_events"
+                else "event_timestamp_ns"
+            )
             deleted = db.execute(
                 f"DELETE FROM {table} WHERE {ts_col} < ? AND {ts_col} > 0",
                 (cutoff_ns,),
@@ -1522,8 +1729,8 @@ def _run_maintenance():
     # flow_events grows fastest (~4K/hour). Retention already handles age-based
     # cleanup, but row caps protect against bursts. Limits are per-table:
     _TABLE_CAPS = {
-        "flow_events": 500_000,       # ~5 days at 4K/hour
-        "dns_events": 500_000,        # ~2 days at 12K/hour
+        "flow_events": 500_000,  # ~5 days at 4K/hour
+        "dns_events": 500_000,  # ~2 days at 12K/hour
         "observation_events": 200_000,
         "process_events": 200_000,
         "security_events": 100_000,
@@ -1622,11 +1829,13 @@ def report_command_result(device_id, command_id):
     db = get_db()
     data = request.get_json(silent=True) or {}
 
-    result = json.dumps({
-        "success": data.get("success", False),
-        "output": data.get("output", ""),
-        "error": data.get("error", ""),
-    })
+    result = json.dumps(
+        {
+            "success": data.get("success", False),
+            "output": data.get("output", ""),
+            "error": data.get("error", ""),
+        }
+    )
 
     db.execute(
         "UPDATE device_commands SET status = 'completed', completed_at = ?, result = ? "
