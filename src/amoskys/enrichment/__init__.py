@@ -100,14 +100,45 @@ class EnrichmentPipeline:
     ) -> None:
         self._geoip = GeoIPEnricher(db_path=geoip_db_path)
         self._asn = ASNEnricher(db_path=asn_db_path)
-        # Path precedence: explicit arg → AMOSKYS_THREAT_INTEL_DB env → CWD default.
-        # The env var is the lever for deployed agents, whose CWD (e.g.
-        # /var/lib/amoskys) is NOT the repo — without it the enricher silently
-        # creates an empty DB at the wrong path and every match returns False.
+        # Threat-intel DB path: explicit arg → AMOSKYS_THREAT_INTEL_DB env.
+        # There is deliberately NO CWD-relative "data/threat_intel.db" fallback:
+        # a deployed agent's CWD (e.g. /var/lib/amoskys) is NOT the repo, so a
+        # relative default silently created an EMPTY DB at the wrong path and
+        # every threat_intel_match returned False — a false-clean. We now require
+        # an absolute path from the env and fail LOUDLY (not open) if it is
+        # missing, non-absolute, or the file is absent/empty.
+        threat_intel_path = threat_intel_db_path or os.getenv("AMOSKYS_THREAT_INTEL_DB")
+        if not threat_intel_path:
+            logger.error(
+                "AMOSKYS_THREAT_INTEL_DB is not set — refusing the old "
+                "CWD-relative 'data/threat_intel.db' fallback. threat_intel "
+                "enrichment is DISABLED; every threat_intel_match will be False. "
+                "Set AMOSKYS_THREAT_INTEL_DB to an absolute path and populate it "
+                "via scripts/update_threat_intel.py."
+            )
+        elif not os.path.isabs(threat_intel_path):
+            logger.error(
+                "AMOSKYS_THREAT_INTEL_DB=%r is not an absolute path — refusing "
+                "to resolve it against CWD (deployed CWD is not the repo). "
+                "threat_intel enrichment is DISABLED. Use an absolute path.",
+                threat_intel_path,
+            )
+            threat_intel_path = None
+        elif not os.path.exists(threat_intel_path):
+            logger.error(
+                "Threat-intel DB does not exist: %s — enricher will create an "
+                "EMPTY store, so every threat_intel_match will be False until it "
+                "is populated via scripts/update_threat_intel.py. Not failing "
+                "open silently: this is logged at ERROR.",
+                threat_intel_path,
+            )
+
+        # When the path is unusable we still construct the enricher (so the
+        # pipeline stays alive) but point it at an in-memory DB — its own
+        # startup WARNING then fires for the 0-indicator degraded state, and no
+        # stray file is written to a wrong location.
         self._threat_intel = ThreatIntelEnricher(
-            db_path=threat_intel_db_path
-            or os.getenv("AMOSKYS_THREAT_INTEL_DB")
-            or "data/threat_intel.db"
+            db_path=threat_intel_path or ":memory:"
         )
         self._mitre = MITREEnricher()
         self._stages: List[tuple] = [

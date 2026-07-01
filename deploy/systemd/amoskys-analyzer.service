@@ -1,0 +1,59 @@
+# AMOSKYS Analyzer Daemon (Tier 2 "brain") systemd unit.
+# Location on the ops box: /etc/systemd/system/amoskys-analyzer.service
+#
+# Runs the enrichment → scoring → detection → correlation → IGRIS pipeline
+# (python -m amoskys.analyzer_main) on the low-memory ops box.
+#
+# Memory math (box: ~1.9 GB total, ~900 MB free, NO swap by default):
+#   The 2G swapfile added by scripts/ops_brain_bringup.sh gives the kernel
+#   headroom so a transient spike cannot OOM-kill the web/ops/mcp peers. The
+#   analyzer's own steady state is capped at MemoryHigh=320M (soft throttle,
+#   reclaim pressure kicks in) and MemoryMax=384M (hard ceiling — the cgroup
+#   is killed before it can starve the rest of the box). numpy-only (no
+#   sklearn) keeps the resident set small; scoring/SOMA guard sklearn and
+#   degrade gracefully when it is absent.
+
+[Unit]
+Description=AMOSKYS Analyzer Daemon (Tier 2 brain — enrichment/scoring/detection/IGRIS)
+Documentation=https://github.com/amoskys/platform
+After=network-online.target amoskys-ops.service
+Wants=network-online.target amoskys-ops.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/amoskys
+
+# ── Environment ──────────────────────────────────────────────────────────────
+# PYTHONPATH points at the src/ layout. All DB paths are ABSOLUTE and live
+# under /var/lib/amoskys so the daemon never depends on its CWD.
+Environment=PYTHONPATH=/opt/amoskys/src
+Environment=AMOSKYS_DATA_DIR=/var/lib/amoskys
+Environment=AMOSKYS_TELEMETRY_DB=/var/lib/amoskys/fleet.db
+Environment=AMOSKYS_FUSION_DB=/var/lib/amoskys/intel/fusion.db
+Environment=AMOSKYS_THREAT_INTEL_DB=/var/lib/amoskys/threat_intel.db
+Environment=AMOSKYS_FLEET_RESCORE=1
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/amoskys/venv/bin/python3 -m amoskys.analyzer_main
+
+# ── Restart policy ───────────────────────────────────────────────────────────
+Restart=always
+RestartSec=10
+
+# ── Resource limits (the point of this unit on a 1.9 GB / no-swap box) ───────
+# MemoryHigh is the soft throttle (reclaim pressure); MemoryMax is the hard
+# cap — the cgroup is OOM-killed at 384M rather than taking down the box.
+# Nice=10 yields CPU to the web UI / eventbus / mcp under contention.
+MemoryAccounting=yes
+MemoryMax=384M
+MemoryHigh=320M
+Nice=10
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amoskys-analyzer
+
+[Install]
+WantedBy=multi-user.target

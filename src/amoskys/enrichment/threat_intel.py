@@ -61,7 +61,10 @@ class ThreatIntelEnricher:
         cache_size: int = 10_000,
         cache_ttl_seconds: int = 3600,
     ) -> None:
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        # ":memory:" is used by the pipeline as a safe sink when the configured
+        # AMOSKYS_THREAT_INTEL_DB path is missing/invalid — never mkdir for it.
+        if db_path != ":memory:":
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
         self._cache_ttl = cache_ttl_seconds
         self._cache_epoch = time.monotonic()

@@ -223,18 +223,48 @@ def pipeline_status():
     except Exception as e:
         status["soma"] = {"error": str(e)}
 
-    # Fusion engine (incident count)
+    # Fusion engine (incident count).
+    # Fleet nodes have no standalone fusion.db — correlated incidents live
+    # in the 'fleet_incidents' table (written by the MCP brain, synced into
+    # fleet_cache.db). Local mode still uses data/intel/fusion.db with an
+    # 'incidents' table. Prefer the fleet cache when it carries incidents,
+    # otherwise fall back to the local fusion database.
     try:
         import sqlite3
         from pathlib import Path
 
-        fusion_db = Path(__file__).resolve().parents[3] / "data" / "intel" / "fusion.db"
-        if fusion_db.exists():
+        data_dir = Path(__file__).resolve().parents[3] / "data"
+        fleet_cache = data_dir / "fleet_cache.db"
+        fusion_db = data_dir / "intel" / "fusion.db"
+
+        counted = False
+        if fleet_cache.exists():
+            conn = sqlite3.connect(f"file:{fleet_cache}?mode=ro", uri=True, timeout=3)
+            try:
+                has_fleet = conn.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type='table' AND name='fleet_incidents'"
+                ).fetchone()
+                if has_fleet:
+                    row = conn.execute(
+                        "SELECT COUNT(*) FROM fleet_incidents"
+                    ).fetchone()
+                    status["fusion"] = {
+                        "incidents": row[0] if row else 0,
+                        "source": "fleet_incidents",
+                    }
+                    counted = True
+            finally:
+                conn.close()
+
+        if not counted and fusion_db.exists():
             conn = sqlite3.connect(str(fusion_db), timeout=3)
             row = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()
             status["fusion"] = {"incidents": row[0] if row else 0}
             conn.close()
-        else:
+            counted = True
+
+        if not counted:
             status["fusion"] = {"incidents": 0, "note": "no fusion database yet"}
     except Exception as e:
         status["fusion"] = {"error": str(e)}

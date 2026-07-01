@@ -125,14 +125,29 @@ def nexus_verdict_funnel():
             (t_noise, t_noise, t_base, t_base, t_susp, t_susp, cutoff_ns),
         ).fetchone()
 
-        # Incident count
+        # Incident count.
+        # Fleet nodes store correlated incidents in 'fleet_incidents'
+        # (written by the MCP brain) whose created_at is a REAL unix
+        # timestamp. Local telemetry.db instead has an 'incidents' table
+        # keyed on a datetime('now') text column. Detect which table
+        # exists and query with the matching predicate.
         incidents = 0
         try:
-            incidents = conn.execute(
-                "SELECT COUNT(*) FROM incidents "
-                "WHERE created_at > datetime('now', ?)",
-                (f"-{hours} hours",),
-            ).fetchone()[0]
+            has_fleet = conn.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='fleet_incidents'"
+            ).fetchone()
+            if has_fleet:
+                incidents = conn.execute(
+                    "SELECT COUNT(*) FROM fleet_incidents WHERE created_at > ?",
+                    (time.time() - hours * 3600,),
+                ).fetchone()[0]
+            else:
+                incidents = conn.execute(
+                    "SELECT COUNT(*) FROM incidents "
+                    "WHERE created_at > datetime('now', ?)",
+                    (f"-{hours} hours",),
+                ).fetchone()[0]
         except Exception:
             pass
 

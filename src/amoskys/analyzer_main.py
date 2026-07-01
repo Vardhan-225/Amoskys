@@ -27,14 +27,252 @@ from pathlib import Path
 
 logger = logging.getLogger("amoskys.analyzer")
 
-DATA_DIR = Path("data")
+# DB paths are env-overridable so the analyzer ("the brain") can be pointed at a
+# Command-Center fleet DB for re-scoring without changing single-machine defaults.
+# With no env set, these resolve to the exact same paths as before:
+#   DATA_DIR       -> data/
+#   TELEMETRY_DB   -> data/telemetry.db
+#   FUSION_DB      -> data/intel/fusion.db
+DATA_DIR = Path(os.environ.get("AMOSKYS_DATA_DIR", "data"))
 WAL_DIR = DATA_DIR / "wal"
-TELEMETRY_DB = DATA_DIR / "telemetry.db"
-FUSION_DB = DATA_DIR / "intel" / "fusion.db"
+TELEMETRY_DB = Path(
+    os.environ.get("AMOSKYS_TELEMETRY_DB", str(DATA_DIR / "telemetry.db"))
+)
+FUSION_DB = Path(
+    os.environ.get("AMOSKYS_FUSION_DB", str(DATA_DIR / "intel" / "fusion.db"))
+)
+
+# Columns the scoring/enrichment pipeline writes onto security_events. fleet.db
+# (authored by command_center) is missing composite_score / risk_score_raw /
+# last_scored; _rescore_fleet_db adds any that are absent, idempotently.
+_FLEET_SCORE_COLUMNS = (
+    ("risk_score_raw", "REAL"),
+    ("geometric_score", "REAL"),
+    ("temporal_score", "REAL"),
+    ("behavioral_score", "REAL"),
+    ("composite_score", "REAL"),
+    ("final_classification", "TEXT"),
+    ("enrichment_status", "TEXT"),
+    ("last_scored", "INTEGER"),
+)
 
 
-def main() -> int:
-    """Analyzer process entry point."""
+def _ensure_fleet_score_columns(conn) -> None:
+    """Idempotently add the scoring columns to security_events.
+
+    fleet.db (written by command_center) may lack composite_score /
+    risk_score_raw / last_scored. Each ALTER is wrapped so an already-present
+    column (SQLite raises 'duplicate column name') is simply skipped.
+    """
+    for col, col_type in _FLEET_SCORE_COLUMNS:
+        try:
+            conn.execute(f"ALTER TABLE security_events ADD COLUMN {col} {col_type}")
+        except Exception:
+            # Column already exists (duplicate column name) — nothing to do.
+            pass
+
+
+def _build_fusion_view(event_data, device_id):
+    """Best-effort construct a lightweight TelemetryEventView from a fleet row.
+
+    We have no protobuf here (fleet.db rows are already flattened), so we build
+    the view + its security_event dict directly. Kept minimal — just enough for
+    fusion correlation rules to see the event. Returns None on any failure so
+    the caller can treat fusion as strictly best-effort.
+    """
+    from datetime import datetime, timezone
+
+    from amoskys.intel.models import TelemetryEventView
+
+    ts_ns = int(
+        event_data.get("event_timestamp_ns") or event_data.get("timestamp_ns") or 0
+    )
+    if ts_ns > 0:
+        ts = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc)
+    else:
+        ts = datetime.now(timezone.utc)
+
+    security_event = {
+        "event_category": event_data.get("event_category", "") or "",
+        "event_action": event_data.get("event_action", "") or "",
+        "event_outcome": event_data.get("event_outcome", "") or "",
+        "source_ip": event_data.get("remote_ip", "") or "",
+        "risk_score": float(event_data.get("risk_score", 0.0) or 0.0),
+        "mitre_techniques": event_data.get("mitre_techniques", []) or [],
+        "requires_investigation": False,
+    }
+
+    view = TelemetryEventView(
+        event_id=str(event_data.get("event_id") or event_data.get("id") or ""),
+        device_id=str(device_id or ""),
+        event_type=str(event_data.get("event_type", "SECURITY") or "SECURITY"),
+        severity=str(event_data.get("final_classification", "") or ""),
+        timestamp=ts,
+        attributes={
+            k: str(v)
+            for k, v in event_data.items()
+            if v is not None and not isinstance(v, (dict, list))
+        },
+        event_timestamp_ns=ts_ns,
+        probe_name=event_data.get("probe_name") or None,
+        collection_agent=event_data.get("collection_agent") or None,
+        security_event=security_event,
+    )
+    return view
+
+
+def _rescore_fleet_db(db_path, scorer, enricher, fusion, batch: int = 500) -> int:
+    """Re-score a Command-Center fleet DB's ``security_events`` in place.
+
+    fleet.db is written by command_center from shipped agent telemetry and has
+    the raw event but no brain-computed scores. This makes the analyzer ("the
+    brain") the scorer for fleet events: it enriches each unscored row, runs the
+    ScoringEngine, best-effort feeds fusion, and writes the 8 score columns back.
+
+    Selection: rows WHERE composite_score IS NULL OR last_scored IS NULL, and
+    (to avoid racing fresh command_center inserts) only rows at least ~2s old.
+    ``received_at`` is an epoch REAL in fleet.db, so ``received_at <
+    strftime('%s','now')-2`` compares like-for-like; if that column is absent we
+    fall back to an id-based cutoff (id <= max(id)-batch guard via ORDER BY id).
+
+    Args:
+        db_path: Path to the fleet DB (sqlite3 file).
+        scorer: A ScoringEngine (mutates event dict with score columns).
+        enricher: An EnrichmentPipeline (or None) — enrich runs before scoring.
+        fusion: A FusionEngine (or None) — add_event is best-effort.
+        batch: Max rows to score per call.
+
+    Returns:
+        Number of rows successfully scored this call.
+    """
+    import sqlite3 as _sqlite3
+
+    scored = 0
+    skipped = 0
+    conn = None
+    try:
+        conn = _sqlite3.connect(str(db_path), timeout=10.0)
+        conn.execute("PRAGMA busy_timeout=10000")
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass
+        conn.row_factory = _sqlite3.Row
+
+        _ensure_fleet_score_columns(conn)
+        conn.commit()
+
+        # Discover which columns actually exist so the age filter degrades safely.
+        existing_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(security_events)").fetchall()
+        }
+
+        need = "(composite_score IS NULL OR last_scored IS NULL)"
+        if "received_at" in existing_cols:
+            # received_at is epoch seconds (REAL) — same units as strftime('%s').
+            age_guard = "AND received_at < (strftime('%s','now') - 2)"
+        else:
+            # No received_at: fall back to id-based ordering (oldest first). The
+            # 2s-race guard is unavailable, so we simply take the oldest rows.
+            age_guard = ""
+
+        rows = conn.execute(
+            f"SELECT * FROM security_events WHERE {need} {age_guard} "
+            f"ORDER BY id LIMIT ?",
+            (batch,),
+        ).fetchall()
+
+        now_epoch = int(time.time())
+        for row in rows:
+            # Bind id up-front (before any risky work) so the error handler can
+            # always name the offending row.
+            try:
+                row_id = row["id"]
+            except (IndexError, KeyError):
+                row_id = None
+            try:
+                event_data = {k: row[k] for k in row.keys()}
+                device_id = event_data.get("device_id", "") or "unknown"
+
+                # mitre_techniques is stored as a JSON string in fleet.db —
+                # decode so scoring/fusion see a list, not a raw string.
+                mt = event_data.get("mitre_techniques")
+                if isinstance(mt, str) and mt:
+                    try:
+                        event_data["mitre_techniques"] = json.loads(mt)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                # Enrich (GeoIP/ASN/ThreatIntel) then score. Both mutate in place.
+                if enricher is not None:
+                    try:
+                        enricher.enrich(event_data)
+                    except Exception:
+                        logger.debug(
+                            "Fleet enrich failed for id=%s", row_id, exc_info=True
+                        )
+
+                scorer.score_event(event_data)
+
+                # Best-effort fusion feed — never let a fusion error abort scoring.
+                if fusion is not None:
+                    try:
+                        view = _build_fusion_view(event_data, device_id)
+                        if view is not None:
+                            fusion.add_event(view)
+                    except Exception:
+                        logger.debug(
+                            "Fleet fusion feed failed for id=%s", row_id, exc_info=True
+                        )
+
+                conn.execute(
+                    "UPDATE security_events SET "
+                    "risk_score_raw=?, geometric_score=?, temporal_score=?, "
+                    "behavioral_score=?, composite_score=?, final_classification=?, "
+                    "enrichment_status=?, last_scored=? WHERE id=?",
+                    (
+                        event_data.get("risk_score_raw"),
+                        event_data.get("geometric_score"),
+                        event_data.get("temporal_score"),
+                        event_data.get("behavioral_score"),
+                        event_data.get("composite_score"),
+                        event_data.get("final_classification"),
+                        event_data.get("enrichment_status"),
+                        now_epoch,
+                        row_id,
+                    ),
+                )
+                scored += 1
+            except Exception as e:
+                # One bad row must not abort the batch.
+                skipped += 1
+                logger.warning("Fleet rescore: skipping row id=%s: %s", row_id, e)
+
+        conn.commit()
+    except Exception as e:
+        logger.error("Fleet rescore failed for %s: %s", db_path, e)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    if scored or skipped:
+        logger.info(
+            "Fleet rescore: scored %d, skipped %d (%s)", scored, skipped, db_path
+        )
+    return scored
+
+
+def main(run_once: bool = False) -> int:
+    """Analyzer process entry point.
+
+    Args:
+        run_once: When True, run a single fleet-DB rescore batch and exit 0
+            (for validation / cron-style invocation) instead of entering the
+            continuous analysis loop.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
@@ -929,6 +1167,30 @@ def main() -> int:
 
     logger.info("Direct queue reader enabled (single-machine mode)")
 
+    # ── Fleet re-scoring mode ──
+    # When AMOSKYS_FLEET_RESCORE is truthy (or --once is passed), the brain scores
+    # events in a Command-Center fleet DB (TELEMETRY_DB, pointed via
+    # AMOSKYS_TELEMETRY_DB at fleet.db). This is what makes the brain the scorer
+    # for shipped fleet telemetry, not just single-machine queues.
+    _fleet_rescore_enabled = bool(os.environ.get("AMOSKYS_FLEET_RESCORE"))
+
+    if run_once:
+        # Single batch then exit 0 — for validation and cron-style use.
+        if scorer is None:
+            logger.error("--once requires a ScoringEngine; none available")
+            return 1
+        logger.info("Fleet rescore --once: scoring one batch from %s", TELEMETRY_DB)
+        try:
+            n = _rescore_fleet_db(TELEMETRY_DB, scorer, enrichment, fusion)
+            logger.info("Fleet rescore --once complete: %d rows scored", n)
+        finally:
+            if scorer is not None:
+                try:
+                    scorer.close()
+                except Exception:
+                    pass
+        return 0
+
     # ── Analysis loop ──
     # Adaptive cadence (no hardcoded batches): drain a bounded number of rows per
     # cycle and pace subsystems by wall-clock, not cycle count, so the loop stays
@@ -961,6 +1223,18 @@ def main() -> int:
                 events_this_cycle += drained
             except Exception:
                 logger.error("Queue drain failed", exc_info=True)
+
+            # Fleet re-scoring (fleet mode — bypasses the stub
+            # FusionEngine.ingest_telemetry_from_db). Scores command_center's
+            # fleet.db events in place each cycle when AMOSKYS_FLEET_RESCORE is set.
+            if _fleet_rescore_enabled and scorer is not None:
+                try:
+                    rescored = _rescore_fleet_db(
+                        TELEMETRY_DB, scorer, enrichment, fusion
+                    )
+                    events_this_cycle += rescored
+                except Exception:
+                    logger.error("Fleet rescore failed", exc_info=True)
 
             # IGRIS tactical assessment (~every 10s, wall-clock paced)
             if tactical and t0 - _last["tactical"] >= TACTICAL_EVERY_S:
@@ -1114,5 +1388,25 @@ def _write_heartbeat(cycle: int, events_this_cycle: int, total: int, latency_ms:
         pass
 
 
+def _parse_args(argv=None):
+    """Parse CLI args for the analyzer entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="AMOSKYS Analyzer Daemon (Tier 2 brain)."
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help=(
+            "Run a single fleet-DB rescore batch and exit 0 "
+            "(for validation / cron-style use). Scores AMOSKYS_TELEMETRY_DB "
+            "(point it at fleet.db) in place."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    _args = _parse_args()
+    sys.exit(main(run_once=_args.once))
