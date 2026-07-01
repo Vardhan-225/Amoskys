@@ -12,11 +12,16 @@ import json
 import logging
 import os
 import sqlite3
+import ssl
 import time
 from pathlib import Path
+from typing import Any
 
 import requests as http_client
 from flask import Response, jsonify, render_template, request
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
+from urllib3.util.ssl_ import create_urllib3_context
 
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
@@ -28,15 +33,93 @@ logger = logging.getLogger("web.dashboard.command_center")
 OPS_SERVER_URL = os.getenv("AMOSKYS_OPS_SERVER", "").rstrip("/")
 OPS_TIMEOUT = (5, 15)  # (connect, read) seconds
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _resolve_ca_bundle() -> str | None:
+    """Resolve the pinned ops CA bundle path.
+
+    Order of resolution:
+      1. AMOSKYS_CA_BUNDLE env var (operator override)
+      2. Packaged deploy/certs/ops-ca.pem under the repo root
+
+    Returns the path as a string if it exists, else None (caller falls back
+    to an unverified connection so a missing cert never hard-breaks proxying).
+    """
+    env_path = os.getenv("AMOSKYS_CA_BUNDLE", "").strip()
+    if env_path:
+        if Path(env_path).is_file():
+            return env_path
+        logger.warning(
+            "AMOSKYS_CA_BUNDLE set to %s but file not found; "
+            "falling back to packaged CA",
+            env_path,
+        )
+    packaged = _REPO_ROOT / "deploy" / "certs" / "ops-ca.pem"
+    if packaged.is_file():
+        return str(packaged)
+    return None
+
+
+class _PinnedCAAdapter(HTTPAdapter):
+    """requests adapter that pins TLS to the ops self-signed CA.
+
+    The ops cert (CN=ops.amoskys.com) is self-signed and carries NO
+    subjectAltName, so RFC 6125 hostname matching cannot succeed. We require
+    the chain to validate against the pinned CA (CERT_REQUIRED — full MITM
+    protection) but suppress the SAN/hostname match. A wrong or absent CA is
+    still rejected.
+    """
+
+    def __init__(self, ca_bundle: str, *args: Any, **kwargs: Any) -> None:
+        self._ca_bundle = ca_bundle
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(  # type: ignore[override]
+        self, connections: int, maxsize: int, block: bool = False, **kwargs: Any
+    ) -> None:
+        ctx = create_urllib3_context()
+        ctx.load_verify_locations(cafile=self._ca_bundle)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        self.poolmanager = PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_context=ctx,
+            assert_hostname=False,
+            **kwargs,
+        )
+
+
+def _ops_session() -> http_client.Session:
+    """Build a requests Session with pinned-CA TLS to the ops server.
+
+    Pins verification to the ops self-signed CA (CN=ops.amoskys.com); operator
+    sets AMOSKYS_OPS_SERVER=https://ops.amoskys.com. If the CA bundle is
+    missing we log a WARNING and fall back to unverified TLS so the fleet
+    proxy never hard-breaks.
+    """
+    session = http_client.Session()
+    ca_bundle = _resolve_ca_bundle()
+    if ca_bundle:
+        session.mount("https://", _PinnedCAAdapter(ca_bundle))
+    else:
+        logger.warning(
+            "Ops CA bundle not found (set AMOSKYS_CA_BUNDLE or ship "
+            "deploy/certs/ops-ca.pem); ops proxy using UNVERIFIED TLS"
+        )
+        session.verify = False
+    return session
+
 
 def _ops_get(path: str, params: dict | None = None) -> dict | None:
     """Fetch data from the ops server API."""
     try:
-        resp = http_client.get(
+        resp = _ops_session().get(
             f"{OPS_SERVER_URL}{path}",
             params=params,
             timeout=OPS_TIMEOUT,
-            verify=False,  # Self-signed cert on ops server
         )
         if resp.status_code == 200:
             return resp.json()

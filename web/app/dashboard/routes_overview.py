@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sqlite3
+import ssl
 import time
 from pathlib import Path
 
@@ -17,6 +18,59 @@ from ..middleware import get_current_org_id, get_current_user, require_login
 from . import dashboard_bp
 
 logger = logging.getLogger("web.dashboard.overview")
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _resolve_ca_bundle() -> str | None:
+    """Resolve the pinned ops CA bundle path.
+
+    Order of resolution:
+      1. AMOSKYS_CA_BUNDLE env var (operator override)
+      2. Packaged deploy/certs/ops-ca.pem under the repo root
+
+    Returns the path as a string if it exists, else None.
+    """
+    env_path = os.getenv("AMOSKYS_CA_BUNDLE", "").strip()
+    if env_path:
+        if Path(env_path).is_file():
+            return env_path
+        logger.warning(
+            "AMOSKYS_CA_BUNDLE set to %s but file not found; "
+            "falling back to packaged CA",
+            env_path,
+        )
+    packaged = _REPO_ROOT / "deploy" / "certs" / "ops-ca.pem"
+    if packaged.is_file():
+        return str(packaged)
+    return None
+
+
+def _ops_ssl_context() -> ssl.SSLContext:
+    """Build the TLS context for urllib calls to the ops server.
+
+    Pins verification to the ops self-signed CA (CN=ops.amoskys.com); the
+    operator sets AMOSKYS_OPS_SERVER=https://ops.amoskys.com. The ops cert has
+    NO subjectAltName, so RFC 6125 hostname matching cannot succeed — we keep
+    CERT_REQUIRED (chain must validate against the pinned CA → full MITM
+    protection) but disable hostname checking, which is the only check the
+    missing SAN would break. If the CA bundle is missing we log a WARNING and
+    fall back to an unverified context so overview data never hard-breaks.
+    """
+    ca_bundle = _resolve_ca_bundle()
+    if ca_bundle:
+        ctx = ssl.create_default_context(cafile=ca_bundle)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        return ctx
+    logger.warning(
+        "Ops CA bundle not found (set AMOSKYS_CA_BUNDLE or ship "
+        "deploy/certs/ops-ca.pem); ops calls using UNVERIFIED TLS"
+    )
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def _get_fleet_db() -> sqlite3.Connection | None:
@@ -109,7 +163,6 @@ def overview_geo_points():
         if not is_admin and org_id:
             # Get this org's device_ids from command center
             try:
-                import ssl
                 import urllib.request as urlreq
 
                 ops_host = os.getenv(
@@ -119,9 +172,7 @@ def overview_geo_points():
                     f"{ops_host}/api/v1/fleet/status?org_id={org_id}",
                     headers={"Accept": "application/json"},
                 )
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
+                ctx = _ops_ssl_context()
                 with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
                     devs = json.loads(rsp.read()).get("devices", [])
                 dev_ids = [d["device_id"] for d in devs if d.get("device_id")]
@@ -189,16 +240,12 @@ def overview_device_locations():
     # Get device list from command center (use same env var as routes_command_center)
     ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
     try:
-        import ssl
-
         url = f"{ops_host}/api/v1/fleet/status"
         if not is_admin and org_id:
             url += f"?org_id={org_id}"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        # Allow self-signed certs on ops server
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+        # Pin verification to the ops self-signed CA (CN=ops.amoskys.com)
+        ctx = _ops_ssl_context()
         with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
             data = json.loads(resp.read())
     except Exception as e:
@@ -343,7 +390,6 @@ def overview_data():
         # Always call command center for device list (we need it for
         # both the device cards AND the device_id isolation filter)
         try:
-            import ssl
             import urllib.request as urlreq
 
             ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip(
@@ -353,9 +399,7 @@ def overview_data():
             if not is_admin and org_id:
                 cc_url += f"?org_id={org_id}"
             rq = urlreq.Request(cc_url, headers={"Accept": "application/json"})
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+            ctx = _ops_ssl_context()
             with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
                 cc_data = json.loads(rsp.read())
             cc_devices = cc_data.get("devices", [])

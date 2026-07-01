@@ -48,10 +48,21 @@ class SecurityMixin:
 
     @staticmethod
     def _classify_risk(risk: float) -> str:
-        """Map numeric risk score to classification label."""
-        if risk >= 0.75:
+        """Map numeric risk score to classification label.
+
+        Thresholds are the single source of truth in amoskys.intel.scoring
+        (_MALICIOUS_THRESHOLD=0.70 / _SUSPICIOUS_THRESHOLD=0.40). Imported
+        lazily inside the function to avoid an import cycle (scoring imports
+        nothing from storage, but keeping this lazy keeps the module boundary
+        one-directional and cheap to load). This keeps the local WAL path and
+        the fleet scoring path in agreement — a composite floored at 0.70
+        (e.g. full_kill_chain) is "malicious" on BOTH paths.
+        """
+        from amoskys.intel.scoring import _MALICIOUS_THRESHOLD, _SUSPICIOUS_THRESHOLD
+
+        if risk >= _MALICIOUS_THRESHOLD:
             return "malicious"
-        if risk >= 0.5:
+        if risk >= _SUSPICIOUS_THRESHOLD:
             return "suspicious"
         return "legitimate"
 
@@ -442,6 +453,12 @@ class SecurityMixin:
                 event_data["tier"] = "observation"
 
             # ── FINAL classification — last step, cannot be overridden ──
+            # Unified thresholds: amoskys.intel.scoring is the single source of
+            # truth (_MALICIOUS_THRESHOLD=0.70 / _SUSPICIOUS_THRESHOLD=0.40),
+            # applied here via _classify_risk() so the local WAL path and the
+            # fleet scoring path can never disagree. Previously this block used
+            # a divergent 0.75/0.5, so a full_kill_chain floored at 0.70 read
+            # "malicious" on the fleet path but "suspicious" here.
             final_risk = event_data.get("risk_score", 0.0)
             if final_risk is None:
                 final_risk = 0.0
@@ -451,12 +468,9 @@ class SecurityMixin:
                 except (ValueError, TypeError):
                     final_risk = 0.0
             final_risk = float(final_risk)
-            if final_risk >= 0.75:
-                event_data["final_classification"] = "malicious"
-            elif final_risk >= 0.5:
-                event_data["final_classification"] = "suspicious"
-            else:
-                event_data["final_classification"] = "legitimate"
+            event_data["final_classification"] = SecurityMixin._classify_risk(
+                final_risk
+            )
 
             # DEBUG: log classification decision for high-risk events
             if final_risk >= 0.5:

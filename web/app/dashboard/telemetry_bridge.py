@@ -15,10 +15,15 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+import ssl
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
+from urllib3.util.ssl_ import create_urllib3_context
 
 if TYPE_CHECKING:
     from amoskys.storage.telemetry_store import TelemetryStore
@@ -30,10 +35,67 @@ _store_lock = threading.Lock()
 _sync_started = False
 
 # Resolve paths
-_DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DATA_DIR = _REPO_ROOT / "data"
 _DB_PATH = _DATA_DIR / "telemetry.db"
 _CACHE_DB_PATH = _DATA_DIR / "fleet_cache.db"
 _OPS_SERVER = os.getenv("AMOSKYS_OPS_SERVER", "").rstrip("/")
+
+
+def _resolve_ca_bundle() -> Optional[str]:
+    """Resolve the pinned ops CA bundle path.
+
+    Order of resolution:
+      1. AMOSKYS_CA_BUNDLE env var (operator override)
+      2. Packaged deploy/certs/ops-ca.pem under the repo root
+
+    Returns the path as a string if it exists, else None (caller falls back
+    to an unverified connection so a missing cert never hard-breaks sync).
+    """
+    env_path = os.getenv("AMOSKYS_CA_BUNDLE", "").strip()
+    if env_path:
+        if Path(env_path).is_file():
+            return env_path
+        logger.warning(
+            "AMOSKYS_CA_BUNDLE set to %s but file not found; "
+            "falling back to packaged CA",
+            env_path,
+        )
+    packaged = _REPO_ROOT / "deploy" / "certs" / "ops-ca.pem"
+    if packaged.is_file():
+        return str(packaged)
+    return None
+
+
+class _PinnedCAAdapter(HTTPAdapter):
+    """requests adapter that pins TLS to the ops self-signed CA.
+
+    The ops cert (CN=ops.amoskys.com) is self-signed and carries NO
+    subjectAltName, so RFC 6125 hostname matching cannot succeed. We require
+    the chain to validate against the pinned CA (CERT_REQUIRED — full MITM
+    protection) but suppress the SAN/hostname match. A wrong or absent CA is
+    still rejected.
+    """
+
+    def __init__(self, ca_bundle: str, *args: Any, **kwargs: Any) -> None:
+        self._ca_bundle = ca_bundle
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(  # type: ignore[override]
+        self, connections: int, maxsize: int, block: bool = False, **kwargs: Any
+    ) -> None:
+        ctx = create_urllib3_context()
+        ctx.load_verify_locations(cafile=self._ca_bundle)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        self.poolmanager = PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_context=ctx,
+            assert_hostname=False,
+            **kwargs,
+        )
 
 
 def get_telemetry_store() -> Optional["TelemetryStore"]:
@@ -122,12 +184,23 @@ def _sync_from_ops():
 
     # Fetch bulk export from ops server (6h window — keeps cache small
     # for the t2.micro presentation server with 914MB RAM)
+    # Pin TLS verification to the ops self-signed CA (CN=ops.amoskys.com).
+    # Missing CA → WARNING + unverified fallback so sync never hard-breaks.
+    _ca_bundle = _resolve_ca_bundle()
+    _session = requests.Session()
+    if _ca_bundle:
+        _session.mount("https://", _PinnedCAAdapter(_ca_bundle))
+    else:
+        logger.warning(
+            "Ops CA bundle not found (set AMOSKYS_CA_BUNDLE or ship "
+            "deploy/certs/ops-ca.pem); fleet sync using UNVERIFIED TLS"
+        )
+        _session.verify = False
     try:
-        resp = requests.get(
+        resp = _session.get(
             f"{_OPS_SERVER}/api/v1/bulk-export",
             params={"hours": 6},
             timeout=60,
-            verify=False,
         )
         if resp.status_code != 200:
             logger.debug("Fleet sync: ops returned %d", resp.status_code)

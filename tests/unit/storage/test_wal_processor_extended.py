@@ -101,31 +101,84 @@ def _make_security_event(
 
 
 class TestProcessSecurityEventClassification:
-    """Test risk_score -> classification mapping."""
+    """Test the FINAL classification contract of _process_security_event.
+
+    Contract (post over-attribution fix): the raw probe risk_score does NOT
+    flow straight to final_classification. The pipeline RE-SCORES the event
+    (ScoringEngine) and the stored risk_score is the calibrated composite. The
+    final band is then derived from that re-scored risk using the UNIFIED
+    thresholds that live in amoskys.intel.scoring:
+
+        risk >= _MALICIOUS_THRESHOLD (0.70)  -> "malicious"
+        risk >= _SUSPICIOUS_THRESHOLD (0.40) -> "suspicious"
+        else                                 -> "legitimate"
+
+    These same thresholds are the single source of truth on the fleet scoring
+    path, so a category floored at 0.70 (e.g. full_kill_chain) is "malicious"
+    on BOTH the local WAL path and the fleet path — the divergence these tests
+    used to encode (0.75/0.5 here vs 0.70/0.40 there) is gone.
+
+    Two of these tests exercise _classify_risk() as a pure function to pin the
+    threshold contract directly; the others construct events whose FINAL
+    re-scored value lands in the asserted band via a real attack category.
+    """
+
+    def test_classify_risk_pure_function_uses_unified_thresholds(self):
+        """_classify_risk() is bound to the scoring-module thresholds (0.70/0.40)."""
+        from amoskys.intel.scoring import _MALICIOUS_THRESHOLD, _SUSPICIOUS_THRESHOLD
+        from amoskys.storage._wal_security import SecurityMixin
+
+        # Pin the actual constants so a future drift in scoring.py is caught.
+        assert _MALICIOUS_THRESHOLD == 0.70
+        assert _SUSPICIOUS_THRESHOLD == 0.40
+
+        # Malicious band: >= 0.70 (boundary inclusive).
+        assert SecurityMixin._classify_risk(_MALICIOUS_THRESHOLD) == "malicious"
+        assert SecurityMixin._classify_risk(0.95) == "malicious"
+        # Suspicious band: [0.40, 0.70).
+        assert SecurityMixin._classify_risk(_SUSPICIOUS_THRESHOLD) == "suspicious"
+        assert SecurityMixin._classify_risk(0.69) == "suspicious"
+        # Just under the old 0.75 boundary must now be malicious, not suspicious
+        # (this is the exact regression the unification fixes).
+        assert SecurityMixin._classify_risk(0.72) == "malicious"
+        # Legitimate band: < 0.40.
+        assert SecurityMixin._classify_risk(0.39) == "legitimate"
+        assert SecurityMixin._classify_risk(0.0) == "legitimate"
 
     def test_malicious_classification(self, tmp_path):
+        """A full_kill_chain re-scores into the malicious band (composite floored
+        at 0.70) and the FINAL classification agrees with the fleet path."""
         proc = _make_proc(tmp_path)
-        ev = _make_security_event(risk_score=0.85)
+        ev = _make_security_event(risk_score=0.85, event_category="full_kill_chain")
         proc._process_security_event(
             ev, "dev-1", 1000, "2024-01-01T00:00:00", "test-agent"
         )
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
         assert len(rows) == 1
+        # Re-scored risk lands on the malicious floor (0.70) and classifies malicious.
+        assert rows[0]["risk_score"] >= 0.70
         assert rows[0]["final_classification"] == "malicious"
 
     def test_suspicious_classification(self, tmp_path):
+        """A single-stage exfil category floors into the suspicious band
+        ([0.40, 0.70)) after re-scoring."""
         proc = _make_proc(tmp_path)
-        ev = _make_security_event(risk_score=0.55)
+        ev = _make_security_event(
+            risk_score=0.55, event_category="cloud_exfil_detected"
+        )
         proc._process_security_event(
             ev, "dev-1", 1000, "2024-01-01T00:00:00", "test-agent"
         )
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
         assert len(rows) == 1
+        risk = rows[0]["risk_score"]
+        assert 0.40 <= risk < 0.70
         assert rows[0]["final_classification"] == "suspicious"
 
     def test_legitimate_classification(self, tmp_path):
+        """A benign category with a low probe risk re-scores below 0.40."""
         proc = _make_proc(tmp_path)
         ev = _make_security_event(risk_score=0.3)
         proc._process_security_event(
@@ -134,26 +187,41 @@ class TestProcessSecurityEventClassification:
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
         assert len(rows) == 1
+        assert rows[0]["risk_score"] < 0.40
         assert rows[0]["final_classification"] == "legitimate"
 
-    def test_boundary_075_is_malicious(self, tmp_path):
+    def test_boundary_070_is_malicious(self, tmp_path):
+        """The malicious boundary is 0.70 (inclusive), NOT the old 0.75.
+
+        full_kill_chain floors the composite to exactly _MALICIOUS_THRESHOLD
+        (0.70); the re-scored risk lands on that boundary and must classify
+        malicious on the WAL path — matching the fleet path.
+        """
         proc = _make_proc(tmp_path)
-        ev = _make_security_event(risk_score=0.75)
+        ev = _make_security_event(risk_score=0.50, event_category="full_kill_chain")
         proc._process_security_event(
             ev, "dev-1", 1000, "2024-01-01T00:00:00", "test-agent"
         )
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
+        assert rows[0]["risk_score"] == pytest.approx(0.70)
         assert rows[0]["final_classification"] == "malicious"
 
-    def test_boundary_050_is_suspicious(self, tmp_path):
+    def test_boundary_040_is_suspicious(self, tmp_path):
+        """The suspicious boundary is 0.40 (inclusive), NOT the old 0.50.
+
+        c2_beacon_suspect floors the composite to exactly _SUSPICIOUS_THRESHOLD
+        (0.40); the re-scored risk lands on that boundary and must classify
+        suspicious (not legitimate).
+        """
         proc = _make_proc(tmp_path)
-        ev = _make_security_event(risk_score=0.50)
+        ev = _make_security_event(risk_score=0.20, event_category="c2_beacon_suspect")
         proc._process_security_event(
             ev, "dev-1", 1000, "2024-01-01T00:00:00", "test-agent"
         )
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
+        assert rows[0]["risk_score"] == pytest.approx(0.40)
         assert rows[0]["final_classification"] == "suspicious"
 
 
