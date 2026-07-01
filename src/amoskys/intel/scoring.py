@@ -1231,42 +1231,31 @@ class ScoringEngine:
         # "suspicious" (≥0.40) on the single-device fleet where every attack
         # pattern is "familiar". Applied BEFORE the trust caps below, so a
         # trusted apple_system/self actor still wins and is pulled back down.
+        # ── Corroboration gate (2026-07-01) ──────────────────────────────────
+        # A scary category LABEL alone must not launder an event into the
+        # malicious band. The old code floored full_kill_chain / execute_to_exfil
+        # to 0.70 unconditionally, so the OWNER'S OWN ssh/curl deploy read as
+        # "malicious exfiltration". For ANY floored attack category the malicious
+        # verdict now requires an INDEPENDENT signal — a threat-intel match or a
+        # foreign/off-home source — because these categories inflate their OWN
+        # composite (the full_kill_chain probe especially), so "composite is high"
+        # is circular self-certification. Without independent corroboration the
+        # category is capped at "worth a look" AND the agent's raw CRITICAL stamp
+        # is NOT allowed to resurrect it (capped_uncorroborated -> skips the
+        # never-downgrade rule below). Foreign/intel still escalate. This holds
+        # until the causal-chain rewrite (roadmap increment 2) can assert a real,
+        # ordered, same-actor chain.
         capped_uncorroborated = False
         floor = _CATEGORY_RISK_FLOORS.get(cat_key, 0.0)
-        if floor > 0.0 and composite < floor:
-            # ── Corroboration gate (2026-07-01) ──────────────────────────────
-            # A scary category LABEL alone must not launder an event into the
-            # malicious band. The old code floored full_kill_chain / execute_to_
-            # exfil to 0.70 unconditionally, so the OWNER'S OWN ssh/curl deploy
-            # (trust_disposition="unknown") read as "malicious exfiltration".
-            # The floor now applies at full strength ONLY when the detection is
-            # INDEPENDENTLY corroborated:
-            #   • a threat-intel match, OR
-            #   • the fusion sub-detectors (geo/temporal/behavioral) already put
-            #     the composite at/above the suspicious line on their own, OR
-            #   • the source is outside the home regions (foreign egress).
-            # Otherwise the category is capped at the SUSPICIOUS floor
-            # ("worth a look"), never malicious. Measured on live fleet data this
-            # demotes 11/16 false "malicious" (owner deploy) to worth-a-look while
-            # keeping every corroborated detection. Threat-intel hits still
-            # escalate to malicious unconditionally (see risk reconciliation).
+        if floor > 0.0:
             country = str(event.get("geo_src_country") or "").upper()
             foreign = bool(country) and country not in _HOME_REGIONS
-            # Corroboration must be INDEPENDENT of the category's own score. These
-            # floored categories inflate their OWN behavioral/composite score (the
-            # full_kill_chain probe in particular), so "composite >= suspicious"
-            # is circular — it lets a naive unordered-co-occurrence kill-chain
-            # self-certify as malicious. Require a genuinely independent signal:
-            # a threat-intel match or a foreign/off-home source. Everything else
-            # caps at suspicious ("worth a look") until the causal-chain rewrite
-            # (roadmap increment 2) can assert a real, ordered, same-actor chain.
             corroborated = bool(event.get("threat_intel_match")) or foreign
+            capped_uncorroborated = not corroborated
             effective_floor = floor if corroborated else min(floor, _SUSPICIOUS_THRESHOLD)
-            # Remember that the brain deliberately capped an uncorroborated scary
-            # label, so the never-downgrade rule below cannot resurrect the
-            # agent's raw 'malicious' stamp and undo the calibration.
             if not corroborated:
-                capped_uncorroborated = True
+                # never let an uncorroborated floored category exceed suspicious
+                composite = min(composite, _SUSPICIOUS_THRESHOLD)
             if composite < effective_floor:
                 behav_factors.append(
                     {
