@@ -224,6 +224,21 @@ def _sync_from_ops():
         # Fallback: create minimal tables
         _create_minimal_schema(db)
 
+    # Carry the BRAIN'S verdict through the sync. The dynamic INSERT only writes
+    # columns that already exist in the table, so composite_score / risk_score_raw
+    # / last_scored (present in the ops bulk export after re-scoring) are silently
+    # dropped unless the columns exist here. Add them idempotently so the web can
+    # read the calibrated score instead of the agent's raw risk_score.
+    for _col, _typ in (
+        ("composite_score", "REAL"),
+        ("risk_score_raw", "REAL"),
+        ("last_scored", "INTEGER"),
+    ):
+        try:
+            db.execute(f"ALTER TABLE security_events ADD COLUMN {_col} {_typ}")
+        except Exception:
+            pass  # column already exists
+
     # Truncate and replace each table (prevents unbounded growth)
     total = 0
     for table_name, rows in bulk.items():

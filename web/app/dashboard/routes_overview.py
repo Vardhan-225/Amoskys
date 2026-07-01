@@ -92,23 +92,20 @@ def _get_fleet_db() -> sqlite3.Connection | None:
 
 
 def _compute_posture(critical: int, high: int, medium: int = 0) -> dict:
-    """Compute fleet posture score and label from threat counts."""
+    """Compute a fleet RISK score (0 = safe, 100 = critical) from threat counts.
+
+    Risk-oriented so it reads the same direction as every other threat score in
+    the app (low = safe). Must stay in lock-step with computePosture() in
+    overview.html. The gauge ring fills UP as risk rises.
+    """
     if critical == 0 and high == 0:
-        score = 100
-        label = "All Clear"
-        color = "#00ff88"
-    elif critical == 0 and high <= 3:
-        score = max(70, 90 - high * 5)
-        label = "Guarded"
-        color = "#f0ad4e"
+        score, label, color = 0, "All Clear", "#3ad29f"
+    elif critical == 0:
+        score, label, color = min(35, 8 + high * 4), "Guarded", "#ffb038"
     elif critical <= 5:
-        score = max(30, 60 - critical * 5 - high * 2)
-        label = "Needs Attention"
-        color = "#f0ad4e"
+        score, label, color = min(70, 40 + critical * 6 + high * 2), "Needs Attention", "#ffb038"
     else:
-        score = max(5, 25 - critical)
-        label = "Critical"
-        color = "#ff3366"
+        score, label, color = min(100, 75 + critical * 3), "Critical", "#ff4d5e"
     return {"score": score, "label": label, "color": color}
 
 
@@ -437,13 +434,16 @@ def overview_data():
             + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
+        # Severity counts use the BRAIN'S verdict (final_classification), not the
+        # agent's raw risk_score. On live data risk_score>=0.8 counted 49 while
+        # the brain's 'malicious' was 23 — the raw threshold ~2x over-counts.
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8"
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND final_classification = 'malicious'"
             + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8"
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND final_classification = 'suspicious'"
             + evt_dev_clause,
             (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
@@ -455,7 +455,7 @@ def overview_data():
             (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
         prev_critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8"
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND final_classification = 'malicious'"
             + evt_dev_clause,
             (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
@@ -509,8 +509,8 @@ def overview_data():
                           d.agent_version, d.last_seen,
                           COUNT(se.id) as event_count,
                           COALESCE(MAX(se.risk_score), 0) as max_risk,
-                          SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
-                          SUM(CASE WHEN se.risk_score >= 0.6 AND se.risk_score < 0.8 THEN 1 ELSE 0 END) as high_count
+                          SUM(CASE WHEN se.final_classification = 'malicious' THEN 1 ELSE 0 END) as critical_count,
+                          SUM(CASE WHEN se.final_classification = 'suspicious' THEN 1 ELSE 0 END) as high_count
                    FROM devices d
                    LEFT JOIN security_events se ON d.device_id = se.device_id
                         AND se.timestamp_ns > ?
@@ -554,11 +554,11 @@ def overview_data():
                         (did, day_ago_ns),
                     ).fetchone()[0]
                     cr = db.execute(
-                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND risk_score >= 0.8",
+                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND final_classification = 'malicious'",
                         (did, day_ago_ns),
                     ).fetchone()[0]
                     hi = db.execute(
-                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8",
+                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND final_classification = 'suspicious'",
                         (did, day_ago_ns),
                     ).fetchone()[0]
                 except Exception:

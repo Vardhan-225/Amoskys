@@ -1251,11 +1251,15 @@ class ScoringEngine:
             # escalate to malicious unconditionally (see risk reconciliation).
             country = str(event.get("geo_src_country") or "").upper()
             foreign = bool(country) and country not in _HOME_REGIONS
-            corroborated = (
-                bool(event.get("threat_intel_match"))
-                or composite >= _SUSPICIOUS_THRESHOLD
-                or foreign
-            )
+            # Corroboration must be INDEPENDENT of the category's own score. These
+            # floored categories inflate their OWN behavioral/composite score (the
+            # full_kill_chain probe in particular), so "composite >= suspicious"
+            # is circular — it lets a naive unordered-co-occurrence kill-chain
+            # self-certify as malicious. Require a genuinely independent signal:
+            # a threat-intel match or a foreign/off-home source. Everything else
+            # caps at suspicious ("worth a look") until the causal-chain rewrite
+            # (roadmap increment 2) can assert a real, ordered, same-actor chain.
+            corroborated = bool(event.get("threat_intel_match")) or foreign
             effective_floor = floor if corroborated else min(floor, _SUSPICIOUS_THRESHOLD)
             if composite < effective_floor:
                 behav_factors.append(

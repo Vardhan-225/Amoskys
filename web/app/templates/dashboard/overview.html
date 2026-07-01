@@ -232,12 +232,15 @@
         }
     }
 
+    // RISK score: 0 = safe (green), 100 = critical (red). Consistent with every
+    // other page's threat scale, so "Am I safe?" reads the same way everywhere.
+    // The gauge ring uses go = gc*(1 - score/100), so it now fills UP with risk.
     function computePosture(cr, hi) {
         cr = cr || 0; hi = hi || 0;
-        if (cr === 0 && hi === 0) return { score: 100, label: 'All Clear', color: '#00ff88' };
-        if (cr === 0 && hi <= 3) return { score: Math.max(70, 90 - hi * 5), label: 'Guarded', color: '#f0ad4e' };
-        if (cr <= 5) return { score: Math.max(30, 60 - cr * 5 - hi * 2), label: 'Needs Attention', color: '#f0ad4e' };
-        return { score: Math.max(5, 25 - cr), label: 'Critical', color: '#ff3366' };
+        if (cr === 0 && hi === 0) return { score: 0, label: 'All Clear', color: '#3ad29f' };
+        if (cr === 0) return { score: Math.min(35, 8 + hi * 4), label: 'Guarded', color: '#ffb038' };
+        if (cr <= 5) return { score: Math.min(70, 40 + cr * 6 + hi * 2), label: 'Needs Attention', color: '#ffb038' };
+        return { score: Math.min(100, 75 + cr * 3), label: 'Critical', color: '#ff4d5e' };
     }
 
     function render(data) {
@@ -256,7 +259,7 @@
         // Posture badge — top-left
         html += '<div class="ov-posture-badge">';
         html += '<div class="ov-pb-label" style="color:' + p.color + '">' + p.label + '</div>';
-        html += '<div class="ov-pb-score" style="color:' + p.color + '">' + p.score + ' / 100</div>';
+        html += '<div class="ov-pb-score" style="color:' + p.color + '">risk ' + p.score + ' / 100</div>';
         html += '<div class="ov-pb-events">' + fmtNum(ev.total_events) + ' events (24h)</div>';
         html += '</div>';
 
