@@ -83,7 +83,7 @@ authoritative ground truth for questions about "right now".
 
 
 # Safety caps
-_MAX_HISTORY_TURNS = 8          # user+assistant pairs
+_MAX_HISTORY_TURNS = 8  # user+assistant pairs
 _MAX_USER_LEN = 2000
 _MAX_RESPONSE_TOKENS = 512
 _LIVE_MODEL = os.environ.get("IGRIS_WEB_MODEL", "claude-sonnet-4-5")
@@ -96,7 +96,9 @@ _LIVE_MODEL = os.environ.get("IGRIS_WEB_MODEL", "claude-sonnet-4-5")
 # ─────────────────────────────────────────────────────────────────────
 
 
-def build_context(snap, active_concerns_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def build_context(
+    snap, active_concerns_payload: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Distill an AegisTail.snapshot() result into a minimal JSON blob
     suitable for system-priming the LLM or rule-matching in GROUND mode.
 
@@ -120,16 +122,28 @@ def build_context(snap, active_concerns_payload: Optional[Dict[str, Any]] = None
             {"ip": b.get("ip"), "rule": b.get("rule"), "strikes": b.get("strikes")}
             for b in active_blocks[:5]
         ],
-        "chain_ok":     getattr(snap, "chain_ok", 0),
+        "chain_ok": getattr(snap, "chain_ok", 0),
         "chain_breaks": getattr(snap, "chain_breaks", 0),
         "recent": [
             {
                 "event_type": e.get("event_type"),
-                "severity":   e.get("severity"),
-                "ts_ns":      e.get("ts_ns"),
-                "ip":         (e.get("request") or {}).get("ip"),
-                "attrs":      {k: v for k, v in (e.get("attributes") or {}).items() if k in
-                               {"ip", "rule", "strikes", "slug", "drift_type", "user_login", "role"}},
+                "severity": e.get("severity"),
+                "ts_ns": e.get("ts_ns"),
+                "ip": (e.get("request") or {}).get("ip"),
+                "attrs": {
+                    k: v
+                    for k, v in (e.get("attributes") or {}).items()
+                    if k
+                    in {
+                        "ip",
+                        "rule",
+                        "strikes",
+                        "slug",
+                        "drift_type",
+                        "user_login",
+                        "role",
+                    }
+                },
             }
             for e in recent
         ],
@@ -149,6 +163,7 @@ def _have_anthropic_key() -> bool:
 def _have_anthropic_sdk() -> bool:
     try:
         import anthropic  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -173,7 +188,7 @@ def _reply_live(
 
     # First user turn carries the snapshot; subsequent turns are plain.
     first = True
-    for turn in history[-(_MAX_HISTORY_TURNS * 2):]:
+    for turn in history[-(_MAX_HISTORY_TURNS * 2) :]:
         role = turn.get("role")
         if role not in ("user", "assistant"):
             continue
@@ -246,7 +261,17 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         )
 
     # RIGHT NOW / STATUS / POSTURE
-    if any(k in q for k in ("right now", "what's happening", "status", "posture", "everything ok", "all good")):
+    if any(
+        k in q
+        for k in (
+            "right now",
+            "what's happening",
+            "status",
+            "posture",
+            "everything ok",
+            "all good",
+        )
+    ):
         posture = (context.get("concerns") or {}).get("posture", "normal")
         blocks = context.get("active_blocks_count", 0)
         top_ip = (context.get("top_external_ips") or [{}])[0]
@@ -272,11 +297,23 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         )
 
     # TOP IPs / ATTACKERS
-    if any(k in q for k in ("top ip", "top callers", "attacker", "who's hitting", "who is hitting", "loudest")):
+    if any(
+        k in q
+        for k in (
+            "top ip",
+            "top callers",
+            "attacker",
+            "who's hitting",
+            "who is hitting",
+            "loudest",
+        )
+    ):
         ips = context.get("top_external_ips") or []
         if not ips:
             return ("No external IPs recorded yet.", "ground/top_ips")
-        lines = "\n".join(f"• `{x['ip']}` — {_fmt_int(x['count'])} events" for x in ips[:5])
+        lines = "\n".join(
+            f"• `{x['ip']}` — {_fmt_int(x['count'])} events" for x in ips[:5]
+        )
         return (f"Top IPs hitting your site:\n{lines}", "ground/top_ips")
 
     # BLOCKS
@@ -285,7 +322,10 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         if blocks == 0:
             return ("No IPs in Aegis's penalty box right now.", "ground/blocks")
         blist = context.get("active_blocks") or []
-        detail = "; ".join(f"`{b.get('ip')}` ({b.get('rule')}, {b.get('strikes')} strikes)" for b in blist[:3])
+        detail = "; ".join(
+            f"`{b.get('ip')}` ({b.get('rule')}, {b.get('strikes')} strikes)"
+            for b in blist[:3]
+        )
         return (f"{blocks} IP(s) currently blocked: {detail}", "ground/blocks")
 
     # CHAIN
@@ -295,7 +335,10 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         total = ok + breaks
         pct = (100.0 * ok / total) if total else 0.0
         if breaks == 0:
-            return (f"Chain 100% intact — {_fmt_int(ok)} events cryptographically linked.", "ground/chain")
+            return (
+                f"Chain 100% intact — {_fmt_int(ok)} events cryptographically linked.",
+                "ground/chain",
+            )
         return (
             f"{pct:.2f}% chain-ok · {breaks} break(s) out of {_fmt_int(total)}. "
             f"Usually benign (interleaved writes from a burst), but worth a look if it grows.",
@@ -303,7 +346,10 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         )
 
     # FAILED LOGINS
-    if any(k in q for k in ("failed login", "brute force", "password attempts", "login failures")):
+    if any(
+        k in q
+        for k in ("failed login", "brute force", "password attempts", "login failures")
+    ):
         by_type = {t["type"]: t["count"] for t in context.get("top_event_types", [])}
         n = by_type.get("aegis.auth.login_failed", 0)
         if n == 0:
@@ -319,7 +365,9 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
         types = context.get("top_event_types") or []
         if not types:
             return ("No events in the tail yet.", "ground/event_types")
-        lines = "\n".join(f"• `{t['type']}` — {_fmt_int(t['count'])}" for t in types[:8])
+        lines = "\n".join(
+            f"• `{t['type']}` — {_fmt_int(t['count'])}" for t in types[:8]
+        )
         return (f"Top event types in the current tail:\n{lines}", "ground/event_types")
 
     # RUDE BUT HONEST DEFAULT
@@ -340,7 +388,7 @@ def _reply_ground(user_text: str, context: Dict[str, Any]) -> Tuple[str, str]:
 class ChatReply:
     text: str
     backend: str
-    mode: str             # "live" | "ground"
+    mode: str  # "live" | "ground"
     posture: Optional[str] = None
     took_ms: int = 0
     warning: Optional[str] = None
@@ -379,7 +427,13 @@ def chat(
         if mode == "live":
             text, backend = _reply_live(user_message, history, context)
             took_ms = int((time.perf_counter() - t0) * 1000)
-            return ChatReply(text=text, backend=backend, mode="live", posture=posture, took_ms=took_ms)
+            return ChatReply(
+                text=text,
+                backend=backend,
+                mode="live",
+                posture=posture,
+                took_ms=took_ms,
+            )
         text, backend = _reply_ground(user_message, context)
     except Exception as exc:  # noqa: BLE001
         log.exception("igris_chat failure")
@@ -397,7 +451,9 @@ def chat(
         )
 
     took_ms = int((time.perf_counter() - t0) * 1000)
-    return ChatReply(text=text, backend=backend, mode="ground", posture=posture, took_ms=took_ms)
+    return ChatReply(
+        text=text, backend=backend, mode="ground", posture=posture, took_ms=took_ms
+    )
 
 
 __all__ = ["chat", "ChatReply", "build_context"]

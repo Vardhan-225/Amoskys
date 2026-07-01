@@ -26,8 +26,10 @@ import sys
 # Try multiple possible locations (local dev, server deployment, pip install)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _possible_paths = [
-    os.path.join(_script_dir, "../../src"),  # Local dev: deployments/protocol_collectors/../../src
-    os.path.expanduser("~/amoskys-src"),      # Server: ~/amoskys-src/amoskys/
+    os.path.join(
+        _script_dir, "../../src"
+    ),  # Local dev: deployments/protocol_collectors/../../src
+    os.path.expanduser("~/amoskys-src"),  # Server: ~/amoskys-src/amoskys/
     os.path.join(os.path.expanduser("~"), "amoskys", "src"),  # Server alt
 ]
 
@@ -36,7 +38,9 @@ for path in _possible_paths:
         sys.path.insert(0, path)
 
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
-from amoskys.agents.protocol_collectors.protocol_collectors_v2 import ProtocolCollectorsV2
+from amoskys.agents.protocol_collectors.protocol_collectors_v2 import (
+    ProtocolCollectorsV2,
+)
 
 # Configure logging
 logging.basicConfig(

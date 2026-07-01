@@ -38,8 +38,10 @@ DB_PATH = ROOT / "data" / "telemetry.db"
 
 # ─── ANSI Colors ────────────────────────────────────────────────
 
+
 class C:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -185,17 +187,18 @@ TACTIC_MAP = {
 }
 
 KILL_CHAIN_STAGES = [
-    ("RECON",        "reconnaissance"),
-    ("WEAPONIZE",    "resource_development"),
-    ("DELIVER",      "initial_access"),
-    ("EXPLOIT",      "execution"),
-    ("INSTALL",      "persistence"),
-    ("C2",           "command_and_control"),
-    ("ACT",          "exfiltration"),
+    ("RECON", "reconnaissance"),
+    ("WEAPONIZE", "resource_development"),
+    ("DELIVER", "initial_access"),
+    ("EXPLOIT", "execution"),
+    ("INSTALL", "persistence"),
+    ("C2", "command_and_control"),
+    ("ACT", "exfiltration"),
 ]
 
 
 # ─── DB Helpers ─────────────────────────────────────────────────
+
 
 def query(sql: str, params: tuple = (), db: str = None) -> List[dict]:
     """Execute SQL and return list of dicts."""
@@ -240,6 +243,7 @@ def ns_to_str(ns: int) -> str:
 
 # ─── Timeline View ──────────────────────────────────────────────
 
+
 def show_timeline():
     """Show unified timeline of all events across all tables."""
     print(f"\n{C.BOLD}{'='*80}{C.RESET}")
@@ -249,72 +253,86 @@ def show_timeline():
     events = []
 
     # Security events
-    for ev in query("SELECT * FROM security_events ORDER BY timestamp_ns DESC LIMIT 200"):
-        events.append({
-            "time_ns": ev.get("timestamp_ns", 0),
-            "table": "security",
-            "type": ev.get("event_type", "?"),
-            "severity": ev.get("severity", "info"),
-            "mitre": ev.get("mitre_techniques", ""),
-            "agent": ev.get("collection_agent", "?"),
-            "detail": ev.get("event_category", "") or ev.get("data", ""),
-            "risk": ev.get("risk_score", 0),
-        })
+    for ev in query(
+        "SELECT * FROM security_events ORDER BY timestamp_ns DESC LIMIT 200"
+    ):
+        events.append(
+            {
+                "time_ns": ev.get("timestamp_ns", 0),
+                "table": "security",
+                "type": ev.get("event_type", "?"),
+                "severity": ev.get("severity", "info"),
+                "mitre": ev.get("mitre_techniques", ""),
+                "agent": ev.get("collection_agent", "?"),
+                "detail": ev.get("event_category", "") or ev.get("data", ""),
+                "risk": ev.get("risk_score", 0),
+            }
+        )
 
     # Persistence events
-    for ev in query("SELECT * FROM persistence_events ORDER BY timestamp_ns DESC LIMIT 100"):
-        events.append({
-            "time_ns": ev.get("timestamp_ns", 0),
-            "table": "persistence",
-            "type": ev.get("mechanism", "?"),
-            "severity": "high",
-            "mitre": "",
-            "agent": "persistence",
-            "detail": ev.get("path", ev.get("entry_path", "")),
-            "risk": 0.7,
-        })
+    for ev in query(
+        "SELECT * FROM persistence_events ORDER BY timestamp_ns DESC LIMIT 100"
+    ):
+        events.append(
+            {
+                "time_ns": ev.get("timestamp_ns", 0),
+                "table": "persistence",
+                "type": ev.get("mechanism", "?"),
+                "severity": "high",
+                "mitre": "",
+                "agent": "persistence",
+                "detail": ev.get("path", ev.get("entry_path", "")),
+                "risk": 0.7,
+            }
+        )
 
     # Process events
     for ev in query(
         "SELECT * FROM process_events WHERE is_suspicious = 1 "
         "ORDER BY timestamp_ns DESC LIMIT 100"
     ):
-        events.append({
-            "time_ns": ev.get("timestamp_ns", 0),
-            "table": "process",
-            "type": f"proc:{ev.get('name', '?')}",
-            "severity": "medium",
-            "mitre": "",
-            "agent": "process",
-            "detail": f"pid={ev.get('pid', '?')} exe={ev.get('exe', '?')[:50]}",
-            "risk": ev.get("anomaly_score", 0),
-        })
+        events.append(
+            {
+                "time_ns": ev.get("timestamp_ns", 0),
+                "table": "process",
+                "type": f"proc:{ev.get('name', '?')}",
+                "severity": "medium",
+                "mitre": "",
+                "agent": "process",
+                "detail": f"pid={ev.get('pid', '?')} exe={ev.get('exe', '?')[:50]}",
+                "risk": ev.get("anomaly_score", 0),
+            }
+        )
 
     # DNS events
     for ev in query("SELECT * FROM dns_events ORDER BY timestamp_ns DESC LIMIT 100"):
-        events.append({
-            "time_ns": ev.get("timestamp_ns", 0),
-            "table": "dns",
-            "type": f"dns:{ev.get('query_name', '?')[:30]}",
-            "severity": "low",
-            "mitre": "",
-            "agent": "dns",
-            "detail": ev.get("query_type", ""),
-            "risk": ev.get("anomaly_score", 0),
-        })
+        events.append(
+            {
+                "time_ns": ev.get("timestamp_ns", 0),
+                "table": "dns",
+                "type": f"dns:{ev.get('query_name', '?')[:30]}",
+                "severity": "low",
+                "mitre": "",
+                "agent": "dns",
+                "detail": ev.get("query_type", ""),
+                "risk": ev.get("anomaly_score", 0),
+            }
+        )
 
     # FIM events
     for ev in query("SELECT * FROM fim_events ORDER BY timestamp_ns DESC LIMIT 100"):
-        events.append({
-            "time_ns": ev.get("timestamp_ns", 0),
-            "table": "fim",
-            "type": f"file:{ev.get('action', '?')}",
-            "severity": "medium",
-            "mitre": "",
-            "agent": "filesystem",
-            "detail": ev.get("path", "")[:60],
-            "risk": 0,
-        })
+        events.append(
+            {
+                "time_ns": ev.get("timestamp_ns", 0),
+                "table": "fim",
+                "type": f"file:{ev.get('action', '?')}",
+                "severity": "medium",
+                "mitre": "",
+                "agent": "filesystem",
+                "detail": ev.get("path", "")[:60],
+                "risk": 0,
+            }
+        )
 
     # Sort by time
     events.sort(key=lambda e: e["time_ns"], reverse=True)
@@ -334,7 +352,9 @@ def show_timeline():
         if minute != current_minute:
             current_minute = minute
             dt = ns_to_dt(ev["time_ns"])
-            print(f"\n  {C.BOLD}{C.BLUE}--- {dt.strftime('%Y-%m-%d %H:%M')} UTC ---{C.RESET}")
+            print(
+                f"\n  {C.BOLD}{C.BLUE}--- {dt.strftime('%Y-%m-%d %H:%M')} UTC ---{C.RESET}"
+            )
 
         sev_color = C.severity(ev["severity"])
         table_color = {
@@ -353,7 +373,9 @@ def show_timeline():
                 techniques = [mitre]
             mitre_str = ",".join(techniques[:2])
             mitre_name = MITRE_NAMES.get(techniques[0], "")
-            mitre_display = f" {C.BOLD}[{mitre_str}]{C.RESET} {C.DIM}{mitre_name}{C.RESET}"
+            mitre_display = (
+                f" {C.BOLD}[{mitre_str}]{C.RESET} {C.DIM}{mitre_name}{C.RESET}"
+            )
         else:
             mitre_display = ""
 
@@ -380,6 +402,7 @@ def show_timeline():
 
 # ─── Attack Chain Diagram ───────────────────────────────────────
 
+
 def show_chains():
     """Show ASCII art attack chain diagrams."""
     print(f"\n{C.BOLD}{'='*80}{C.RESET}")
@@ -400,7 +423,9 @@ def show_chains():
     for ev in sec_events:
         mitre_raw = ev.get("mitre_techniques", "")
         try:
-            techniques = json.loads(mitre_raw) if mitre_raw.startswith("[") else [mitre_raw]
+            techniques = (
+                json.loads(mitre_raw) if mitre_raw.startswith("[") else [mitre_raw]
+            )
         except (json.JSONDecodeError, TypeError):
             techniques = [mitre_raw] if mitre_raw else []
 
@@ -444,7 +469,9 @@ def show_chains():
             }
 
     if not technique_tactics:
-        print(f"  {C.DIM}No attack chains detected. Run the benchmark first.{C.RESET}\n")
+        print(
+            f"  {C.DIM}No attack chains detected. Run the benchmark first.{C.RESET}\n"
+        )
         return
 
     # ─── Kill Chain View ───
@@ -476,7 +503,9 @@ def show_chains():
                 print(f"  {'':>14s}{C.DIM}    |{C.RESET}")
                 print(f"  {'':>14s}{C.DIM}    v{C.RESET}")
         else:
-            print(f"  {C.DIM}[{stage_name:^12s}]{C.RESET} {C.DIM}(no detections){C.RESET}")
+            print(
+                f"  {C.DIM}[{stage_name:^12s}]{C.RESET} {C.DIM}(no detections){C.RESET}"
+            )
             if stage_name != "ACT":
                 print(f"  {'':>14s}{C.DIM}    |{C.RESET}")
                 print(f"  {'':>14s}{C.DIM}    v{C.RESET}")
@@ -486,24 +515,49 @@ def show_chains():
     print(f"  {C.DIM}{'─'*70}{C.RESET}\n")
 
     # Chain 1: AMOS Stealer
-    amos_techs = ["T1204", "T1543.001", "T1555.001", "T1555.003", "T1005", "T1539", "T1560.001", "T1041"]
-    _draw_chain("AMOS STEALER KILL CHAIN", amos_techs, technique_tactics,
-                "Fake app download -> LaunchAgent persist -> steal keychain + browser + wallet + cookies -> archive -> exfil")
+    amos_techs = [
+        "T1204",
+        "T1543.001",
+        "T1555.001",
+        "T1555.003",
+        "T1005",
+        "T1539",
+        "T1560.001",
+        "T1041",
+    ]
+    _draw_chain(
+        "AMOS STEALER KILL CHAIN",
+        amos_techs,
+        technique_tactics,
+        "Fake app download -> LaunchAgent persist -> steal keychain + browser + wallet + cookies -> archive -> exfil",
+    )
 
     # Chain 2: SSH Brute Force
     ssh_techs = ["T1046", "T1110.001", "T1078", "T1543.001", "T1555.001", "T1041"]
-    _draw_chain("SSH BRUTE FORCE CHAIN (Kali)", ssh_techs, technique_tactics,
-                "Port scan from 192.168.237.132 -> hydra brute force -> valid login -> persist -> steal -> exfil")
+    _draw_chain(
+        "SSH BRUTE FORCE CHAIN (Kali)",
+        ssh_techs,
+        technique_tactics,
+        "Port scan from 192.168.237.132 -> hydra brute force -> valid login -> persist -> steal -> exfil",
+    )
 
     # Chain 3: Defense Evasion
     evasion_techs = ["T1548.003", "T1562.001", "T1564.001", "T1070.006", "T1070.002"]
-    _draw_chain("PRIVILEGE ESCALATION + EVASION", evasion_techs, technique_tactics,
-                "sudo backdoor -> disable Gatekeeper -> hide binary -> timestomp -> erase logs")
+    _draw_chain(
+        "PRIVILEGE ESCALATION + EVASION",
+        evasion_techs,
+        technique_tactics,
+        "sudo backdoor -> disable Gatekeeper -> hide binary -> timestomp -> erase logs",
+    )
 
     # Chain 4: DNS C2
     dns_techs = ["T1071.004", "T1568.002", "T1071.001", "T1572"]
-    _draw_chain("DNS TUNNELING + C2 BEACON", dns_techs, technique_tactics,
-                "DNS tunnel exfil -> DGA domains -> HTTP beaconing -> protocol tunneling")
+    _draw_chain(
+        "DNS TUNNELING + C2 BEACON",
+        dns_techs,
+        technique_tactics,
+        "DNS tunnel exfil -> DGA domains -> HTTP beaconing -> protocol tunneling",
+    )
 
     # ─── Technique Coverage Map ───
     print(f"\n\n  {C.BOLD}MITRE ATT&CK TECHNIQUE COVERAGE{C.RESET}")
@@ -517,7 +571,9 @@ def show_chains():
         agent = info["agent"]
 
         risk = info.get("risk", 0)
-        risk_bar = "#" * int(risk * 10) + "." * (10 - int(risk * 10)) if risk else ".........."
+        risk_bar = (
+            "#" * int(risk * 10) + "." * (10 - int(risk * 10)) if risk else ".........."
+        )
 
         print(
             f"  {sev_c}{tech_id:<14s}{C.RESET} "
@@ -527,7 +583,9 @@ def show_chains():
             f"({count}x)"
         )
 
-    print(f"\n  {C.BOLD}Total: {len(technique_tactics)} unique techniques detected{C.RESET}\n")
+    print(
+        f"\n  {C.BOLD}Total: {len(technique_tactics)} unique techniques detected{C.RESET}\n"
+    )
 
 
 def _draw_chain(title: str, techs: List[str], detected: dict, narrative: str):
@@ -547,7 +605,7 @@ def _draw_chain(title: str, techs: List[str], detected: dict, narrative: str):
             status = f"{C.RED}MISSED{C.RESET}"
             agent = ""
 
-        is_last = (i == len(techs) - 1)
+        is_last = i == len(techs) - 1
         connector = "    " if is_last else " -> "
 
         print(f"    [{status}] {sev_c}{tech}{C.RESET} {name} {agent}")
@@ -559,14 +617,21 @@ def _draw_chain(title: str, techs: List[str], detected: dict, narrative: str):
 
 # ─── Live Monitor ───────────────────────────────────────────────
 
+
 def live_monitor():
     """Real-time event monitor — watches DB for new events."""
     print(f"\n{C.BOLD}{C.BG_BLUE}{C.WHITE}  AMOSKYS LIVE ATTACK MONITOR  {C.RESET}")
     print(f"{C.DIM}  Watching for new events... (Ctrl+C to stop){C.RESET}\n")
 
     last_count = {}
-    tables = ["security_events", "persistence_events", "process_events",
-              "dns_events", "fim_events", "flow_events"]
+    tables = [
+        "security_events",
+        "persistence_events",
+        "process_events",
+        "dns_events",
+        "fim_events",
+        "flow_events",
+    ]
 
     # Get initial counts
     for t in tables:
@@ -587,7 +652,7 @@ def live_monitor():
                     # New events! Fetch them
                     new_rows = query(
                         f"SELECT * FROM {t} ORDER BY timestamp_ns DESC LIMIT ?",
-                        (current - last_count[t],)
+                        (current - last_count[t],),
                     )
                     for row in reversed(new_rows):
                         _print_live_event(t, row)
@@ -644,6 +709,7 @@ def _print_live_event(table: str, ev: dict):
 
 # ─── Baseline Report ───────────────────────────────────────────
 
+
 def generate_baseline():
     """Generate comprehensive baseline documentation in markdown."""
     now = datetime.now(timezone.utc)
@@ -671,9 +737,7 @@ def generate_baseline():
 
     # ── Security Events ──
     print(f"## Security Events (Probe Detections)\n")
-    sec_events = query(
-        "SELECT * FROM security_events ORDER BY timestamp_ns ASC"
-    )
+    sec_events = query("SELECT * FROM security_events ORDER BY timestamp_ns ASC")
 
     if sec_events:
         print(f"| Time | Technique | Severity | Agent | Risk | Category |")
@@ -682,7 +746,9 @@ def generate_baseline():
             ts = ns_to_str(ev.get("timestamp_ns", 0))
             mitre = ev.get("mitre_techniques", "")
             try:
-                techniques = json.loads(mitre) if mitre and mitre.startswith("[") else [mitre]
+                techniques = (
+                    json.loads(mitre) if mitre and mitre.startswith("[") else [mitre]
+                )
             except (json.JSONDecodeError, TypeError):
                 techniques = [mitre] if mitre else [""]
             tech_str = ", ".join(techniques[:3])
@@ -693,7 +759,9 @@ def generate_baseline():
             risk = ev.get("risk_score", 0)
             cat = ev.get("event_category", "")
 
-            print(f"| {ts} | {tech_str} ({name}) | {sev} | {agent} | {risk:.2f} | {cat} |")
+            print(
+                f"| {ts} | {tech_str} ({name}) | {sev} | {agent} | {risk:.2f} | {cat} |"
+            )
     else:
         print(f"*No security events recorded.*\n")
 
@@ -717,21 +785,50 @@ def generate_baseline():
     print(f"## Attack Chains Detected\n")
 
     chains = [
-        ("AMOS Stealer Kill Chain",
-         "Download -> Execute from /tmp -> LaunchAgent persist -> Keychain dump -> Browser creds -> Wallet theft -> Cookie steal -> Archive -> HTTP exfil -> Cleanup",
-         ["T1204", "T1059.004", "T1543.001", "T1555.001", "T1555.003", "T1005", "T1539", "T1560.001", "T1041", "T1070.004"]),
-        ("SSH Brute Force + Persistence (Kali)",
-         "Nmap port scan -> Hydra brute force -> Valid account login -> LaunchAgent drop -> Keychain access -> Data exfil",
-         ["T1046", "T1110.001", "T1078", "T1543.001", "T1555.001", "T1041"]),
-        ("DNS Tunneling + C2 Beacon",
-         "DNS tunnel data exfil -> DGA domain rotation -> HTTP C2 beaconing",
-         ["T1071.004", "T1568.002", "T1071.001"]),
-        ("Privilege Escalation + Defense Evasion",
-         "Sudo backdoor -> Gatekeeper disable -> Hide shell binary -> Timestomp -> Log erasure",
-         ["T1548.003", "T1562.001", "T1564.001", "T1070.006", "T1070.002"]),
-        ("Reverse Shell + Discovery",
-         "Script in /tmp -> Reverse shell -> System discovery -> Process enum -> Browser cred enum -> Archive + exfil",
-         ["T1059.004", "T1059.004", "T1082", "T1057", "T1555.003", "T1560.001", "T1041"]),
+        (
+            "AMOS Stealer Kill Chain",
+            "Download -> Execute from /tmp -> LaunchAgent persist -> Keychain dump -> Browser creds -> Wallet theft -> Cookie steal -> Archive -> HTTP exfil -> Cleanup",
+            [
+                "T1204",
+                "T1059.004",
+                "T1543.001",
+                "T1555.001",
+                "T1555.003",
+                "T1005",
+                "T1539",
+                "T1560.001",
+                "T1041",
+                "T1070.004",
+            ],
+        ),
+        (
+            "SSH Brute Force + Persistence (Kali)",
+            "Nmap port scan -> Hydra brute force -> Valid account login -> LaunchAgent drop -> Keychain access -> Data exfil",
+            ["T1046", "T1110.001", "T1078", "T1543.001", "T1555.001", "T1041"],
+        ),
+        (
+            "DNS Tunneling + C2 Beacon",
+            "DNS tunnel data exfil -> DGA domain rotation -> HTTP C2 beaconing",
+            ["T1071.004", "T1568.002", "T1071.001"],
+        ),
+        (
+            "Privilege Escalation + Defense Evasion",
+            "Sudo backdoor -> Gatekeeper disable -> Hide shell binary -> Timestomp -> Log erasure",
+            ["T1548.003", "T1562.001", "T1564.001", "T1070.006", "T1070.002"],
+        ),
+        (
+            "Reverse Shell + Discovery",
+            "Script in /tmp -> Reverse shell -> System discovery -> Process enum -> Browser cred enum -> Archive + exfil",
+            [
+                "T1059.004",
+                "T1059.004",
+                "T1082",
+                "T1057",
+                "T1555.003",
+                "T1560.001",
+                "T1041",
+            ],
+        ),
     ]
 
     for chain_name, narrative, techs in chains:
@@ -744,7 +841,7 @@ def generate_baseline():
             # Check if detected
             found = query(
                 "SELECT COUNT(*) as cnt FROM security_events WHERE mitre_techniques LIKE ?",
-                (f"%{t}%",)
+                (f"%{t}%",),
             )
             cnt = found[0]["cnt"] if found else 0
             status = "DETECT" if cnt > 0 else "TELEMETRY"
@@ -760,7 +857,9 @@ def generate_baseline():
     print(f"| Mac Target IP | 192.168.237.1 |")
     print(f"| Target Account | testattacker (WeakPassword123) |")
     print(f"| SSH Key | ~/.ssh/kali_lab |")
-    print(f"| Attack Tools | nmap, hydra, metasploit, responder, iodine, crackmapexec |")
+    print(
+        f"| Attack Tools | nmap, hydra, metasploit, responder, iodine, crackmapexec |"
+    )
     print(f"| ART Path | /Volumes/Akash_Lab/atomic-red-team/ |")
     print(f"| ART macOS Techniques | 107 |")
     print()
@@ -786,7 +885,9 @@ def generate_baseline():
         sys.path.insert(0, str(ROOT / "src"))
         os.environ.setdefault("PYTHONPATH", str(ROOT / "src"))
 
-        from amoskys.agents.os.macos.infostealer_guard.probes import create_infostealer_guard_probes
+        from amoskys.agents.os.macos.infostealer_guard.probes import (
+            create_infostealer_guard_probes,
+        )
         from amoskys.agents.os.macos.process.probes import create_process_probes
         from amoskys.agents.os.macos.network.probes import create_network_probes
         from amoskys.agents.os.macos.auth.probes import create_auth_probes
@@ -799,7 +900,11 @@ def generate_baseline():
         ]:
             probes = factory()
             for p in probes:
-                techs = ", ".join(p.mitre_techniques) if hasattr(p, "mitre_techniques") else ""
+                techs = (
+                    ", ".join(p.mitre_techniques)
+                    if hasattr(p, "mitre_techniques")
+                    else ""
+                )
                 print(f"| {agent_name} | {p.name} | {techs} |")
     except Exception as e:
         print(f"| Error loading probes | {e} | |")
@@ -809,21 +914,30 @@ def generate_baseline():
     # ── Recommendations ──
     print(f"## Gaps and Recommendations\n")
     print(f"### Critical Gaps")
-    print(f"1. **No ESF integration** — polling-only (10-60s intervals), fast attacks invisible")
+    print(
+        f"1. **No ESF integration** — polling-only (10-60s intervals), fast attacks invisible"
+    )
     print(f"2. **No auto-response** — detects but does not block/quarantine/kill")
-    print(f"3. **No persistent process genealogy** — parent-child trees lost on process exit")
+    print(
+        f"3. **No persistent process genealogy** — parent-child trees lost on process exit"
+    )
     print(f"4. **Scoring is hybrid rule+ML** — not pure behavioral ML")
     print()
     print(f"### Strengths")
     print(f"1. **Zero misses** — 100% detection rate across 130 attack steps")
-    print(f"2. **Cryptographic integrity** — BLAKE2b + Ed25519 + hash chains on all telemetry")
+    print(
+        f"2. **Cryptographic integrity** — BLAKE2b + Ed25519 + hash chains on all telemetry"
+    )
     print(f"3. **Agent coordination** — WATCH_PID lateral bus is real and working")
     print(f"4. **IGRIS AI** — genuine Claude API integration for threat analysis")
-    print(f"5. **SOMA ML** — real IsolationForest + GradientBoost, retrains every 30min")
+    print(
+        f"5. **SOMA ML** — real IsolationForest + GradientBoost, retrains every 30min"
+    )
     print()
 
 
 # ─── Interactive Report ─────────────────────────────────────────
+
 
 def show_report():
     """Post-run visual report combining timeline + chains + stats."""
@@ -862,6 +976,7 @@ def show_report():
 
 
 # ─── Main ───────────────────────────────────────────────────────
+
 
 def main():
     if len(sys.argv) < 2:

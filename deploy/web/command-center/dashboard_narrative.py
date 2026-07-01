@@ -29,24 +29,24 @@ from typing import Any, Dict, List, Optional, Tuple
 
 @dataclass
 class Narrative:
-    posture: str        # "normal" | "watching" | "attack"
-    headline: str       # one short sentence, operator-facing
-    detail: str         # one longer sentence with numbers
+    posture: str  # "normal" | "watching" | "attack"
+    headline: str  # one short sentence, operator-facing
+    detail: str  # one longer sentence with numbers
     cta_text: Optional[str] = None
     cta_href: Optional[str] = None
     # Color cues for the template; keeps all style choices in one place.
-    accent_class: str = "norm"   # norm | warn | alert
-    pulse: bool = False          # animate on attack posture
+    accent_class: str = "norm"  # norm | warn | alert
+    pulse: bool = False  # animate on attack posture
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "posture":      self.posture,
-            "headline":     self.headline,
-            "detail":       self.detail,
-            "cta_text":     self.cta_text,
-            "cta_href":     self.cta_href,
+            "posture": self.posture,
+            "headline": self.headline,
+            "detail": self.detail,
+            "cta_text": self.cta_text,
+            "cta_href": self.cta_href,
             "accent_class": self.accent_class,
-            "pulse":        self.pulse,
+            "pulse": self.pulse,
         }
 
 
@@ -58,7 +58,11 @@ def _top_ip(ips: List[Tuple[str, int]]) -> Optional[Tuple[str, int]]:
     return ips[0] if ips else None
 
 
-def build(snap, concerns_payload: Dict[str, Any], crawlers_totals: Optional[Dict[str, int]] = None) -> Narrative:
+def build(
+    snap,
+    concerns_payload: Dict[str, Any],
+    crawlers_totals: Optional[Dict[str, int]] = None,
+) -> Narrative:
     """Build a Narrative from the current snapshot + concerns payload."""
     posture = concerns_payload.get("posture", "normal")
     recent = getattr(snap, "recent", []) or []
@@ -113,7 +117,11 @@ def build(snap, concerns_payload: Dict[str, Any], crawlers_totals: Optional[Dict
             parts.append(f"{chain_breaks} chain break(s)")
 
         headline = "👁 Elevated chatter — watching"
-        detail = "; ".join(parts) if parts else "Signal above baseline but nothing has crossed the line."
+        detail = (
+            "; ".join(parts)
+            if parts
+            else "Signal above baseline but nothing has crossed the line."
+        )
         return Narrative(
             posture="watching",
             headline=headline,
@@ -128,13 +136,17 @@ def build(snap, concerns_payload: Dict[str, Any], crawlers_totals: Optional[Dict
     ct = crawlers_totals or {}
     humans = ct.get("human", 0)
     search = ct.get("search", 0)
-    seo    = ct.get("seo", 0)
-    bots   = ct.get("ai", 0) + ct.get("bot_other", 0) + ct.get("unknown", 0)
+    seo = ct.get("seo", 0)
+    bots = ct.get("ai", 0) + ct.get("bot_other", 0) + ct.get("unknown", 0)
     bits: List[str] = []
-    if humans: bits.append(f"{_fmt(humans)} human{'s' if humans != 1 else ''}")
-    if search: bits.append(f"{_fmt(search)} search crawler{'s' if search != 1 else ''}")
-    if seo:    bits.append(f"{_fmt(seo)} SEO tool{'s' if seo != 1 else ''}")
-    if bots:   bits.append(f"{_fmt(bots)} other bot{'s' if bots != 1 else ''}")
+    if humans:
+        bits.append(f"{_fmt(humans)} human{'s' if humans != 1 else ''}")
+    if search:
+        bits.append(f"{_fmt(search)} search crawler{'s' if search != 1 else ''}")
+    if seo:
+        bits.append(f"{_fmt(seo)} SEO tool{'s' if seo != 1 else ''}")
+    if bots:
+        bits.append(f"{_fmt(bots)} other bot{'s' if bots != 1 else ''}")
 
     if bits:
         detail = "Traffic mix: " + ", ".join(bits) + "."

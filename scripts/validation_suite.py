@@ -138,10 +138,7 @@ def run_detection_validation() -> List[DetectionResult]:
     # Snapshot security_events count before simulation
     conn = sqlite3.connect(DB_PATH)
     pre_count = conn.execute("SELECT COUNT(*) FROM security_events").fetchone()[0]
-    pre_ids = {
-        r[0]
-        for r in conn.execute("SELECT id FROM security_events").fetchall()
-    }
+    pre_ids = {r[0] for r in conn.execute("SELECT id FROM security_events").fetchall()}
     conn.close()
 
     # ── Phase 1: Plant attack artifacts ────────────────────────────────
@@ -253,7 +250,8 @@ def run_detection_validation() -> List[DetectionResult]:
     # Not all unmatched are FPs — some are legitimate detections of real activity
     # We only count high-risk unmatched events as potential FPs
     fp_events = [
-        r for r in unmatched
+        r
+        for r in unmatched
         if (r[3] or 0) >= 0.7 and r[4] in ("suspicious", "malicious")
     ]
 
@@ -288,16 +286,18 @@ def _plant_attack_artifacts() -> List[Dict[str, Any]]:
         "#!/bin/bash\n# AMOSKYS_VALIDATION_TEST — safe artifact\necho test\n"
     )
     quarantine_path.chmod(0o755)
-    techniques.append({
-        "technique_id": "T1553.001",
-        "technique_name": "Gatekeeper Bypass",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 1,
-        "expected_detections": 1,
-        "cleanup_paths": [str(quarantine_path)],
-        "match_categories": ["macos_quarantine_bypass", "quarantine"],
-        "match_agents": ["macos_filesystem", "macos_quarantine_guard"],
-    })
+    techniques.append(
+        {
+            "technique_id": "T1553.001",
+            "technique_name": "Gatekeeper Bypass",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 1,
+            "expected_detections": 1,
+            "cleanup_paths": [str(quarantine_path)],
+            "match_categories": ["macos_quarantine_bypass", "quarantine"],
+            "match_agents": ["macos_filesystem", "macos_quarantine_guard"],
+        }
+    )
     logger.info("  Planted T1553.001: %s", quarantine_path)
 
     # ── T1543.001: LaunchAgent Persistence ─────────────────────────────
@@ -310,18 +310,21 @@ def _plant_attack_artifacts() -> List[Dict[str, Any]]:
     }
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     import plistlib
+
     with open(plist_path, "wb") as f:
         plistlib.dump(plist_data, f)
-    techniques.append({
-        "technique_id": "T1543.001",
-        "technique_name": "LaunchAgent Persistence",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 1,
-        "expected_detections": 1,
-        "cleanup_paths": [str(plist_path)],
-        "match_categories": ["persistence", "launchagent", "launch_agent"],
-        "match_agents": ["macos_persistence", "persistence"],
-    })
+    techniques.append(
+        {
+            "technique_id": "T1543.001",
+            "technique_name": "LaunchAgent Persistence",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 1,
+            "expected_detections": 1,
+            "cleanup_paths": [str(plist_path)],
+            "match_categories": ["persistence", "launchagent", "launch_agent"],
+            "match_agents": ["macos_persistence", "persistence"],
+        }
+    )
     logger.info("  Planted T1543.001: %s", plist_path)
 
     # ── T1070: Indicator Removal (config file modification) ────────────
@@ -332,18 +335,23 @@ def _plant_attack_artifacts() -> List[Dict[str, Any]]:
         "\n<dict><key>test</key><string>AMOSKYS_VALIDATION</string></dict>"
         "\n</plist>\n"
     )
-    techniques.append({
-        "technique_id": "T1070",
-        "technique_name": "Indicator Removal",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 1,
-        "expected_detections": 1,
-        "cleanup_paths": [str(test_config)],
-        "match_categories": [
-            "config_modified", "config_backdoor", "file_modified", "fim",
-        ],
-        "match_agents": ["macos_filesystem", "fim"],
-    })
+    techniques.append(
+        {
+            "technique_id": "T1070",
+            "technique_name": "Indicator Removal",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 1,
+            "expected_detections": 1,
+            "cleanup_paths": [str(test_config)],
+            "match_categories": [
+                "config_modified",
+                "config_backdoor",
+                "file_modified",
+                "fim",
+            ],
+            "match_agents": ["macos_filesystem", "fim"],
+        }
+    )
     logger.info("  Planted T1070: %s", test_config)
 
     # ── T1059.004: Shell Script Execution ──────────────────────────────
@@ -351,52 +359,60 @@ def _plant_attack_artifacts() -> List[Dict[str, Any]]:
     script_path = Path("/tmp/amoskys_validation_payload.sh")
     script_path.write_text("#!/bin/bash\n# AMOSKYS_VALIDATION_TEST\necho test\n")
     script_path.chmod(0o755)
-    techniques.append({
-        "technique_id": "T1059.004",
-        "technique_name": "Unix Shell Execution",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 1,
-        "expected_detections": 1,
-        "cleanup_paths": [str(script_path)],
-        "match_categories": [
-            "execution_from_temp", "script", "binary_from_temp",
-            "process_spawned",
-        ],
-        "match_agents": ["macos_process", "proc"],
-    })
+    techniques.append(
+        {
+            "technique_id": "T1059.004",
+            "technique_name": "Unix Shell Execution",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 1,
+            "expected_detections": 1,
+            "cleanup_paths": [str(script_path)],
+            "match_categories": [
+                "execution_from_temp",
+                "script",
+                "binary_from_temp",
+                "process_spawned",
+            ],
+            "match_agents": ["macos_process", "proc"],
+        }
+    )
     logger.info("  Planted T1059.004: %s", script_path)
 
     # ── T1555.003: Browser Credential Theft Detection ──────────────────
     # InfostealerGuard watches for non-browser processes reading browser DBs
     # We can't safely simulate this (requires actual file access), but we
     # verify the probe is registered and functional
-    techniques.append({
-        "technique_id": "T1555.003",
-        "technique_name": "Browser Credential Theft",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 0,  # Passive detection — probes are always watching
-        "expected_detections": 0,  # We expect 0 because we don't simulate access
-        "cleanup_paths": [],
-        "match_categories": ["browser_credential_theft"],
-        "match_agents": ["macos_infostealer_guard"],
-        "_note": "passive_probe_check",
-    })
+    techniques.append(
+        {
+            "technique_id": "T1555.003",
+            "technique_name": "Browser Credential Theft",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 0,  # Passive detection — probes are always watching
+            "expected_detections": 0,  # We expect 0 because we don't simulate access
+            "cleanup_paths": [],
+            "match_categories": ["browser_credential_theft"],
+            "match_agents": ["macos_infostealer_guard"],
+            "_note": "passive_probe_check",
+        }
+    )
 
     # ── T1071.004: DNS Beaconing ───────────────────────────────────────
     # DNS agent detects regular-interval DNS queries
     # We don't inject DNS queries — just verify the probe detects our own
     # collection interval (which the self-recognition layer should filter)
-    techniques.append({
-        "technique_id": "T1071.004",
-        "technique_name": "DNS Beaconing",
-        "threat_family": "validation_suite",
-        "artifacts_planted": 0,
-        "expected_detections": 0,  # Self-recognition should filter our own
-        "cleanup_paths": [],
-        "match_categories": ["dns_beaconing"],
-        "match_agents": ["macos_dns"],
-        "_note": "self_recognition_test",
-    })
+    techniques.append(
+        {
+            "technique_id": "T1071.004",
+            "technique_name": "DNS Beaconing",
+            "threat_family": "validation_suite",
+            "artifacts_planted": 0,
+            "expected_detections": 0,  # Self-recognition should filter our own
+            "cleanup_paths": [],
+            "match_categories": ["dns_beaconing"],
+            "match_agents": ["macos_dns"],
+            "_note": "self_recognition_test",
+        }
+    )
 
     return techniques
 
@@ -410,15 +426,47 @@ def _run_collection(processor) -> None:
         ("MacOSNetwork", "amoskys.agents.os.macos.network.agent", "MacOSNetworkAgent"),
         ("MacOSDNS", "amoskys.agents.os.macos.dns.agent", "MacOSDNSAgent"),
         ("MacOSAuth", "amoskys.agents.os.macos.auth.agent", "MacOSAuthAgent"),
-        ("MacOSFilesystem", "amoskys.agents.os.macos.filesystem.agent", "MacOSFileAgent"),
-        ("MacOSPersistence", "amoskys.agents.os.macos.persistence.agent", "MacOSPersistenceAgent"),
-        ("MacOSPeripheral", "amoskys.agents.os.macos.peripheral.agent", "MacOSPeripheralAgent"),
-        ("UnifiedLog", "amoskys.agents.os.macos.unified_log.agent", "MacOSUnifiedLogAgent"),
+        (
+            "MacOSFilesystem",
+            "amoskys.agents.os.macos.filesystem.agent",
+            "MacOSFileAgent",
+        ),
+        (
+            "MacOSPersistence",
+            "amoskys.agents.os.macos.persistence.agent",
+            "MacOSPersistenceAgent",
+        ),
+        (
+            "MacOSPeripheral",
+            "amoskys.agents.os.macos.peripheral.agent",
+            "MacOSPeripheralAgent",
+        ),
+        (
+            "UnifiedLog",
+            "amoskys.agents.os.macos.unified_log.agent",
+            "MacOSUnifiedLogAgent",
+        ),
         ("Discovery", "amoskys.agents.os.macos.discovery.agent", "MacOSDiscoveryAgent"),
-        ("InternetActivity", "amoskys.agents.os.macos.internet_activity.agent", "MacOSInternetActivityAgent"),
-        ("InfostealerGuard", "amoskys.agents.os.macos.infostealer_guard.agent", "MacOSInfostealerGuardAgent"),
-        ("QuarantineGuard", "amoskys.agents.os.macos.quarantine_guard.agent", "MacOSQuarantineGuardAgent"),
-        ("ProvenanceEngine", "amoskys.agents.os.macos.provenance.agent", "MacOSProvenanceAgent"),
+        (
+            "InternetActivity",
+            "amoskys.agents.os.macos.internet_activity.agent",
+            "MacOSInternetActivityAgent",
+        ),
+        (
+            "InfostealerGuard",
+            "amoskys.agents.os.macos.infostealer_guard.agent",
+            "MacOSInfostealerGuardAgent",
+        ),
+        (
+            "QuarantineGuard",
+            "amoskys.agents.os.macos.quarantine_guard.agent",
+            "MacOSQuarantineGuardAgent",
+        ),
+        (
+            "ProvenanceEngine",
+            "amoskys.agents.os.macos.provenance.agent",
+            "MacOSProvenanceAgent",
+        ),
     ]
 
     for name, module_path, class_name in agent_imports:
@@ -518,16 +566,22 @@ def run_performance_benchmarks() -> List[PerformanceBenchmark]:
             timings.append(elapsed)
 
         timings.sort()
-        benchmarks.append(PerformanceBenchmark(
-            stage="collection",
-            operation="MacOSProcessAgent.collect_data()",
-            samples=len(timings),
-            p50_ms=timings[len(timings) // 2],
-            p95_ms=timings[int(len(timings) * 0.95)] if len(timings) >= 20 else timings[-1],
-            p99_ms=timings[-1],
-            mean_ms=statistics.mean(timings),
-            max_ms=max(timings),
-        ))
+        benchmarks.append(
+            PerformanceBenchmark(
+                stage="collection",
+                operation="MacOSProcessAgent.collect_data()",
+                samples=len(timings),
+                p50_ms=timings[len(timings) // 2],
+                p95_ms=(
+                    timings[int(len(timings) * 0.95)]
+                    if len(timings) >= 20
+                    else timings[-1]
+                ),
+                p99_ms=timings[-1],
+                mean_ms=statistics.mean(timings),
+                max_ms=max(timings),
+            )
+        )
         logger.info(
             "  Process collection: p50=%.1fms, mean=%.1fms, max=%.1fms (%d runs)",
             timings[len(timings) // 2],
@@ -567,16 +621,18 @@ def run_performance_benchmarks() -> List[PerformanceBenchmark]:
             timings.append(elapsed)
 
         timings.sort()
-        benchmarks.append(PerformanceBenchmark(
-            stage="scoring",
-            operation="ScoringEngine.score_event()",
-            samples=len(timings),
-            p50_ms=timings[len(timings) // 2],
-            p95_ms=timings[int(len(timings) * 0.95)],
-            p99_ms=timings[int(len(timings) * 0.99)],
-            mean_ms=statistics.mean(timings),
-            max_ms=max(timings),
-        ))
+        benchmarks.append(
+            PerformanceBenchmark(
+                stage="scoring",
+                operation="ScoringEngine.score_event()",
+                samples=len(timings),
+                p50_ms=timings[len(timings) // 2],
+                p95_ms=timings[int(len(timings) * 0.95)],
+                p99_ms=timings[int(len(timings) * 0.99)],
+                mean_ms=statistics.mean(timings),
+                max_ms=max(timings),
+            )
+        )
         logger.info(
             "  Scoring: p50=%.3fms, p95=%.3fms, mean=%.3fms (%d runs)",
             timings[len(timings) // 2],
@@ -622,16 +678,18 @@ def run_performance_benchmarks() -> List[PerformanceBenchmark]:
                 timings.append(elapsed)
 
             timings.sort()
-            benchmarks.append(PerformanceBenchmark(
-                stage="dashboard_query",
-                operation=query_name,
-                samples=len(timings),
-                p50_ms=timings[len(timings) // 2],
-                p95_ms=timings[int(len(timings) * 0.95)],
-                p99_ms=timings[int(len(timings) * 0.99)],
-                mean_ms=statistics.mean(timings),
-                max_ms=max(timings),
-            ))
+            benchmarks.append(
+                PerformanceBenchmark(
+                    stage="dashboard_query",
+                    operation=query_name,
+                    samples=len(timings),
+                    p50_ms=timings[len(timings) // 2],
+                    p95_ms=timings[int(len(timings) * 0.95)],
+                    p99_ms=timings[int(len(timings) * 0.99)],
+                    mean_ms=statistics.mean(timings),
+                    max_ms=max(timings),
+                )
+            )
             logger.info(
                 "  %s: p50=%.3fms, p95=%.3fms",
                 query_name,
@@ -675,16 +733,18 @@ def run_performance_benchmarks() -> List[PerformanceBenchmark]:
                 timings.append(elapsed)
 
             timings.sort()
-            benchmarks.append(PerformanceBenchmark(
-                stage="soma_inference",
-                operation="ModelScorerAdapter.score()",
-                samples=len(timings),
-                p50_ms=timings[len(timings) // 2],
-                p95_ms=timings[int(len(timings) * 0.95)],
-                p99_ms=timings[int(len(timings) * 0.99)],
-                mean_ms=statistics.mean(timings),
-                max_ms=max(timings),
-            ))
+            benchmarks.append(
+                PerformanceBenchmark(
+                    stage="soma_inference",
+                    operation="ModelScorerAdapter.score()",
+                    samples=len(timings),
+                    p50_ms=timings[len(timings) // 2],
+                    p95_ms=timings[int(len(timings) * 0.95)],
+                    p99_ms=timings[int(len(timings) * 0.99)],
+                    mean_ms=statistics.mean(timings),
+                    max_ms=max(timings),
+                )
+            )
             logger.info(
                 "  SOMA inference: p50=%.3fms, p95=%.3fms (%d runs)",
                 timings[len(timings) // 2],
@@ -732,25 +792,29 @@ def run_integrity_checks() -> List[IntegrityCheck]:
         if full_path.exists():
             content = full_path.read_bytes()
             sha256 = hashlib.sha256(content).hexdigest()
-            checks.append(IntegrityCheck(
-                component="source_code",
-                path=rel_path,
-                check_type="checksum",
-                expected="recorded",
-                actual=sha256[:16],
-                passed=True,  # First run establishes baseline
-                detail=f"SHA256={sha256[:16]}... size={len(content)}B",
-            ))
+            checks.append(
+                IntegrityCheck(
+                    component="source_code",
+                    path=rel_path,
+                    check_type="checksum",
+                    expected="recorded",
+                    actual=sha256[:16],
+                    passed=True,  # First run establishes baseline
+                    detail=f"SHA256={sha256[:16]}... size={len(content)}B",
+                )
+            )
         else:
-            checks.append(IntegrityCheck(
-                component="source_code",
-                path=rel_path,
-                check_type="existence",
-                expected="exists",
-                actual="missing",
-                passed=False,
-                detail="Critical source file missing",
-            ))
+            checks.append(
+                IntegrityCheck(
+                    component="source_code",
+                    path=rel_path,
+                    check_type="existence",
+                    expected="exists",
+                    actual="missing",
+                    passed=False,
+                    detail="Critical source file missing",
+                )
+            )
 
     # ── Check 2: Database file permissions ─────────────────────────────
     db_files = [
@@ -766,15 +830,17 @@ def run_integrity_checks() -> List[IntegrityCheck]:
             mode = oct(full_path.stat().st_mode)[-3:]
             # Databases should not be world-writable
             world_writable = full_path.stat().st_mode & 0o002
-            checks.append(IntegrityCheck(
-                component="database",
-                path=rel_path,
-                check_type="permissions",
-                expected="not world-writable",
-                actual=f"mode={mode}, world_writable={bool(world_writable)}",
-                passed=not world_writable,
-                detail=f"File permissions: {mode}",
-            ))
+            checks.append(
+                IntegrityCheck(
+                    component="database",
+                    path=rel_path,
+                    check_type="permissions",
+                    expected="not world-writable",
+                    actual=f"mode={mode}, world_writable={bool(world_writable)}",
+                    passed=not world_writable,
+                    detail=f"File permissions: {mode}",
+                )
+            )
 
     # ── Check 3: Ed25519 key file integrity ────────────────────────────
     key_files = [
@@ -795,34 +861,41 @@ def run_integrity_checks() -> List[IntegrityCheck]:
             if is_private:
                 group_other_read = full_path.stat().st_mode & 0o077
                 passed = not group_other_read
-                checks.append(IntegrityCheck(
-                    component="crypto_keys",
-                    path=rel_path,
-                    check_type="permissions",
-                    expected="owner-only (0o600 or stricter)",
-                    actual=f"mode={mode}",
-                    passed=passed,
-                    detail="Private key" + (" EXPOSED" if not passed else " protected"),
-                ))
+                checks.append(
+                    IntegrityCheck(
+                        component="crypto_keys",
+                        path=rel_path,
+                        check_type="permissions",
+                        expected="owner-only (0o600 or stricter)",
+                        actual=f"mode={mode}",
+                        passed=passed,
+                        detail="Private key"
+                        + (" EXPOSED" if not passed else " protected"),
+                    )
+                )
             else:
-                checks.append(IntegrityCheck(
+                checks.append(
+                    IntegrityCheck(
+                        component="crypto_keys",
+                        path=rel_path,
+                        check_type="existence",
+                        expected="exists",
+                        actual="present",
+                        passed=True,
+                    )
+                )
+        else:
+            checks.append(
+                IntegrityCheck(
                     component="crypto_keys",
                     path=rel_path,
                     check_type="existence",
                     expected="exists",
-                    actual="present",
-                    passed=True,
-                ))
-        else:
-            checks.append(IntegrityCheck(
-                component="crypto_keys",
-                path=rel_path,
-                check_type="existence",
-                expected="exists",
-                actual="missing",
-                passed=False,
-                detail="Crypto key missing — signatures cannot be verified",
-            ))
+                    actual="missing",
+                    passed=False,
+                    detail="Crypto key missing — signatures cannot be verified",
+                )
+            )
 
     # ── Check 4: SOMA model files integrity ────────────────────────────
     model_files = [
@@ -836,39 +909,45 @@ def run_integrity_checks() -> List[IntegrityCheck]:
         if full_path.exists():
             age_hours = (time.time() - full_path.stat().st_mtime) / 3600
             passed = age_hours < 24  # Models should be <24h old
-            checks.append(IntegrityCheck(
-                component="soma_models",
-                path=rel_path,
-                check_type="freshness",
-                expected="< 24 hours old",
-                actual=f"{age_hours:.1f} hours",
-                passed=passed,
-                detail=f"Model age: {age_hours:.1f}h",
-            ))
+            checks.append(
+                IntegrityCheck(
+                    component="soma_models",
+                    path=rel_path,
+                    check_type="freshness",
+                    expected="< 24 hours old",
+                    actual=f"{age_hours:.1f} hours",
+                    passed=passed,
+                    detail=f"Model age: {age_hours:.1f}h",
+                )
+            )
         else:
-            checks.append(IntegrityCheck(
-                component="soma_models",
-                path=rel_path,
-                check_type="existence",
-                expected="exists",
-                actual="missing",
-                passed=False,
-                detail="SOMA model missing — ML scoring offline",
-            ))
+            checks.append(
+                IntegrityCheck(
+                    component="soma_models",
+                    path=rel_path,
+                    check_type="existence",
+                    expected="exists",
+                    actual="missing",
+                    passed=False,
+                    detail="SOMA model missing — ML scoring offline",
+                )
+            )
 
     # ── Check 5: IGRIS signal log integrity ────────────────────────────
     signal_log = PROJECT_ROOT / "data" / "igris" / "signals.jsonl"
     if signal_log.exists():
         size_mb = signal_log.stat().st_size / (1024 * 1024)
-        checks.append(IntegrityCheck(
-            component="igris_signals",
-            path="data/igris/signals.jsonl",
-            check_type="size",
-            expected="< 10 MB (rotation threshold)",
-            actual=f"{size_mb:.2f} MB",
-            passed=size_mb < 10,
-            detail=f"Signal log size: {size_mb:.2f} MB",
-        ))
+        checks.append(
+            IntegrityCheck(
+                component="igris_signals",
+                path="data/igris/signals.jsonl",
+                check_type="size",
+                expected="< 10 MB (rotation threshold)",
+                actual=f"{size_mb:.2f} MB",
+                passed=size_mb < 10,
+                detail=f"Signal log size: {size_mb:.2f} MB",
+            )
+        )
 
     # Log results
     passed = sum(1 for c in checks if c.passed)
@@ -993,7 +1072,9 @@ def main():
     parser = argparse.ArgumentParser(description="AMOSKYS Validation Suite")
     parser.add_argument("--detection", action="store_true", help="Detection tests only")
     parser.add_argument("--performance", action="store_true", help="Benchmarks only")
-    parser.add_argument("--integrity", action="store_true", help="Integrity checks only")
+    parser.add_argument(
+        "--integrity", action="store_true", help="Integrity checks only"
+    )
     args = parser.parse_args()
 
     run_all = not (args.detection or args.performance or args.integrity)

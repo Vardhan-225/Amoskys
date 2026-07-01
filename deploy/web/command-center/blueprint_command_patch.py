@@ -17,11 +17,13 @@ rather than editing the live file in place.
 
 # ============ PASTE THESE NEAR THE TOP (after blueprint creation) ============
 
+
 def _humantime(ts_ns):
     """'5s ago' / '3m ago' / '—' from a nanosecond timestamp."""
     if not ts_ns:
         return "—"
     import time
+
     delta = time.time() - (ts_ns / 1e9)
     if delta < 0:
         return "in future"
@@ -39,7 +41,10 @@ def _humantime_abs(ts_ns):
     if not ts_ns:
         return "—"
     from datetime import datetime, timezone
-    return datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    return datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
 
 
 # web_bp.add_app_template_filter(_humantime, "humantime")

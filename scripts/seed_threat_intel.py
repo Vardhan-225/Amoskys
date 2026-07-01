@@ -99,13 +99,27 @@ def seed():
     # Tor Exit Nodes (sample — for detection, not blocking)
     # ══════════════════════════════════════════════════════════════
     tor_exits = [
-        "185.220.100.240", "185.220.100.241", "185.220.100.242",
-        "185.220.100.243", "185.220.100.244", "185.220.100.245",
-        "204.85.191.30", "204.85.191.31", "199.249.230.80",
-        "199.249.230.81", "199.249.230.82", "199.249.230.83",
+        "185.220.100.240",
+        "185.220.100.241",
+        "185.220.100.242",
+        "185.220.100.243",
+        "185.220.100.244",
+        "185.220.100.245",
+        "204.85.191.30",
+        "204.85.191.31",
+        "199.249.230.80",
+        "199.249.230.81",
+        "199.249.230.82",
+        "199.249.230.83",
     ]
     for ip in tor_exits:
-        add(ip, "ip", "medium", "torproject.org", "Tor exit node — potential anonymization")
+        add(
+            ip,
+            "ip",
+            "medium",
+            "torproject.org",
+            "Tor exit node — potential anonymization",
+        )
 
     # ══════════════════════════════════════════════════════════════
     # Crypto Mining Pools
@@ -150,17 +164,33 @@ def seed():
         ("d19b8b0c7a4ecfb4f96ff23c87b799e3e7e6b8a1", "high", "AMOS Stealer DMG hash"),
         ("a1b2c3d4e5f678901234567890abcdef12345678", "high", "AMOS Stealer Mach-O"),
         # Poseidon Stealer
-        ("e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4", "high", "Poseidon Stealer payload"),
+        (
+            "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4",
+            "high",
+            "Poseidon Stealer payload",
+        ),
         # Atomic Stealer
         ("f1e2d3c4b5a6978807060504030201009f8e7d6c", "high", "Atomic Stealer v2 DMG"),
         # RustBucket (DPRK)
-        ("b0a1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d", "critical", "RustBucket stage-2 loader"),
+        (
+            "b0a1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d",
+            "critical",
+            "RustBucket stage-2 loader",
+        ),
         # XLoader/Formbook macOS variant
         ("c3d4e5f6a7b8091a2b3c4d5e6f7a8b9c0d1e2f3a", "high", "XLoader macOS variant"),
         # SysJoker macOS
-        ("d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "critical", "SysJoker macOS backdoor"),
+        (
+            "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3",
+            "critical",
+            "SysJoker macOS backdoor",
+        ),
         # OSX.Shlayer
-        ("a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0", "high", "OSX.Shlayer adware dropper"),
+        (
+            "a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0",
+            "high",
+            "OSX.Shlayer adware dropper",
+        ),
     ]
     for hash_val, sev, desc in malware_hashes:
         add(hash_val, "file_hash", sev, "MalwareBazaar/VT", desc)
@@ -171,7 +201,11 @@ def seed():
     malicious_urls = [
         ("http://evil.com/payload.dmg", "critical", "Generic malware delivery URL"),
         ("https://pastebin.com/raw/", "medium", "Pastebin raw — common C2 dead drop"),
-        ("https://raw.githubusercontent.com/malware/", "medium", "GitHub raw — malware hosting"),
+        (
+            "https://raw.githubusercontent.com/malware/",
+            "medium",
+            "GitHub raw — malware hosting",
+        ),
         ("http://transfer.sh/", "medium", "transfer.sh — file exfiltration service"),
         ("https://anonfiles.com/", "medium", "AnonFiles — anonymous file hosting"),
         ("https://gofile.io/d/", "medium", "GoFile — anonymous file sharing"),
@@ -197,7 +231,9 @@ def seed():
     # Summary
     conn = sqlite3.connect(DB_PATH)
     for itype in ["ip", "domain", "file_hash", "url"]:
-        cnt = conn.execute("SELECT COUNT(*) FROM indicators WHERE type = ?", (itype,)).fetchone()[0]
+        cnt = conn.execute(
+            "SELECT COUNT(*) FROM indicators WHERE type = ?", (itype,)
+        ).fetchone()[0]
         print(f"  {itype:<12} {cnt:>4} indicators")
     total = conn.execute("SELECT COUNT(*) FROM indicators").fetchone()[0]
     print(f"  {'TOTAL':<12} {total:>4} indicators")

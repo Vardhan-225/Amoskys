@@ -66,13 +66,13 @@ _CACHE_TTL_SEC = 2.0
 _IDLE_POLL_SEC = 1.0
 
 # Active-defense and supply-chain windows (seconds from now).
-_BLOCK_WINDOW_SEC = 600          # 10 min, matches plugin BLOCK_DURATION_SEC
-_DRIFT_WINDOW_SEC = 24 * 3600    # 24 h
+_BLOCK_WINDOW_SEC = 600  # 10 min, matches plugin BLOCK_DURATION_SEC
+_DRIFT_WINDOW_SEC = 24 * 3600  # 24 h
 
 # For building the request ring-buffer's view-model (truncation budgets).
 _URI_DISPLAY_LEN = 80
-_UA_DISPLAY_LEN  = 60
-_UA_COUNT_LEN    = 80
+_UA_DISPLAY_LEN = 60
+_UA_COUNT_LEN = 80
 _SIG_DISPLAY_LEN = 16
 
 # Threshold below which we do the first-scan synchronously inline. At or
@@ -114,10 +114,10 @@ class LiveSnapshot:
     supply_chain_drift: List[Dict[str, Any]] = field(default_factory=list)
     supply_chain_last_cycle: Optional[Dict[str, Any]] = None
     # Ingest-pipeline health (new, useful for ops / debug but cheap to carry).
-    ingest_caught_up: bool = False      # True once first full scan completed
-    ingest_last_offset: int = 0         # byte offset we've read up to
-    ingest_file_bytes: int = 0          # current size on disk
-    ingest_lag_bytes: int = 0           # max(0, file_bytes - last_offset)
+    ingest_caught_up: bool = False  # True once first full scan completed
+    ingest_last_offset: int = 0  # byte offset we've read up to
+    ingest_file_bytes: int = 0  # current size on disk
+    ingest_lag_bytes: int = 0  # max(0, file_bytes - last_offset)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -128,18 +128,28 @@ class LiveSnapshot:
 
 class _IngestState:
     __slots__ = (
-        "event_types", "severities", "sensors",
-        "external_ips", "user_agents",
-        "ring", "recent_by_sev",
-        "chain_ok", "chain_breaks",
-        "first_sig", "last_sig", "prev_sig",
-        "total", "last_event_ns",
+        "event_types",
+        "severities",
+        "sensors",
+        "external_ips",
+        "user_agents",
+        "ring",
+        "recent_by_sev",
+        "chain_ok",
+        "chain_breaks",
+        "first_sig",
+        "last_sig",
+        "prev_sig",
+        "total",
+        "last_event_ns",
         "active_blocks_by_ip",
         "blocks_started_events",
         "blocks_enforced_events",
         "drift_events",
         "last_supply_cycle",
-        "last_offset", "last_inode", "last_size",
+        "last_offset",
+        "last_inode",
+        "last_size",
         "caught_up",
         "errors",
     )
@@ -214,9 +224,7 @@ def _process_event(state: _IngestState, e: Dict[str, Any], now_sec: float) -> No
 
     # Chain integrity — preserved as-is from the legacy implementation.
     submitted_prev = e.get("prev_sig")
-    if submitted_prev == state.prev_sig or (
-        not submitted_prev and not state.prev_sig
-    ):
+    if submitted_prev == state.prev_sig or (not submitted_prev and not state.prev_sig):
         state.chain_ok += 1
     else:
         state.chain_breaks += 1
@@ -249,14 +257,19 @@ def _process_event(state: _IngestState, e: Dict[str, Any], now_sec: float) -> No
     elif et == "aegis.block.enforced":
         state.blocks_enforced_events.append((event_sec, attrs.get("ip") or ""))
     elif et == "aegis.supply_chain.drift":
-        state.drift_events.append((event_sec, {
-            "slug": attrs.get("slug"),
-            "drift_type": attrs.get("drift_type"),
-            "reason": attrs.get("reason"),
-            "remote_ver": attrs.get("remote_ver"),
-            "author": attrs.get("author"),
-            "ts_sec": int(event_sec),
-        }))
+        state.drift_events.append(
+            (
+                event_sec,
+                {
+                    "slug": attrs.get("slug"),
+                    "drift_type": attrs.get("drift_type"),
+                    "reason": attrs.get("reason"),
+                    "remote_ver": attrs.get("remote_ver"),
+                    "author": attrs.get("author"),
+                    "ts_sec": int(event_sec),
+                },
+            )
+        )
     elif et == "aegis.supply_chain.cycle":
         state.last_supply_cycle = {
             "installed": attrs.get("installed"),
@@ -398,7 +411,11 @@ class AegisTail:
             # render after process start already has populated stats. For
             # large logs, let the background thread do the catch-up.
             try:
-                size = os.path.getsize(self.log_path) if os.path.exists(self.log_path) else 0
+                size = (
+                    os.path.getsize(self.log_path)
+                    if os.path.exists(self.log_path)
+                    else 0
+                )
             except OSError:
                 size = 0
 
@@ -406,7 +423,9 @@ class AegisTail:
                 try:
                     self._ingest_once()
                 except Exception as exc:  # noqa: BLE001
-                    self._state.errors.append(f"inline-firstscan: {type(exc).__name__}: {exc}")
+                    self._state.errors.append(
+                        f"inline-firstscan: {type(exc).__name__}: {exc}"
+                    )
 
             t = threading.Thread(
                 target=self._ingest_loop,
@@ -423,9 +442,7 @@ class AegisTail:
                 did_work = self._ingest_once()
             except Exception as exc:  # noqa: BLE001
                 with self._lock:
-                    self._state.errors.append(
-                        f"ingest: {type(exc).__name__}: {exc}"
-                    )
+                    self._state.errors.append(f"ingest: {type(exc).__name__}: {exc}")
                 did_work = False
 
             # If we read new lines, loop again immediately (catch-up mode).
@@ -448,7 +465,10 @@ class AegisTail:
 
         with self._lock:
             # Detect rotation / truncation.
-            if self._state.last_inode is not None and st.st_ino != self._state.last_inode:
+            if (
+                self._state.last_inode is not None
+                and st.st_ino != self._state.last_inode
+            ):
                 self._reset_tail_position_locked()
             elif st.st_size < self._state.last_offset:
                 self._reset_tail_position_locked()
@@ -633,8 +653,16 @@ class AegisTail:
                 user_agents=user_agents,
                 chain_ok=state.chain_ok,
                 chain_breaks=state.chain_breaks,
-                chain_first_sig=(state.first_sig or "")[:_SIG_DISPLAY_LEN] if state.first_sig else None,
-                chain_last_sig=(state.last_sig or "")[:_SIG_DISPLAY_LEN] if state.last_sig else None,
+                chain_first_sig=(
+                    (state.first_sig or "")[:_SIG_DISPLAY_LEN]
+                    if state.first_sig
+                    else None
+                ),
+                chain_last_sig=(
+                    (state.last_sig or "")[:_SIG_DISPLAY_LEN]
+                    if state.last_sig
+                    else None
+                ),
                 recent=recent_list,
                 by_severity_recent=by_sev_recent,
                 errors=errors_list,
@@ -652,31 +680,31 @@ class AegisTail:
 
 # The canonical sensor-family taxonomy (must match Aegis plugin)
 AEGIS_SENSOR_FAMILIES = {
-    "aegis.auth":        "Authentication — login/role/password activity",
-    "aegis.rest":        "REST API — route registration + POI canary",
-    "aegis.plugin":      "Plugin lifecycle — install/update/activate/delete",
-    "aegis.theme":       "Theme — switch/update",
-    "aegis.fim":         "File integrity — wp-config.php tampering",
-    "aegis.outbound":    "Outbound HTTP — calls with Ethereum-RPC detection",
-    "aegis.http":        "HTTP request — every inbound request",
-    "aegis.admin":       "Admin — page views and privileged actions",
-    "aegis.options":     "Options — WP option adds/updates",
-    "aegis.cron":        "Cron — scheduled task execution",
-    "aegis.mail":        "Mail — wp_mail success + failure",
-    "aegis.post":        "Post — create/update/status/delete",
-    "aegis.comment":     "Comment — insert",
-    "aegis.media":       "Media — upload/delete with MIME flagging",
-    "aegis.db":          "Database — per-request query summary",
-    "aegis.lifecycle":   "Plugin lifecycle — own activation/deactivation",
+    "aegis.auth": "Authentication — login/role/password activity",
+    "aegis.rest": "REST API — route registration + POI canary",
+    "aegis.plugin": "Plugin lifecycle — install/update/activate/delete",
+    "aegis.theme": "Theme — switch/update",
+    "aegis.fim": "File integrity — wp-config.php tampering",
+    "aegis.outbound": "Outbound HTTP — calls with Ethereum-RPC detection",
+    "aegis.http": "HTTP request — every inbound request",
+    "aegis.admin": "Admin — page views and privileged actions",
+    "aegis.options": "Options — WP option adds/updates",
+    "aegis.cron": "Cron — scheduled task execution",
+    "aegis.mail": "Mail — wp_mail success + failure",
+    "aegis.post": "Post — create/update/status/delete",
+    "aegis.comment": "Comment — insert",
+    "aegis.media": "Media — upload/delete with MIME flagging",
+    "aegis.db": "Database — per-request query summary",
+    "aegis.lifecycle": "Plugin lifecycle — own activation/deactivation",
     # v0.4 additions
-    "aegis.block":       "Active defense — IP burst blocking + 403 enforcement",
-    "aegis.supply_chain":"Supply chain — daily plugin author/update drift check",
-    "aegis.browser":     "Browser beacon — admin-page client-side events",
+    "aegis.block": "Active defense — IP burst blocking + 403 enforcement",
+    "aegis.supply_chain": "Supply chain — daily plugin author/update drift check",
+    "aegis.browser": "Browser beacon — admin-page client-side events",
     # v0.5+ query + nonce
-    "aegis.query":       "Database — slow/anomalous query per request",
-    "aegis.nonce":       "Nonces — CSRF token generation + verification",
-    "aegis.request":     "Request pipeline — point-of-ingestion sensors",
-    "aegis.redirect":    "Redirects — admin-forced / login-forced navigation",
-    "aegis.capability":  "Capability — denied map_meta_cap filter hits",
-    "aegis.404":         "404 — observed missing-resource probes",
+    "aegis.query": "Database — slow/anomalous query per request",
+    "aegis.nonce": "Nonces — CSRF token generation + verification",
+    "aegis.request": "Request pipeline — point-of-ingestion sensors",
+    "aegis.redirect": "Redirects — admin-forced / login-forced navigation",
+    "aegis.capability": "Capability — denied map_meta_cap filter hits",
+    "aegis.404": "404 — observed missing-resource probes",
 }

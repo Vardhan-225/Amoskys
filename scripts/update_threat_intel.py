@@ -145,8 +145,12 @@ def main():
             logger.warning("  Error: %s", e)
 
     # Summary
-    indicator_count = enricher._conn.execute("SELECT COUNT(*) FROM indicators").fetchone()[0]
-    logger.info("Total indicators in DB: %d (added %d this run)", indicator_count, total)
+    indicator_count = enricher._conn.execute(
+        "SELECT COUNT(*) FROM indicators"
+    ).fetchone()[0]
+    logger.info(
+        "Total indicators in DB: %d (added %d this run)", indicator_count, total
+    )
 
 
 if __name__ == "__main__":

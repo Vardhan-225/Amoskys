@@ -137,7 +137,9 @@ def build_live_feed(snap, limit: int = 14) -> List[Dict[str, Any]]:
     sorted_events = sorted(
         snap.recent,
         key=lambda e: (
-            {"critical": 0, "high": 1, "warn": 2, "medium": 2, "info": 3, "low": 3}.get(e["severity"], 4),
+            {"critical": 0, "high": 1, "warn": 2, "medium": 2, "info": 3, "low": 3}.get(
+                e["severity"], 4
+            ),
             -(e.get("ts_ns") or 0),
         ),
     )
@@ -159,15 +161,21 @@ def build_live_feed(snap, limit: int = 14) -> List[Dict[str, Any]]:
         if req.get("uri") and req.get("uri") != "/":
             detail_bits.append(f"uri={req['uri'][:40]}")
 
-        feed.append({
-            "severity": e["severity"],
-            "headline": headline,
-            "event_type": event_type,
-            "detail": " · ".join(detail_bits) if detail_bits else None,
-            "ip": req.get("ip") if req.get("ip") and req.get("ip") not in ("127.0.0.1", "::1") else None,
-            "ago": _humantime(ts_ns) if ts_ns else "—",
-            "ts_ns": ts_ns,
-        })
+        feed.append(
+            {
+                "severity": e["severity"],
+                "headline": headline,
+                "event_type": event_type,
+                "detail": " · ".join(detail_bits) if detail_bits else None,
+                "ip": (
+                    req.get("ip")
+                    if req.get("ip") and req.get("ip") not in ("127.0.0.1", "::1")
+                    else None
+                ),
+                "ago": _humantime(ts_ns) if ts_ns else "—",
+                "ts_ns": ts_ns,
+            }
+        )
     return feed
 
 
@@ -182,10 +190,10 @@ def build_stats(snap) -> Dict[str, Any]:
         + snap.event_types.get("aegis.auth.login_failed", 0)
     )
     return {
-        "attacks_today":        max(attacks_today, 1),  # never zero for drama
-        "wp_share":             43,
-        "wp_sites_global":      475_000_000,
-        "cves_this_week":       47,  # update weekly from Patchstack feed
+        "attacks_today": max(attacks_today, 1),  # never zero for drama
+        "wp_share": 43,
+        "wp_sites_global": 475_000_000,
+        "cves_this_week": 47,  # update weekly from Patchstack feed
         "aegis_sensors_firing": snap.total_events,
     }
 

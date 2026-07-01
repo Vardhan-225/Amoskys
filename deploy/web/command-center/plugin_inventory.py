@@ -20,22 +20,21 @@ import urllib.request
 from typing import Any, Dict, List
 
 
-
 _PLUGIN_HINTS = {
     # Namespace prefix -> pretty slug
-    "wp/v2":              "wordpress-core",
-    "oembed/1.0":         "wordpress-core",
-    "wp-site-health/v1":  "wordpress-core",
+    "wp/v2": "wordpress-core",
+    "oembed/1.0": "wordpress-core",
+    "wp-site-health/v1": "wordpress-core",
     "wp-block-editor/v1": "wordpress-core",
-    "akismet/v1":         "akismet",
-    "woocommerce/v3":     "woocommerce",
-    "wc/store/v1":        "woocommerce",
-    "elementor/v1":       "elementor",
-    "wpseo/v1":           "yoast-seo",
-    "jetpack/v4":         "jetpack",
-    "contact-form-7/v1":  "contact-form-7",
-    "litespeed/v1":       "litespeed-cache",
-    "amoskys-aegis/v1":   "amoskys-aegis",
+    "akismet/v1": "akismet",
+    "woocommerce/v3": "woocommerce",
+    "wc/store/v1": "woocommerce",
+    "elementor/v1": "elementor",
+    "wpseo/v1": "yoast-seo",
+    "jetpack/v4": "jetpack",
+    "contact-form-7/v1": "contact-form-7",
+    "litespeed/v1": "litespeed-cache",
+    "amoskys-aegis/v1": "amoskys-aegis",
 }
 
 
@@ -59,7 +58,9 @@ _PLUGIN_HINTS = {
 # ─────────────────────────────────────────────────────────────────────
 
 _WP_JSON_CACHE: Dict[str, "tuple[float, Dict[str, Any]]"] = {}
-_WP_JSON_CACHE_TTL_SEC = 300.0  # 5 min — /wp-json/ changes only on plugin install/update
+_WP_JSON_CACHE_TTL_SEC = (
+    300.0  # 5 min — /wp-json/ changes only on plugin install/update
+)
 
 
 def _fetch_wp_json(site_url: str, timeout: float = 6.0) -> Dict[str, Any]:
@@ -122,17 +123,19 @@ def inventory_from_wpjson(site_url: str) -> List[Dict[str, Any]]:
             entries_by_slug[slug]["namespaces"].append(ns)
             continue
         entries_by_slug[slug] = {
-            "slug":        slug,
-            "version":     None,
-            "state":       "active",  # namespace registered → plugin is loaded
-            "namespaces":  [ns],
-            "source":      "wp-json",
+            "slug": slug,
+            "version": None,
+            "state": "active",  # namespace registered → plugin is loaded
+            "namespaces": [ns],
+            "source": "wp-json",
         }
 
     return list(entries_by_slug.values())
 
 
-def enrich_with_aegis_events(plugins: List[Dict[str, Any]], snap) -> List[Dict[str, Any]]:
+def enrich_with_aegis_events(
+    plugins: List[Dict[str, Any]], snap
+) -> List[Dict[str, Any]]:
     """Fold in version + state from Aegis plugin.* events on the log."""
     by_slug = {p["slug"]: p for p in plugins}
 
@@ -153,10 +156,10 @@ def enrich_with_aegis_events(plugins: List[Dict[str, Any]], snap) -> List[Dict[s
 
         if slug not in by_slug:
             by_slug[slug] = {
-                "slug":     slug,
-                "version":  version,
-                "state":    "inactive",
-                "source":   "aegis",
+                "slug": slug,
+                "version": version,
+                "state": "inactive",
+                "source": "aegis",
             }
 
         entry = by_slug[slug]

@@ -40,7 +40,9 @@ def admin_password() -> str:
 
 
 def customer_site() -> str:
-    return os.environ.get("AMOSKYS_WEB_CUSTOMER_SITE", "lab.amoskys.com").strip().lower()
+    return (
+        os.environ.get("AMOSKYS_WEB_CUSTOMER_SITE", "lab.amoskys.com").strip().lower()
+    )
 
 
 def is_auth_configured() -> bool:
@@ -52,12 +54,8 @@ def check_credentials(email: str, password: str) -> bool:
     """Constant-time compare against env credentials."""
     if not is_auth_configured():
         return False
-    email_ok = hmac.compare_digest(
-        (email or "").strip().lower(), admin_email()
-    )
-    password_ok = hmac.compare_digest(
-        (password or "").strip(), admin_password()
-    )
+    email_ok = hmac.compare_digest((email or "").strip().lower(), admin_email())
+    password_ok = hmac.compare_digest((password or "").strip(), admin_password())
     return email_ok and password_ok
 
 
@@ -86,9 +84,11 @@ def sign_out() -> None:
 
 def require_signed_in(fn):
     """Decorator: redirect to /web/signin if not authenticated."""
+
     @wraps(fn)
     def wrapper(*args, **kwargs):
         if not signed_in():
             return redirect(url_for("web.signin", next=request.path))
         return fn(*args, **kwargs)
+
     return wrapper

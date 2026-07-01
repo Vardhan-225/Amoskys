@@ -40,9 +40,7 @@ def _write(p, s):
 
 def step_copy():
     if not os.path.exists(SQL_SENSOR_SRC):
-        raise SystemExit(
-            f"missing {SQL_SENSOR_SRC} — scp the file onto the lab first."
-        )
+        raise SystemExit(f"missing {SQL_SENSOR_SRC} — scp the file onto the lab first.")
     shutil.copy2(SQL_SENSOR_SRC, SQL_SENSOR_DST)
     os.chmod(SQL_SENSOR_DST, 0o644)
     # Preserve the file's ownership to match sibling classes.
@@ -79,9 +77,7 @@ def step_main_plugin():
         print("  = property already declared")
 
     # Instantiation
-    needle_inst = (
-        "$this->beacon   = new Amoskys_Aegis_Beacon( $this->emitter );"
-    )
+    needle_inst = "$this->beacon   = new Amoskys_Aegis_Beacon( $this->emitter );"
     add_inst = (
         "\n\t\t$this->sql_sensor = new Amoskys_Aegis_Sql_Sensor( $this->emitter );"
     )
@@ -108,7 +104,9 @@ def step_block_strike_rule():
     s = _read(BLOCK_CLASS)
 
     needle_const = "const POI_ATTEMPT_LIMIT   = 1;"
-    add_const = "\n\tconst SQLI_ATTEMPT_LIMIT  = 2; // two suspicious queries in 60s → block"
+    add_const = (
+        "\n\tconst SQLI_ATTEMPT_LIMIT  = 2; // two suspicious queries in 60s → block"
+    )
     if "SQLI_ATTEMPT_LIMIT" not in s:
         s = s.replace(needle_const, needle_const + add_const, 1)
         print("  ✓ added SQLI_ATTEMPT_LIMIT const")
@@ -117,9 +115,7 @@ def step_block_strike_rule():
 
     # threshold_for switch
     needle_switch = "case 'poi_attempt': return self::POI_ATTEMPT_LIMIT;"
-    add_switch = (
-        "\n\t\t\tcase 'sqli_attempt': return self::SQLI_ATTEMPT_LIMIT;"
-    )
+    add_switch = "\n\t\t\tcase 'sqli_attempt': return self::SQLI_ATTEMPT_LIMIT;"
     if "'sqli_attempt'" not in s:
         s = s.replace(needle_switch, needle_switch + add_switch, 1)
         print("  ✓ wired sqli_attempt into threshold_for()")
@@ -131,9 +127,7 @@ def step_block_strike_rule():
 
 def step_lint():
     for path in (MAIN_PLUGIN, BLOCK_CLASS, SQL_SENSOR_DST):
-        r = subprocess.run(
-            ["php", "-l", path], capture_output=True, text=True
-        )
+        r = subprocess.run(["php", "-l", path], capture_output=True, text=True)
         if r.returncode != 0:
             print(f"  ✗ php lint failed on {path}:\n{r.stderr or r.stdout}")
             raise SystemExit(1)

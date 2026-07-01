@@ -46,15 +46,27 @@ CREATE INDEX IF NOT EXISTS idx_indicator_type ON indicators(type);
 """
 
 FEEDS = [
-    {"name": "abuse.ch Feodo C2",
-     "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.csv",
-     "type": "ip", "sev": "critical", "parser": "feodo"},
-    {"name": "Emerging Threats Compromised",
-     "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt",
-     "type": "ip", "sev": "high", "parser": "plain_ip"},
-    {"name": "abuse.ch URLhaus",
-     "url": "https://urlhaus.abuse.ch/downloads/text_online/",
-     "type": "domain", "sev": "high", "parser": "urlhaus_domains"},
+    {
+        "name": "abuse.ch Feodo C2",
+        "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.csv",
+        "type": "ip",
+        "sev": "critical",
+        "parser": "feodo",
+    },
+    {
+        "name": "Emerging Threats Compromised",
+        "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt",
+        "type": "ip",
+        "sev": "high",
+        "parser": "plain_ip",
+    },
+    {
+        "name": "abuse.ch URLhaus",
+        "url": "https://urlhaus.abuse.ch/downloads/text_online/",
+        "type": "domain",
+        "sev": "high",
+        "parser": "urlhaus_domains",
+    },
 ]
 
 
@@ -93,15 +105,43 @@ def parse_plain_ip(text: str):
 # are benign and high-traffic — flagging them would flood the brain with false
 # positives. Never ingest a host whose registrable domain is allowlisted.
 _ALLOWLIST = {
-    "googleusercontent.com", "google.com", "googleapis.com", "gstatic.com",
-    "githubusercontent.com", "github.com", "github.io", "gitlab.com",
-    "dropbox.com", "dropboxusercontent.com", "amazonaws.com", "cloudfront.net",
-    "discord.com", "discordapp.com", "discordapp.net", "cdn.discordapp.com",
-    "microsoft.com", "live.com", "sharepoint.com", "onedrive.com", "1drv.ms",
-    "apple.com", "icloud.com", "cloudflare.com", "cloudflarestorage.com",
-    "wordpress.com", "blogspot.com", "weebly.com", "wixsite.com",
-    "sites.google.com", "firebasestorage.googleapis.com", "telegram.org",
-    "t.me", "bit.ly", "ipfs.io", "backblazeb2.com", "digitaloceanspaces.com",
+    "googleusercontent.com",
+    "google.com",
+    "googleapis.com",
+    "gstatic.com",
+    "githubusercontent.com",
+    "github.com",
+    "github.io",
+    "gitlab.com",
+    "dropbox.com",
+    "dropboxusercontent.com",
+    "amazonaws.com",
+    "cloudfront.net",
+    "discord.com",
+    "discordapp.com",
+    "discordapp.net",
+    "cdn.discordapp.com",
+    "microsoft.com",
+    "live.com",
+    "sharepoint.com",
+    "onedrive.com",
+    "1drv.ms",
+    "apple.com",
+    "icloud.com",
+    "cloudflare.com",
+    "cloudflarestorage.com",
+    "wordpress.com",
+    "blogspot.com",
+    "weebly.com",
+    "wixsite.com",
+    "sites.google.com",
+    "firebasestorage.googleapis.com",
+    "telegram.org",
+    "t.me",
+    "bit.ly",
+    "ipfs.io",
+    "backblazeb2.com",
+    "digitaloceanspaces.com",
 }
 
 
@@ -126,8 +166,11 @@ def parse_urlhaus_domains(text: str):
     return out
 
 
-PARSERS = {"feodo": parse_feodo, "plain_ip": parse_plain_ip,
-           "urlhaus_domains": parse_urlhaus_domains}
+PARSERS = {
+    "feodo": parse_feodo,
+    "plain_ip": parse_plain_ip,
+    "urlhaus_domains": parse_urlhaus_domains,
+}
 
 # High-confidence, macOS-relevant indicators that are NOT in the volatile public
 # feeds. Re-applied every run (so they never age out) — the endpoint-specific
@@ -158,8 +201,10 @@ def add_curated(con, added, expires):
         "VALUES(?,?,?,?,?,?,?) ON CONFLICT(indicator,type) DO UPDATE SET "
         "severity=excluded.severity, source=excluded.source, "
         "added_at=excluded.added_at, expires_at=excluded.expires_at",
-        [(ind.lower(), t, sev, "AMOSKYS-curated", desc, added, expires)
-         for ind, t, sev, desc in CURATED],
+        [
+            (ind.lower(), t, sev, "AMOSKYS-curated", desc, added, expires)
+            for ind, t, sev, desc in CURATED
+        ],
     )
     con.commit()
     return len(CURATED)
@@ -193,8 +238,18 @@ def main() -> int:
             "ON CONFLICT(indicator,type) DO UPDATE SET "
             "severity=excluded.severity, source=excluded.source, "
             "added_at=excluded.added_at, expires_at=excluded.expires_at",
-            [(ind.lower(), feed["type"], feed["sev"], feed["name"], desc, added, expires)
-             for ind, desc in rows],
+            [
+                (
+                    ind.lower(),
+                    feed["type"],
+                    feed["sev"],
+                    feed["name"],
+                    desc,
+                    added,
+                    expires,
+                )
+                for ind, desc in rows
+            ],
         )
         con.commit()
         log.info("%-28s +%d", feed["name"], len(rows))
@@ -206,13 +261,15 @@ def main() -> int:
     # Self-heal: drop indicators that aged out (and were not refreshed above).
     pruned = con.execute(
         "DELETE FROM indicators WHERE expires_at IS NOT NULL AND expires_at < ?",
-        (now.isoformat(),)).rowcount
+        (now.isoformat(),),
+    ).rowcount
     con.commit()
     live = con.execute("SELECT COUNT(*) FROM indicators").fetchone()[0]
     by = con.execute("SELECT type,COUNT(*) FROM indicators GROUP BY type").fetchall()
     con.close()
-    log.info("refreshed=%d pruned=%d live=%d (%s) db=%s",
-             total, pruned, live, dict(by), DB)
+    log.info(
+        "refreshed=%d pruned=%d live=%d (%s) db=%s", total, pruned, live, dict(by), DB
+    )
     return 0 if live > 0 else 1
 
 

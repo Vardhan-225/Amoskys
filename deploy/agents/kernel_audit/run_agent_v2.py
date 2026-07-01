@@ -38,8 +38,10 @@ from typing import Optional
 # Try multiple possible locations (local dev, server deployment, pip install)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _possible_paths = [
-    os.path.join(_script_dir, "../../src"),  # Local dev: deployments/kernel_audit/../../src
-    os.path.expanduser("~/amoskys-src"),      # Server: ~/amoskys-src/amoskys/
+    os.path.join(
+        _script_dir, "../../src"
+    ),  # Local dev: deployments/kernel_audit/../../src
+    os.path.expanduser("~/amoskys-src"),  # Server: ~/amoskys-src/amoskys/
     os.path.join(os.path.expanduser("~"), "amoskys", "src"),  # Server alt
 ]
 
@@ -251,7 +253,9 @@ def main() -> int:
             agent.start_metrics_http_server(
                 host="127.0.0.1", port=args.metrics_http_port
             )
-            logger.info(f"Metrics HTTP endpoint: http://127.0.0.1:{args.metrics_http_port}/metrics")
+            logger.info(
+                f"Metrics HTTP endpoint: http://127.0.0.1:{args.metrics_http_port}/metrics"
+            )
         except Exception as e:
             logger.warning(f"Failed to start metrics HTTP server: {e}")
 

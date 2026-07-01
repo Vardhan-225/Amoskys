@@ -65,7 +65,12 @@ def _normalize_target(raw: str) -> Optional[str]:
 
 def _tls_info(host: str) -> Dict[str, Any]:
     """Quick TLS probe — just open a socket and grab the cert."""
-    out: Dict[str, Any] = {"ok": False, "version": None, "issuer": None, "expires": None}
+    out: Dict[str, Any] = {
+        "ok": False,
+        "version": None,
+        "issuer": None,
+        "expires": None,
+    }
     try:
         ctx = ssl.create_default_context()
         with socket.create_connection((host, 443), timeout=5) as sock:
@@ -75,7 +80,9 @@ def _tls_info(host: str) -> Dict[str, Any]:
                 cert = ssock.getpeercert()
                 if cert:
                     issuer = dict(x[0] for x in cert.get("issuer", []))
-                    out["issuer"] = issuer.get("organizationName") or issuer.get("commonName")
+                    out["issuer"] = issuer.get("organizationName") or issuer.get(
+                        "commonName"
+                    )
                     out["expires"] = cert.get("notAfter")
     except Exception:
         pass
@@ -140,7 +147,9 @@ def run_preview(target_raw: str) -> Dict[str, Any]:
     )
 
     wp_version = None
-    m = re.search(r'meta name="generator" content="WordPress ([\d.]+)"', body, re.IGNORECASE)
+    m = re.search(
+        r'meta name="generator" content="WordPress ([\d.]+)"', body, re.IGNORECASE
+    )
     if m:
         wp_version = m.group(1)
 
@@ -157,7 +166,12 @@ def run_preview(target_raw: str) -> Dict[str, Any]:
     xmlrpc_enabled = False
     try:
         r = _fetch(f"https://{host}/xmlrpc.php", timeout=4.0)
-        if len(r) == 4 and r[0] == 200 and r[2] and "XML-RPC server accepts POST requests only" in r[2]:
+        if (
+            len(r) == 4
+            and r[0] == 200
+            and r[2]
+            and "XML-RPC server accepts POST requests only" in r[2]
+        ):
             xmlrpc_enabled = True
     except Exception:
         pass
@@ -176,78 +190,105 @@ def run_preview(target_raw: str) -> Dict[str, Any]:
 
     # WordPress detection itself
     if is_wp:
-        findings.append({
-            "severity_class": "good", "ico": "✓",
-            "title": f"WordPress {'v' + wp_version if wp_version else ''} detected",
-            "desc": "Your site runs WordPress. AMOSKYS Aegis can protect this site; AMOSKYS Argos can pentest it.",
-        })
+        findings.append(
+            {
+                "severity_class": "good",
+                "ico": "✓",
+                "title": f"WordPress {'v' + wp_version if wp_version else ''} detected",
+                "desc": "Your site runs WordPress. AMOSKYS Aegis can protect this site; AMOSKYS Argos can pentest it.",
+            }
+        )
     else:
-        findings.append({
-            "severity_class": "warn", "ico": "⚠️",
-            "title": "This doesn't look like a WordPress site",
-            "desc": "We couldn't find WordPress fingerprints in the public HTML. AMOSKYS Web is WordPress-first today; support for other CMSes is on our roadmap.",
-        })
+        findings.append(
+            {
+                "severity_class": "warn",
+                "ico": "⚠️",
+                "title": "This doesn't look like a WordPress site",
+                "desc": "We couldn't find WordPress fingerprints in the public HTML. AMOSKYS Web is WordPress-first today; support for other CMSes is on our roadmap.",
+            }
+        )
 
     # Server header disclosure
     server_header = (headers.get("server") or "").strip()
     if server_header and any(c.isdigit() for c in server_header):
-        findings.append({
-            "severity_class": "warn", "ico": "⚠️",
-            "title": f"Server version disclosed: {server_header}",
-            "desc": "Attackers use the version in your Server header to match public CVEs to your deployed software.",
-        })
+        findings.append(
+            {
+                "severity_class": "warn",
+                "ico": "⚠️",
+                "title": f"Server version disclosed: {server_header}",
+                "desc": "Attackers use the version in your Server header to match public CVEs to your deployed software.",
+            }
+        )
 
     # X-Powered-By disclosure
     xpb = (headers.get("x-powered-by") or "").strip()
     if xpb:
-        findings.append({
-            "severity_class": "warn", "ico": "⚠️",
-            "title": f"X-Powered-By: {xpb}",
-            "desc": "The X-Powered-By header is telling the world what runtime you use. Strip this header — it gives attackers free targeting data.",
-        })
+        findings.append(
+            {
+                "severity_class": "warn",
+                "ico": "⚠️",
+                "title": f"X-Powered-By: {xpb}",
+                "desc": "The X-Powered-By header is telling the world what runtime you use. Strip this header — it gives attackers free targeting data.",
+            }
+        )
 
     # Readme version disclosure
     if readme_exposed:
-        findings.append({
-            "severity_class": "warn", "ico": "⚠️",
-            "title": "WordPress readme.html is publicly accessible",
-            "desc": "readme.html exposes your WordPress version to anyone. Block this file in your webserver or delete it.",
-        })
+        findings.append(
+            {
+                "severity_class": "warn",
+                "ico": "⚠️",
+                "title": "WordPress readme.html is publicly accessible",
+                "desc": "readme.html exposes your WordPress version to anyone. Block this file in your webserver or delete it.",
+            }
+        )
 
     # xmlrpc
     if xmlrpc_enabled:
-        findings.append({
-            "severity_class": "warn", "ico": "⚠️",
-            "title": "/xmlrpc.php is reachable",
-            "desc": "XML-RPC is a common brute-force + amplification target. Unless you have a specific need for it, disable or block it.",
-        })
+        findings.append(
+            {
+                "severity_class": "warn",
+                "ico": "⚠️",
+                "title": "/xmlrpc.php is reachable",
+                "desc": "XML-RPC is a common brute-force + amplification target. Unless you have a specific need for it, disable or block it.",
+            }
+        )
 
     # REST API exposure
     if rest_api_exposed:
-        findings.append({
-            "severity_class": "low", "ico": "ℹ️",
-            "title": "WordPress REST API is public",
-            "desc": "/wp-json/ is reachable. This is WordPress default behavior — the full pentest checks if the API leaks user enumeration or exposes unauthenticated routes (EssentialPlugin-class risk).",
-        })
+        findings.append(
+            {
+                "severity_class": "low",
+                "ico": "ℹ️",
+                "title": "WordPress REST API is public",
+                "desc": "/wp-json/ is reachable. This is WordPress default behavior — the full pentest checks if the API leaks user enumeration or exposes unauthenticated routes (EssentialPlugin-class risk).",
+            }
+        )
 
     # TLS
     if not tls["ok"]:
-        findings.append({
-            "severity_class": "bad", "ico": "❌",
-            "title": "No TLS or broken TLS",
-            "desc": "We couldn't negotiate TLS to your site. This is a critical-severity issue — visitors are transmitting credentials in the clear.",
-        })
+        findings.append(
+            {
+                "severity_class": "bad",
+                "ico": "❌",
+                "title": "No TLS or broken TLS",
+                "desc": "We couldn't negotiate TLS to your site. This is a critical-severity issue — visitors are transmitting credentials in the clear.",
+            }
+        )
     elif tls["version"] and tls["version"] in ("TLSv1", "TLSv1.1"):
-        findings.append({
-            "severity_class": "bad", "ico": "❌",
-            "title": f"Deprecated TLS: {tls['version']}",
-            "desc": "TLS 1.0/1.1 is deprecated and must be disabled. Attackers can downgrade + break the session.",
-        })
+        findings.append(
+            {
+                "severity_class": "bad",
+                "ico": "❌",
+                "title": f"Deprecated TLS: {tls['version']}",
+                "desc": "TLS 1.0/1.1 is deprecated and must be disabled. Attackers can downgrade + break the session.",
+            }
+        )
 
     # Count issues by severity
     issues_high = sum(1 for f in findings if f["severity_class"] == "bad")
-    issues_med  = sum(1 for f in findings if f["severity_class"] == "warn")
-    issues_low  = sum(1 for f in findings if f["severity_class"] == "low")
+    issues_med = sum(1 for f in findings if f["severity_class"] == "warn")
+    issues_low = sum(1 for f in findings if f["severity_class"] == "low")
 
     return {
         "host": host,

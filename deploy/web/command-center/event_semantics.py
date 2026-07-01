@@ -34,12 +34,12 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 @dataclass(frozen=True)
 class EventMeaning:
-    phrase: str                 # short human title
-    detail: Optional[str]       # one-line elaboration if useful
-    concern: int                # 0..5
-    category: str               # Access | Code | Site | Data | Probe | System
-    audience: str               # "user" | "internal"
-    verdict: str                # emoji-class cue
+    phrase: str  # short human title
+    detail: Optional[str]  # one-line elaboration if useful
+    concern: int  # 0..5
+    category: str  # Access | Code | Site | Data | Probe | System
+    audience: str  # "user" | "internal"
+    verdict: str  # emoji-class cue
     action: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -67,224 +67,347 @@ _MEANINGS: Dict[str, EventMeaning] = {
     "aegis.auth.login_failed": EventMeaning(
         phrase="Failed admin login",
         detail="Someone tried to sign in as an existing WP user and got the password wrong",
-        concern=3, category="Access", audience="user", verdict="⚠",
+        concern=3,
+        category="Access",
+        audience="user",
+        verdict="⚠",
         action="Cluster by IP — 10+ in 10 min from one IP is a brute-force",
     ),
     "aegis.auth.login_success": EventMeaning(
         phrase="Admin signed in",
         detail="A WP user successfully authenticated",
-        concern=1, category="Access", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Access",
+        audience="user",
+        verdict="ℹ︎",
     ),
     "aegis.auth.logout": EventMeaning(
         phrase="Admin signed out",
         detail=None,
-        concern=0, category="Access", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="Access",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.auth.password_changed": EventMeaning(
         phrase="Password changed",
         detail="A user's password was reset — expected only after you asked",
-        concern=2, category="Access", audience="user", verdict="⚠",
+        concern=2,
+        category="Access",
+        audience="user",
+        verdict="⚠",
         action="If this wasn't you, the account is compromised",
     ),
     "aegis.auth.user_created": EventMeaning(
         phrase="New WP user created",
-        concern=3, category="Access", audience="user", verdict="⚠",
+        concern=3,
+        category="Access",
+        audience="user",
+        verdict="⚠",
         action="Unexpected new admin = backdoor attempt",
         detail=None,
     ),
     "aegis.nonce.failed": EventMeaning(
         phrase="CSRF token rejected",
         detail="A request's WP nonce didn't match — usually a stale tab, occasionally a CSRF probe",
-        concern=2, category="Access", audience="user", verdict="⚠",
+        concern=2,
+        category="Access",
+        audience="user",
+        verdict="⚠",
     ),
     "aegis.capability.denied": EventMeaning(
         phrase="WP permission check firing",
         detail="Routine — WP asked 'is this user allowed?' and the answer was 'no'",
-        concern=0, category="Access", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="Access",
+        audience="internal",
+        verdict="ℹ︎",
     ),
-
     # ── Active Defense (Aegis's own blocks) ────────────────────────
     "aegis.block.started": EventMeaning(
         phrase="Aegis blocked an attacker",
         detail="Burst rate-limit tripped; offender sent to a 10-min penalty box",
-        concern=4, category="Probe", audience="user", verdict="🛑",
+        concern=4,
+        category="Probe",
+        audience="user",
+        verdict="🛑",
         action="Celebrate — Aegis just stopped something",
     ),
     "aegis.block.enforced": EventMeaning(
         phrase="Blocked IP tried again (403)",
         detail="A still-blocked IP keeps coming back; Aegis keeps saying no",
-        concern=3, category="Probe", audience="user", verdict="🛑",
+        concern=3,
+        category="Probe",
+        audience="user",
+        verdict="🛑",
     ),
-
     # ── Code / Plugin / Theme ──────────────────────────────────────
     "aegis.plugin.install": EventMeaning(
         phrase="Plugin installed",
-        concern=2, category="Code", audience="user", verdict="⚠",
+        concern=2,
+        category="Code",
+        audience="user",
+        verdict="⚠",
         action="Was this expected? Unknown plugin = risk",
         detail=None,
     ),
     "aegis.plugin.update": EventMeaning(
         phrase="Plugin updated",
-        concern=1, category="Code", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Code",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.plugin.activate": EventMeaning(
         phrase="Plugin activated",
-        concern=1, category="Code", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Code",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.plugin.deactivate": EventMeaning(
         phrase="Plugin deactivated",
-        concern=1, category="Code", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Code",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.plugin.delete": EventMeaning(
         phrase="Plugin deleted",
-        concern=2, category="Code", audience="user", verdict="⚠",
+        concern=2,
+        category="Code",
+        audience="user",
+        verdict="⚠",
         detail=None,
     ),
     "aegis.theme.switched": EventMeaning(
         phrase="Theme switched",
-        concern=2, category="Code", audience="user", verdict="⚠",
+        concern=2,
+        category="Code",
+        audience="user",
+        verdict="⚠",
         action="Sudden theme swaps can introduce malicious templates",
         detail=None,
     ),
     "aegis.supply_chain.drift": EventMeaning(
         phrase="Supply-chain drift detected",
         detail="An installed plugin's remote version or author fingerprint changed",
-        concern=3, category="Code", audience="user", verdict="⚠",
+        concern=3,
+        category="Code",
+        audience="user",
+        verdict="⚠",
     ),
     "aegis.supply_chain.cycle": EventMeaning(
         phrase="Supply-chain scan completed",
         detail="Daily author/version-drift check across all installed plugins",
-        concern=0, category="Code", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="Code",
+        audience="internal",
+        verdict="ℹ︎",
     ),
-
     # ── File integrity ─────────────────────────────────────────────
     "aegis.fim.wp_config_change": EventMeaning(
         phrase="wp-config.php was modified",
         detail="The deepest trust file on a WP install changed",
-        concern=5, category="Site", audience="user", verdict="🛑",
+        concern=5,
+        category="Site",
+        audience="user",
+        verdict="🛑",
         action="Verify you made this change; unexpected edits are compromise",
     ),
-
     # ── REST / routes / probes ─────────────────────────────────────
     "aegis.rest.unauth_routes_detected": EventMeaning(
         phrase="Public REST endpoint probe",
         detail="Someone hit a /wp-json/ route known to leak info when unauthenticated",
-        concern=3, category="Probe", audience="user", verdict="⚠",
+        concern=3,
+        category="Probe",
+        audience="user",
+        verdict="⚠",
     ),
     "aegis.rest.routes_registered": EventMeaning(
         phrase="REST routes inventory refreshed",
-        concern=0, category="Code", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="Code",
+        audience="internal",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.redirect.triggered": EventMeaning(
         phrase="Forced redirect (admin/login)",
         detail="Usually routine WP navigation; pattern-spike can mean scripted traversal",
-        concern=1, category="Site", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Site",
+        audience="user",
+        verdict="ℹ︎",
     ),
     "aegis.404.observed": EventMeaning(
         phrase="Missing-resource probe (404)",
         detail="Someone hit a path that doesn't exist — scanners do this by the hundred",
-        concern=2, category="Probe", audience="user", verdict="⚠",
+        concern=2,
+        category="Probe",
+        audience="user",
+        verdict="⚠",
         action="Cluster by IP; bursts of 404s = scanner map-out",
     ),
-
     # ── HTTP / request pipeline ────────────────────────────────────
     "aegis.http.request": EventMeaning(
         phrase="Inbound HTTP request",
         detail="Every inbound request — heartbeat",
-        concern=0, category="Probe", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="Probe",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.request.poi_sensor_tick": EventMeaning(
         phrase="Request pipeline sensor tick",
-        concern=0, category="System", audience="internal", verdict="ℹ︎",
+        concern=0,
+        category="System",
+        audience="internal",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.outbound.http": EventMeaning(
         phrase="Outbound HTTP call",
         detail="Site called an external URL — watch for calls to Ethereum RPC or known-C2 hosts",
-        concern=1, category="Site", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Site",
+        audience="user",
+        verdict="ℹ︎",
     ),
-
     # ── Data / posts / options ─────────────────────────────────────
     "aegis.post.saved": EventMeaning(
         phrase="Post created or saved",
-        concern=1, category="Data", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.post.status_change": EventMeaning(
         phrase="Post status changed (e.g. publish ↔ draft)",
-        concern=1, category="Data", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.post.deleted": EventMeaning(
         phrase="Post deleted",
-        concern=2, category="Data", audience="user", verdict="⚠",
+        concern=2,
+        category="Data",
+        audience="user",
+        verdict="⚠",
         detail=None,
     ),
     "aegis.options.added": EventMeaning(
         phrase="WP option added",
-        concern=1, category="Data", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.options.updated": EventMeaning(
         phrase="WP option updated",
-        concern=1, category="Data", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
         detail=None,
     ),
     "aegis.comment.created": EventMeaning(
         phrase="Comment posted",
-        detail=None, concern=1, category="Data", audience="user", verdict="ℹ︎",
+        detail=None,
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
     ),
     "aegis.media.uploaded": EventMeaning(
         phrase="Media uploaded",
-        detail=None, concern=1, category="Data", audience="user", verdict="ℹ︎",
+        detail=None,
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
     ),
-
     # ── Admin / browser ────────────────────────────────────────────
     "aegis.admin.page_view": EventMeaning(
         phrase="Admin page view",
-        detail=None, concern=0, category="Access", audience="internal", verdict="ℹ︎",
+        detail=None,
+        concern=0,
+        category="Access",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.browser.beacon": EventMeaning(
         phrase="Admin browser telemetry",
-        detail=None, concern=0, category="System", audience="internal", verdict="ℹ︎",
+        detail=None,
+        concern=0,
+        category="System",
+        audience="internal",
+        verdict="ℹ︎",
     ),
-
     # ── DB / queries ───────────────────────────────────────────────
     "aegis.db.summary": EventMeaning(
         phrase="Per-request DB summary",
-        detail=None, concern=0, category="Data", audience="internal", verdict="ℹ︎",
+        detail=None,
+        concern=0,
+        category="Data",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.query.event": EventMeaning(
         phrase="Notable DB query",
         detail="Slow or anomalous query flagged by Aegis",
-        concern=1, category="Data", audience="user", verdict="ℹ︎",
+        concern=1,
+        category="Data",
+        audience="user",
+        verdict="ℹ︎",
     ),
-
     # ── Cron / mail / lifecycle ────────────────────────────────────
     "aegis.cron.run": EventMeaning(
         phrase="Cron tick",
-        detail=None, concern=0, category="System", audience="internal", verdict="ℹ︎",
+        detail=None,
+        concern=0,
+        category="System",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.mail.sent": EventMeaning(
         phrase="wp_mail sent",
-        detail=None, concern=1, category="System", audience="user", verdict="ℹ︎",
+        detail=None,
+        concern=1,
+        category="System",
+        audience="user",
+        verdict="ℹ︎",
     ),
     "aegis.mail.failed": EventMeaning(
         phrase="wp_mail failed",
         detail="Outbound transactional mail didn't deliver",
-        concern=2, category="System", audience="user", verdict="⚠",
+        concern=2,
+        category="System",
+        audience="user",
+        verdict="⚠",
     ),
     "aegis.lifecycle.activate": EventMeaning(
         phrase="Aegis activated on site",
-        detail=None, concern=0, category="System", audience="internal", verdict="ℹ︎",
+        detail=None,
+        concern=0,
+        category="System",
+        audience="internal",
+        verdict="ℹ︎",
     ),
     "aegis.lifecycle.deactivate": EventMeaning(
         phrase="Aegis deactivated on site",
-        detail=None, concern=2, category="System", audience="user", verdict="⚠",
+        detail=None,
+        concern=2,
+        category="System",
+        audience="user",
+        verdict="⚠",
         action="Did you mean to disable the defender?",
     ),
 }
@@ -295,7 +418,10 @@ _MEANINGS: Dict[str, EventMeaning] = {
 _DEFAULT = EventMeaning(
     phrase="Unknown event",
     detail="Uncatalogued Aegis event — taxonomy update needed",
-    concern=1, category="System", audience="internal", verdict="ℹ︎",
+    concern=1,
+    category="System",
+    audience="internal",
+    verdict="ℹ︎",
 )
 
 
@@ -331,13 +457,13 @@ def humanize_event(ev: Dict[str, Any]) -> Dict[str, Any]:
     m = meaning_for(et)
     out = dict(ev)
     out["meaning"] = {
-        "phrase":   m.phrase,
-        "detail":   m.detail,
-        "concern":  m.concern,
+        "phrase": m.phrase,
+        "detail": m.detail,
+        "concern": m.concern,
         "category": m.category,
         "audience": m.audience,
-        "verdict":  m.verdict,
-        "action":   m.action,
+        "verdict": m.verdict,
+        "action": m.action,
         "severity_cue": _CONCERN_TO_SEV.get(m.concern, "info"),
     }
     return out
@@ -386,7 +512,9 @@ def category_rollup(event_types: Dict[str, int]) -> List[Dict[str, Any]]:
         m = meaning_for(et)
         if m.audience == "internal":
             continue
-        b = buckets.setdefault(m.category, {"category": m.category, "count": 0, "top_types": {}})
+        b = buckets.setdefault(
+            m.category, {"category": m.category, "count": 0, "top_types": {}}
+        )
         b["count"] += count
         b["top_types"][et] = count
 
@@ -396,11 +524,16 @@ def category_rollup(event_types: Dict[str, int]) -> List[Dict[str, Any]]:
             continue
         b = buckets[cat]
         top = sorted(b["top_types"].items(), key=lambda kv: kv[1], reverse=True)[:3]
-        out.append({
-            "category": cat,
-            "count": b["count"],
-            "top": [{"event_type": et, "phrase": meaning_for(et).phrase, "count": c} for et, c in top],
-        })
+        out.append(
+            {
+                "category": cat,
+                "count": b["count"],
+                "top": [
+                    {"event_type": et, "phrase": meaning_for(et).phrase, "count": c}
+                    for et, c in top
+                ],
+            }
+        )
     return out
 
 
@@ -444,7 +577,9 @@ def active_concerns(
         "posture": posture,
         "concern_tally": recent_tally,
         "categories_hot": categories_hot,
-        "top_concerns": sorted(top_types.items(), key=lambda kv: kv[1], reverse=True)[:5],
+        "top_concerns": sorted(top_types.items(), key=lambda kv: kv[1], reverse=True)[
+            :5
+        ],
         "active_blocks_count": active_blocks_count,
         "chain_breaks": chain_breaks,
     }

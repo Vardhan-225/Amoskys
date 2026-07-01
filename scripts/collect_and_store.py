@@ -156,7 +156,9 @@ def main():
         logger.warning("Cannot import Discovery: %s", e)
 
     try:
-        from amoskys.agents.os.macos.internet_activity.agent import MacOSInternetActivityAgent
+        from amoskys.agents.os.macos.internet_activity.agent import (
+            MacOSInternetActivityAgent,
+        )
 
         agents.append(("InternetActivity", MacOSInternetActivityAgent, {}))
     except ImportError as e:
@@ -196,7 +198,9 @@ def main():
 
     # Realtime Sensor — kqueue/FSEvents persistence drops, TCC, temp execution
     try:
-        from amoskys.agents.os.macos.realtime_sensor.agent import MacOSRealtimeSensorAgent
+        from amoskys.agents.os.macos.realtime_sensor.agent import (
+            MacOSRealtimeSensorAgent,
+        )
 
         agents.append(("RealtimeSensor", MacOSRealtimeSensorAgent, {}))
     except ImportError as e:

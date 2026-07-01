@@ -16,7 +16,8 @@ SRC = "/tmp/class-aegis-upload-sensor.php"
 DST = os.path.join(INCLUDES, "class-aegis-upload-sensor.php")
 
 
-def _read(p): return open(p).read()
+def _read(p):
+    return open(p).read()
 
 
 def _write(p, s):
@@ -112,7 +113,9 @@ def step_lint():
 
 
 def step_reload():
-    r = subprocess.run(["systemctl", "reload", "php8.3-fpm"], capture_output=True, text=True)
+    r = subprocess.run(
+        ["systemctl", "reload", "php8.3-fpm"], capture_output=True, text=True
+    )
     if r.returncode != 0:
         raise SystemExit(f"FPM reload failed: {r.stderr}")
     print("  ✓ FPM reloaded")

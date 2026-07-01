@@ -41,6 +41,13 @@ TELEMETRY_DB = Path(
 FUSION_DB = Path(
     os.environ.get("AMOSKYS_FUSION_DB", str(DATA_DIR / "intel" / "fusion.db"))
 )
+# The fleet-rescore TARGET is a Command-Center fleet DB (fleet.db) — SEPARATE from
+# TELEMETRY_DB, which backs the analyzer's own TelemetryStore and expects the full
+# TelemetryStore schema (fleet.db does not have it, e.g. no `is_suspicious`).
+# Defaults to TELEMETRY_DB so single-machine / direct-call usage is unchanged; on a
+# fleet node set AMOSKYS_FLEET_DB=/var/lib/amoskys/fleet.db and keep
+# AMOSKYS_TELEMETRY_DB pointed at a fresh analyzer-owned DB.
+FLEET_DB = Path(os.environ.get("AMOSKYS_FLEET_DB", str(TELEMETRY_DB)))
 
 # Columns the scoring/enrichment pipeline writes onto security_events. fleet.db
 # (authored by command_center) is missing composite_score / risk_score_raw /
@@ -1179,9 +1186,9 @@ def main(run_once: bool = False) -> int:
         if scorer is None:
             logger.error("--once requires a ScoringEngine; none available")
             return 1
-        logger.info("Fleet rescore --once: scoring one batch from %s", TELEMETRY_DB)
+        logger.info("Fleet rescore --once: scoring one batch from %s", FLEET_DB)
         try:
-            n = _rescore_fleet_db(TELEMETRY_DB, scorer, enrichment, fusion)
+            n = _rescore_fleet_db(FLEET_DB, scorer, enrichment, fusion)
             logger.info("Fleet rescore --once complete: %d rows scored", n)
         finally:
             if scorer is not None:
@@ -1229,9 +1236,7 @@ def main(run_once: bool = False) -> int:
             # fleet.db events in place each cycle when AMOSKYS_FLEET_RESCORE is set.
             if _fleet_rescore_enabled and scorer is not None:
                 try:
-                    rescored = _rescore_fleet_db(
-                        TELEMETRY_DB, scorer, enrichment, fusion
-                    )
+                    rescored = _rescore_fleet_db(FLEET_DB, scorer, enrichment, fusion)
                     events_this_cycle += rescored
                 except Exception:
                     logger.error("Fleet rescore failed", exc_info=True)

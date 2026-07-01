@@ -53,10 +53,10 @@ SCORECARD_DIR = ROOT / "data" / "benchmarks"
 
 # ── Verdict enum (MITRE Evaluation standard) ───────────────────────
 class Verdict(Enum):
-    DETECT = "DETECT"        # Probe fired, correct technique, alert raised
+    DETECT = "DETECT"  # Probe fired, correct technique, alert raised
     TELEMETRY = "TELEMETRY"  # Event recorded, queryable, no alert
-    ENRICH = "ENRICH"        # Event recorded with enrichment (geo, ASN, genealogy)
-    MISS = "MISS"            # No evidence
+    ENRICH = "ENRICH"  # Event recorded with enrichment (geo, ASN, genealogy)
+    MISS = "MISS"  # No evidence
 
     @property
     def points(self) -> float:
@@ -71,6 +71,7 @@ class Verdict(Enum):
 @dataclass
 class AttackStep:
     """One step in an attack chain."""
+
     name: str
     mitre_technique: str
     description: str
@@ -83,6 +84,7 @@ class AttackStep:
 @dataclass
 class AttackChain:
     """A complete attack chain with multiple steps."""
+
     name: str
     description: str
     steps: List[AttackStep] = field(default_factory=list)
@@ -99,9 +101,11 @@ class AttackChain:
     def score(self) -> float:
         if not self.steps:
             return 0.0
-        return sum(s.verdict.points for s in self.steps) / (
-            len(self.steps) * Verdict.DETECT.points
-        ) * 100
+        return (
+            sum(s.verdict.points for s in self.steps)
+            / (len(self.steps) * Verdict.DETECT.points)
+            * 100
+        )
 
     @property
     def detection_rate(self) -> float:
@@ -138,8 +142,7 @@ class TelemetryScorer:
         events = self._query(self.db_path, sql, (cutoff,))
         if technique:
             events = [
-                e for e in events
-                if technique in (e.get("mitre_techniques") or "")
+                e for e in events if technique in (e.get("mitre_techniques") or "")
             ]
         return events
 
@@ -318,12 +321,12 @@ class TelemetryScorer:
     }
 
     DNS_TECHNIQUES = {
-        "T1071.004", "T1568.002", "T1572",
+        "T1071.004",
+        "T1568.002",
+        "T1572",
     }
 
-    def check_technique(
-        self, technique: str, hours: int = 1
-    ) -> Tuple[Verdict, str]:
+    def check_technique(self, technique: str, hours: int = 1) -> Tuple[Verdict, str]:
         """
         Check if a MITRE technique was detected across ALL telemetry tables.
 
@@ -371,8 +374,11 @@ class TelemetryScorer:
                 agent = ev.get("collection_agent", "unknown")
                 cat = ev.get("event_category", "unknown")
                 enriched = any(
-                    ev.get(f) for f in [
-                        "geo_country", "asn_name", "threat_intel_match",
+                    ev.get(f)
+                    for f in [
+                        "geo_country",
+                        "asn_name",
+                        "threat_intel_match",
                         "code_signing_status",
                     ]
                 )
@@ -389,7 +395,9 @@ class TelemetryScorer:
                 )
                 keywords = self.PERSISTENCE_TECHNIQUES[technique]
                 for pr in pers:
-                    mech = (pr.get("mechanism") or pr.get("persistence_type") or "").lower()
+                    mech = (
+                        pr.get("mechanism") or pr.get("persistence_type") or ""
+                    ).lower()
                     path = (pr.get("path") or pr.get("entry_path") or "").lower()
                     if any(kw.lower() in mech or kw.lower() in path for kw in keywords):
                         return (
@@ -491,40 +499,88 @@ class TelemetryScorer:
 
 # ── Attack Chain Definitions ───────────────────────────────────────
 
+
 def chain_local_simulation() -> AttackChain:
     """Attack Chain 0: Local simulation via attack_simulation.py."""
     return AttackChain(
         name="Local Malware Simulation",
         description="11 macOS malware families simulated locally",
         steps=[
-            AttackStep("AMOS Stealer — LaunchAgent", "T1543.001",
-                       "LaunchAgent persistence", ["Persistence", "RealtimeSensor"]),
-            AttackStep("AMOS Stealer — Keychain", "T1555.001",
-                       "Keychain credential access", ["InfostealerGuard"]),
-            AttackStep("RustBucket — Temp Exec", "T1204",
-                       "Execute from /tmp", ["Process", "RealtimeSensor"]),
-            AttackStep("RustBucket — Masquerade", "T1036.005",
-                       "Fake system process name", ["Process"]),
-            AttackStep("ToDoSwift — Shell Profile", "T1546.004",
-                       ".zshenv persistence", ["Persistence"]),
-            AttackStep("Backdoor Activator — UUID Agent", "T1543.001",
-                       "UUID-named LaunchAgent evasion", ["Persistence"]),
-            AttackStep("LightSpy — Hidden Files", "T1564.001",
-                       "Hidden surveillance framework", ["Filesystem"]),
-            AttackStep("BeaverTail — DYLD Inject", "T1574.004",
-                       "DYLD_INSERT_LIBRARIES", ["Process"]),
-            AttackStep("SSH Key Injection", "T1098.004",
-                       "Authorized keys manipulation", ["Persistence"]),
-            AttackStep("Cron Persistence", "T1053.003",
-                       "Cron job backdoor", ["Persistence"]),
-            AttackStep("LOLBin Abuse", "T1059.004",
-                       "curl|bash + osascript chain", ["Process"]),
-            AttackStep("Process Masquerade", "T1036.005",
-                       "Fake system binary names", ["Process"]),
-            AttackStep("SUID Escalation", "T1548.001",
-                       "Setuid bit manipulation", ["Process"]),
-            AttackStep("Folder Action Persist", "T1546.015",
-                       "Folder action script", ["Persistence"]),
+            AttackStep(
+                "AMOS Stealer — LaunchAgent",
+                "T1543.001",
+                "LaunchAgent persistence",
+                ["Persistence", "RealtimeSensor"],
+            ),
+            AttackStep(
+                "AMOS Stealer — Keychain",
+                "T1555.001",
+                "Keychain credential access",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "RustBucket — Temp Exec",
+                "T1204",
+                "Execute from /tmp",
+                ["Process", "RealtimeSensor"],
+            ),
+            AttackStep(
+                "RustBucket — Masquerade",
+                "T1036.005",
+                "Fake system process name",
+                ["Process"],
+            ),
+            AttackStep(
+                "ToDoSwift — Shell Profile",
+                "T1546.004",
+                ".zshenv persistence",
+                ["Persistence"],
+            ),
+            AttackStep(
+                "Backdoor Activator — UUID Agent",
+                "T1543.001",
+                "UUID-named LaunchAgent evasion",
+                ["Persistence"],
+            ),
+            AttackStep(
+                "LightSpy — Hidden Files",
+                "T1564.001",
+                "Hidden surveillance framework",
+                ["Filesystem"],
+            ),
+            AttackStep(
+                "BeaverTail — DYLD Inject",
+                "T1574.004",
+                "DYLD_INSERT_LIBRARIES",
+                ["Process"],
+            ),
+            AttackStep(
+                "SSH Key Injection",
+                "T1098.004",
+                "Authorized keys manipulation",
+                ["Persistence"],
+            ),
+            AttackStep(
+                "Cron Persistence", "T1053.003", "Cron job backdoor", ["Persistence"]
+            ),
+            AttackStep(
+                "LOLBin Abuse", "T1059.004", "curl|bash + osascript chain", ["Process"]
+            ),
+            AttackStep(
+                "Process Masquerade",
+                "T1036.005",
+                "Fake system binary names",
+                ["Process"],
+            ),
+            AttackStep(
+                "SUID Escalation", "T1548.001", "Setuid bit manipulation", ["Process"]
+            ),
+            AttackStep(
+                "Folder Action Persist",
+                "T1546.015",
+                "Folder action script",
+                ["Persistence"],
+            ),
         ],
     )
 
@@ -535,18 +591,39 @@ def chain_ssh_bruteforce() -> AttackChain:
         name="SSH Brute Force + Persistence",
         description="Kali → nmap scan → hydra brute → SSH login → LaunchAgent → Keychain → exfil",
         steps=[
-            AttackStep("Port scan", "T1046",
-                       "nmap service scan", ["Network", "NetworkSentinel"]),
-            AttackStep("SSH brute force", "T1110.001",
-                       "hydra password spray", ["Auth"]),
-            AttackStep("SSH login (valid creds)", "T1078",
-                       "Successful auth after failures", ["Auth"]),
-            AttackStep("LaunchAgent drop", "T1543.001",
-                       "Persistence via LaunchAgent plist", ["Persistence", "RealtimeSensor"]),
-            AttackStep("Keychain access", "T1555.001",
-                       "Keychain credential dump", ["InfostealerGuard"]),
-            AttackStep("Data exfiltration", "T1041",
-                       "curl POST to C2", ["Network", "InfostealerGuard"]),
+            AttackStep(
+                "Port scan",
+                "T1046",
+                "nmap service scan",
+                ["Network", "NetworkSentinel"],
+            ),
+            AttackStep(
+                "SSH brute force", "T1110.001", "hydra password spray", ["Auth"]
+            ),
+            AttackStep(
+                "SSH login (valid creds)",
+                "T1078",
+                "Successful auth after failures",
+                ["Auth"],
+            ),
+            AttackStep(
+                "LaunchAgent drop",
+                "T1543.001",
+                "Persistence via LaunchAgent plist",
+                ["Persistence", "RealtimeSensor"],
+            ),
+            AttackStep(
+                "Keychain access",
+                "T1555.001",
+                "Keychain credential dump",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Data exfiltration",
+                "T1041",
+                "curl POST to C2",
+                ["Network", "InfostealerGuard"],
+            ),
         ],
     )
 
@@ -557,20 +634,37 @@ def chain_reverse_shell() -> AttackChain:
         name="Reverse Shell + Discovery",
         description="Script in /tmp → reverse shell → discovery → credential enum → exfil",
         steps=[
-            AttackStep("Script in /tmp", "T1059.004",
-                       "Bash script execution from temp", ["Process", "RealtimeSensor"]),
-            AttackStep("Reverse shell", "T1059.004",
-                       "bash -i >& /dev/tcp/ outbound", ["Network", "Process"]),
-            AttackStep("System discovery", "T1082",
-                       "whoami, sw_vers, ifconfig", ["Process"]),
-            AttackStep("Process discovery", "T1057",
-                       "ps aux enumeration", ["Process"]),
-            AttackStep("Browser credential enum", "T1555.003",
-                       "Login Data / Cookies file access", ["InfostealerGuard"]),
-            AttackStep("Archive staging", "T1560.001",
-                       "zip credential files", ["InfostealerGuard"]),
-            AttackStep("Exfil over netcat", "T1041",
-                       "nc to Kali listener", ["Network"]),
+            AttackStep(
+                "Script in /tmp",
+                "T1059.004",
+                "Bash script execution from temp",
+                ["Process", "RealtimeSensor"],
+            ),
+            AttackStep(
+                "Reverse shell",
+                "T1059.004",
+                "bash -i >& /dev/tcp/ outbound",
+                ["Network", "Process"],
+            ),
+            AttackStep(
+                "System discovery", "T1082", "whoami, sw_vers, ifconfig", ["Process"]
+            ),
+            AttackStep("Process discovery", "T1057", "ps aux enumeration", ["Process"]),
+            AttackStep(
+                "Browser credential enum",
+                "T1555.003",
+                "Login Data / Cookies file access",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Archive staging",
+                "T1560.001",
+                "zip credential files",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Exfil over netcat", "T1041", "nc to Kali listener", ["Network"]
+            ),
         ],
     )
 
@@ -581,12 +675,16 @@ def chain_dns_c2() -> AttackChain:
         name="DNS Tunneling + C2 Beaconing",
         description="DNS tunnel → DGA domains → HTTP beaconing",
         steps=[
-            AttackStep("DNS tunneling", "T1071.004",
-                       "Long DNS labels / TXT floods", ["DNS"]),
-            AttackStep("DGA domains", "T1568.002",
-                       "Random domain generation", ["DNS"]),
-            AttackStep("HTTP C2 beacon", "T1071.001",
-                       "Periodic HTTP callbacks", ["DNS", "Network"]),
+            AttackStep(
+                "DNS tunneling", "T1071.004", "Long DNS labels / TXT floods", ["DNS"]
+            ),
+            AttackStep("DGA domains", "T1568.002", "Random domain generation", ["DNS"]),
+            AttackStep(
+                "HTTP C2 beacon",
+                "T1071.001",
+                "Periodic HTTP callbacks",
+                ["DNS", "Network"],
+            ),
         ],
     )
 
@@ -597,16 +695,24 @@ def chain_privesc() -> AttackChain:
         name="Privilege Escalation + Defense Evasion",
         description="sudo abuse → Gatekeeper disable → hidden shell → timestomp → log erase",
         steps=[
-            AttackStep("Sudo backdoor", "T1548.003",
-                       "sudoers.d backdoor file", ["Persistence"]),
-            AttackStep("Gatekeeper disable", "T1562.001",
-                       "spctl --master-disable", ["Process"]),
-            AttackStep("Hidden shell binary", "T1564.001",
-                       "Hidden file in /tmp", ["Filesystem"]),
-            AttackStep("Timestomp", "T1070.006",
-                       "touch -t to past date", ["Filesystem"]),
-            AttackStep("Log erase attempt", "T1070.002",
-                       "log erase --all", ["Process"]),
+            AttackStep(
+                "Sudo backdoor", "T1548.003", "sudoers.d backdoor file", ["Persistence"]
+            ),
+            AttackStep(
+                "Gatekeeper disable", "T1562.001", "spctl --master-disable", ["Process"]
+            ),
+            AttackStep(
+                "Hidden shell binary",
+                "T1564.001",
+                "Hidden file in /tmp",
+                ["Filesystem"],
+            ),
+            AttackStep(
+                "Timestomp", "T1070.006", "touch -t to past date", ["Filesystem"]
+            ),
+            AttackStep(
+                "Log erase attempt", "T1070.002", "log erase --all", ["Process"]
+            ),
         ],
     )
 
@@ -617,31 +723,61 @@ def chain_amos_full() -> AttackChain:
         name="AMOS Stealer Full Kill Chain",
         description="Download → exec → persist → keychain → browser → wallets → cookies → archive → exfil → cleanup",
         steps=[
-            AttackStep("Download to /tmp", "T1204",
-                       "curl payload from C2", ["Network", "QuarantineGuard"]),
-            AttackStep("Execute from /tmp", "T1059.004",
-                       "Shell script execution", ["Process", "RealtimeSensor"]),
-            AttackStep("LaunchAgent persistence", "T1543.001",
-                       "com.chrome.updater.plist", ["Persistence"]),
-            AttackStep("Keychain dump", "T1555.001",
-                       "security dump-keychain", ["InfostealerGuard"]),
-            AttackStep("Browser credentials", "T1555.003",
-                       "Chrome Login Data copy", ["InfostealerGuard"]),
-            AttackStep("Crypto wallets", "T1005",
-                       "Wallet file enumeration", ["InfostealerGuard"]),
-            AttackStep("Session cookies", "T1539",
-                       "Safari cookie theft", ["InfostealerGuard"]),
-            AttackStep("Archive + compress", "T1560.001",
-                       "tar czf credential archive", ["InfostealerGuard"]),
-            AttackStep("HTTP exfiltration", "T1041",
-                       "curl POST to C2", ["Network"]),
-            AttackStep("File cleanup", "T1070.004",
-                       "rm evidence files", ["Filesystem"]),
+            AttackStep(
+                "Download to /tmp",
+                "T1204",
+                "curl payload from C2",
+                ["Network", "QuarantineGuard"],
+            ),
+            AttackStep(
+                "Execute from /tmp",
+                "T1059.004",
+                "Shell script execution",
+                ["Process", "RealtimeSensor"],
+            ),
+            AttackStep(
+                "LaunchAgent persistence",
+                "T1543.001",
+                "com.chrome.updater.plist",
+                ["Persistence"],
+            ),
+            AttackStep(
+                "Keychain dump",
+                "T1555.001",
+                "security dump-keychain",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Browser credentials",
+                "T1555.003",
+                "Chrome Login Data copy",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Crypto wallets",
+                "T1005",
+                "Wallet file enumeration",
+                ["InfostealerGuard"],
+            ),
+            AttackStep(
+                "Session cookies", "T1539", "Safari cookie theft", ["InfostealerGuard"]
+            ),
+            AttackStep(
+                "Archive + compress",
+                "T1560.001",
+                "tar czf credential archive",
+                ["InfostealerGuard"],
+            ),
+            AttackStep("HTTP exfiltration", "T1041", "curl POST to C2", ["Network"]),
+            AttackStep(
+                "File cleanup", "T1070.004", "rm evidence files", ["Filesystem"]
+            ),
         ],
     )
 
 
 # ── Atomic Red Team Runner ─────────────────────────────────────────
+
 
 def get_macos_art_techniques() -> List[str]:
     """Find all ART techniques that have macOS atomics."""
@@ -675,18 +811,19 @@ def run_art_technique_local(technique: str) -> Tuple[bool, str]:
         return False, f"No atomics found for {technique}"
 
     # Try PowerShell Invoke-AtomicTest first
-    pwsh = subprocess.run(
-        ["which", "pwsh"], capture_output=True, text=True
-    )
+    pwsh = subprocess.run(["which", "pwsh"], capture_output=True, text=True)
     if pwsh.returncode == 0:
         result = subprocess.run(
             [
-                "pwsh", "-Command",
+                "pwsh",
+                "-Command",
                 f"Import-Module invoke-atomicredteam -Force; "
                 f"Invoke-AtomicTest {technique} -ShowDetailsBrief -Confirm:$false "
                 f"-TimeoutSeconds 30",
             ],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             return True, result.stdout[:500]
@@ -699,6 +836,7 @@ def run_art_technique_local(technique: str) -> Tuple[bool, str]:
 
     try:
         import yaml as pyyaml
+
         with open(yaml_file) as f:
             spec = pyyaml.safe_load(f)
     except ImportError:
@@ -731,13 +869,13 @@ def run_art_technique_local(technique: str) -> Tuple[bool, str]:
         try:
             result = subprocess.run(
                 ["bash", "-c", command],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
                 env={**os.environ, "HOME": os.path.expanduser("~")},
             )
             ran_any = True
-            output_parts.append(
-                f"[{test.get('name', '?')}] exit={result.returncode}"
-            )
+            output_parts.append(f"[{test.get('name', '?')}] exit={result.returncode}")
         except subprocess.TimeoutExpired:
             output_parts.append(f"[{test.get('name', '?')}] TIMEOUT")
         except Exception as e:
@@ -751,17 +889,20 @@ def run_art_technique_local(technique: str) -> Tuple[bool, str]:
 def _run_art_bash_fallback(technique: str, yaml_content: str) -> Tuple[bool, str]:
     """Extract and run bash commands from ART YAML without pyyaml."""
     import re
+
     # Find command blocks after "name: bash" or "name: sh"
     blocks = re.findall(
-        r'supported_platforms:\s*\n\s*-\s*macos.*?command:\s*\|\s*\n(.*?)(?=\n\s*\w+:|$)',
-        yaml_content, re.DOTALL | re.IGNORECASE,
+        r"supported_platforms:\s*\n\s*-\s*macos.*?command:\s*\|\s*\n(.*?)(?=\n\s*\w+:|$)",
+        yaml_content,
+        re.DOTALL | re.IGNORECASE,
     )
     if not blocks:
         return False, "No macOS bash commands found in YAML"
 
     for block in blocks[:1]:  # Run first matching block only
         command = "\n".join(
-            line.lstrip() for line in block.strip().split("\n")
+            line.lstrip()
+            for line in block.strip().split("\n")
             if line.strip() and not line.strip().startswith("#")
         )
         if not command:
@@ -769,7 +910,9 @@ def _run_art_bash_fallback(technique: str, yaml_content: str) -> Tuple[bool, str
         try:
             result = subprocess.run(
                 ["bash", "-c", command],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             return True, f"exit={result.returncode} stdout={result.stdout[:200]}"
         except Exception as e:
@@ -789,9 +932,13 @@ def run_art_from_kali(
 
     # For network-based attacks, run from Kali directly
     ssh_cmd = [
-        "ssh", "-i", str(KALI_KEY),
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=10",
+        "ssh",
+        "-i",
+        str(KALI_KEY),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
         f"ghostops@{kali_host}",
     ]
 
@@ -803,7 +950,9 @@ def run_art_from_kali(
     try:
         result = subprocess.run(
             ssh_cmd + [kali_commands],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         return (
             result.returncode == 0,
@@ -815,9 +964,7 @@ def run_art_from_kali(
         return False, str(e)
 
 
-def _get_kali_attack_commands(
-    technique: str, target: str, user: str
-) -> Optional[str]:
+def _get_kali_attack_commands(technique: str, target: str, user: str) -> Optional[str]:
     """Return Kali bash commands for a given MITRE technique."""
     commands = {
         # Reconnaissance
@@ -858,12 +1005,15 @@ def _get_kali_attack_commands(
 
 # ── Pipeline Runner ────────────────────────────────────────────────
 
+
 def run_collection_pipeline():
     """Run the full collect → enrich → fuse pipeline."""
     log.info("Running collection pipeline...")
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "collect_and_store.py")],
-        capture_output=True, text=True, timeout=300,
+        capture_output=True,
+        text=True,
+        timeout=300,
         env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
     )
     if result.returncode != 0:
@@ -881,14 +1031,24 @@ def run_attack_simulation():
     log.info("Planting attack artifacts...")
     try:
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "attack_simulation.py"), "--no-cleanup"],
-            capture_output=True, text=True, timeout=300,
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "attack_simulation.py"),
+                "--no-cleanup",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
             env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
         )
         if result.returncode != 0:
             log.warning("Attack simulation had issues: %s", result.stderr[-300:])
         for line in result.stdout.split("\n"):
-            if "planted" in line.lower() or "artifact" in line.lower() or "attack" in line.lower():
+            if (
+                "planted" in line.lower()
+                or "artifact" in line.lower()
+                or "attack" in line.lower()
+            ):
                 log.info("  %s", line.strip())
     except subprocess.TimeoutExpired:
         log.warning("Attack simulation timed out — artifacts may be partially planted")
@@ -896,6 +1056,7 @@ def run_attack_simulation():
 
 
 # ── Scorecard Renderer ─────────────────────────────────────────────
+
 
 def render_scorecard(
     chains: List[AttackChain],
@@ -974,24 +1135,26 @@ def render_scorecard(
     detection_rate = (total_detected / total_steps * 100) if total_steps else 0
     weighted_score = (total_points / max_points * 100) if max_points else 0
 
-    lines.extend([
-        "=" * 70,
-        "  OVERALL RESULTS",
-        "=" * 70,
-        f"  Total Steps:    {total_steps}",
-        f"  Detected:       {total_detected} ({detection_rate:.1f}%)",
-        f"  Weighted Score: {weighted_score:.1f}%",
-        "",
-        f"  Detect:    {verdict_counts[Verdict.DETECT]:>3} ({verdict_counts[Verdict.DETECT]/max(total_steps,1)*100:.1f}%)",
-        f"  Telemetry: {verdict_counts[Verdict.TELEMETRY]:>3} ({verdict_counts[Verdict.TELEMETRY]/max(total_steps,1)*100:.1f}%)",
-        f"  Enrich:    {verdict_counts[Verdict.ENRICH]:>3} ({verdict_counts[Verdict.ENRICH]/max(total_steps,1)*100:.1f}%)",
-        f"  Miss:      {verdict_counts[Verdict.MISS]:>3} ({verdict_counts[Verdict.MISS]/max(total_steps,1)*100:.1f}%)",
-        "",
-        "  COMPARISON:",
-        "  CrowdStrike Falcon (MITRE Eval R5):  99.3%",
-        f"  AMOSKYS v0.9.0-beta.1:               {detection_rate:.1f}%",
-        "=" * 70,
-    ])
+    lines.extend(
+        [
+            "=" * 70,
+            "  OVERALL RESULTS",
+            "=" * 70,
+            f"  Total Steps:    {total_steps}",
+            f"  Detected:       {total_detected} ({detection_rate:.1f}%)",
+            f"  Weighted Score: {weighted_score:.1f}%",
+            "",
+            f"  Detect:    {verdict_counts[Verdict.DETECT]:>3} ({verdict_counts[Verdict.DETECT]/max(total_steps,1)*100:.1f}%)",
+            f"  Telemetry: {verdict_counts[Verdict.TELEMETRY]:>3} ({verdict_counts[Verdict.TELEMETRY]/max(total_steps,1)*100:.1f}%)",
+            f"  Enrich:    {verdict_counts[Verdict.ENRICH]:>3} ({verdict_counts[Verdict.ENRICH]/max(total_steps,1)*100:.1f}%)",
+            f"  Miss:      {verdict_counts[Verdict.MISS]:>3} ({verdict_counts[Verdict.MISS]/max(total_steps,1)*100:.1f}%)",
+            "",
+            "  COMPARISON:",
+            "  CrowdStrike Falcon (MITRE Eval R5):  99.3%",
+            f"  AMOSKYS v0.9.0-beta.1:               {detection_rate:.1f}%",
+            "=" * 70,
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -1000,7 +1163,9 @@ def _get_macos_version() -> str:
     try:
         result = subprocess.run(
             ["sw_vers", "-productVersion"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout.strip()
     except Exception:
@@ -1008,6 +1173,7 @@ def _get_macos_version() -> str:
 
 
 # ── Main Benchmark Modes ───────────────────────────────────────────
+
 
 def benchmark_local(scorer: TelemetryScorer) -> Tuple[List[AttackChain], dict]:
     """Run local attack simulation and score."""
@@ -1049,15 +1215,24 @@ def benchmark_art(
     if not techniques:
         techniques = get_macos_art_techniques()
         if not techniques:
-            log.error("No ART techniques found. Is atomic-red-team installed at %s?", ART_PATH)
+            log.error(
+                "No ART techniques found. Is atomic-red-team installed at %s?", ART_PATH
+            )
             return [], {}
         log.info("Found %d macOS ART techniques", len(techniques))
 
     # Priority techniques (AMOSKYS core detection)
     priority = [
-        "T1543.001", "T1555.001", "T1555.003", "T1059.004",
-        "T1053.003", "T1070.002", "T1548.001", "T1564.001",
-        "T1036", "T1546.004",
+        "T1543.001",
+        "T1555.001",
+        "T1555.003",
+        "T1059.004",
+        "T1053.003",
+        "T1070.002",
+        "T1548.001",
+        "T1564.001",
+        "T1036",
+        "T1546.004",
     ]
 
     # Filter to priority + requested
@@ -1072,9 +1247,7 @@ def benchmark_art(
         log.info("Running ART %s...", tech)
 
         if from_kali:
-            ran, output = run_art_from_kali(
-                tech, kali_host, "192.168.237.1"
-            )
+            ran, output = run_art_from_kali(tech, kali_host, "192.168.237.1")
         else:
             ran, output = run_art_technique_local(tech)
 
@@ -1111,11 +1284,19 @@ def benchmark_kali(
     # Verify Kali connectivity
     result = subprocess.run(
         [
-            "ssh", "-i", str(KALI_KEY),
-            "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-            f"ghostops@{kali_host}", "echo OK",
+            "ssh",
+            "-i",
+            str(KALI_KEY),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=5",
+            f"ghostops@{kali_host}",
+            "echo OK",
         ],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     if result.returncode != 0:
         log.error("Cannot reach Kali at %s: %s", kali_host, result.stderr)
@@ -1137,12 +1318,17 @@ def benchmark_kali(
             try:
                 subprocess.run(
                     [
-                        "ssh", "-i", str(KALI_KEY),
-                        "-o", "BatchMode=yes",
+                        "ssh",
+                        "-i",
+                        str(KALI_KEY),
+                        "-o",
+                        "BatchMode=yes",
                         f"ghostops@{kali_host}",
                         kali_cmd,
                     ],
-                    capture_output=True, text=True, timeout=60,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                 )
             except subprocess.TimeoutExpired:
                 pass  # Expected for brute force
@@ -1160,12 +1346,17 @@ def benchmark_kali(
             try:
                 subprocess.run(
                     [
-                        "ssh", "-i", str(KALI_KEY),
-                        "-o", "BatchMode=yes",
+                        "ssh",
+                        "-i",
+                        str(KALI_KEY),
+                        "-o",
+                        "BatchMode=yes",
                         f"ghostops@{kali_host}",
                         kali_cmd,
                     ],
-                    capture_output=True, text=True, timeout=60,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                 )
             except subprocess.TimeoutExpired:
                 pass
@@ -1219,6 +1410,7 @@ def benchmark_score_only(scorer: TelemetryScorer) -> Tuple[List[AttackChain], di
 
 # ── Entry Point ────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="AMOSKYS Adversary Benchmark — MITRE ATT&CK Scorer",
@@ -1239,27 +1431,34 @@ Examples:
         help="Benchmark mode",
     )
     parser.add_argument(
-        "--techniques", nargs="+", default=None,
+        "--techniques",
+        nargs="+",
+        default=None,
         help="Specific MITRE techniques for ART mode",
     )
     parser.add_argument(
-        "--kali-host", default="192.168.237.132",
+        "--kali-host",
+        default="192.168.237.132",
         help="Kali Linux IP address",
     )
     parser.add_argument(
-        "--mac-target", default="192.168.237.1",
+        "--mac-target",
+        default="192.168.237.1",
         help="Mac target IP (from Kali's perspective)",
     )
     parser.add_argument(
-        "--clear", action="store_true",
+        "--clear",
+        action="store_true",
         help="Clear telemetry DB before running",
     )
     parser.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="Save scorecard to file (default: data/benchmarks/)",
     )
     parser.add_argument(
-        "--json", action="store_true",
+        "--json",
+        action="store_true",
         help="Also output JSON scorecard",
     )
     args = parser.parse_args()
@@ -1271,7 +1470,8 @@ Examples:
         log.info("Clearing telemetry database...")
         subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "collect_and_store.py"), "--clear"],
-            capture_output=True, timeout=120,
+            capture_output=True,
+            timeout=120,
             env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
         )
 
@@ -1340,15 +1540,15 @@ Examples:
                 }
                 for c in all_chains
             ],
-            "art_results": {
-                k: {"verdict": v.name, "evidence": e}
-                for k, (v, e) in all_art.items()
-            } if all_art else None,
+            "art_results": (
+                {k: {"verdict": v.name, "evidence": e} for k, (v, e) in all_art.items()}
+                if all_art
+                else None
+            ),
             "summary": {
                 "total_steps": sum(c.total for c in all_chains) + len(all_art),
-                "detected": sum(c.detected for c in all_chains) + sum(
-                    1 for v, _ in all_art.values() if v != Verdict.MISS
-                ),
+                "detected": sum(c.detected for c in all_chains)
+                + sum(1 for v, _ in all_art.values() if v != Verdict.MISS),
             },
         }
         json_path = output_path.replace(".txt", ".json")

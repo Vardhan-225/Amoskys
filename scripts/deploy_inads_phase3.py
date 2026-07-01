@@ -56,15 +56,19 @@ try:
         FilePathCluster,
         ClusterScore,
     )
+
     print("  ✓ inads_engine.py imports OK")
     print(f"    Classes: INADSEngine, INADSResult, CalibratedFusion")
-    print(f"    Clusters: ProcessTree, NetworkSequence, KillChain, SystemAnomaly, FilePath")
+    print(
+        f"    Clusters: ProcessTree, NetworkSequence, KillChain, SystemAnomaly, FilePath"
+    )
 except Exception as e:
     print(f"  ✗ IMPORT FAILED: {e}")
     sys.exit(1)
 
 try:
     from amoskys.intel.fusion_engine import FusionEngine
+
     print("  ✓ fusion_engine.py imports OK (with INADS integration)")
 except Exception as e:
     print(f"  ✗ FusionEngine import FAILED: {e}")
@@ -74,6 +78,7 @@ except Exception as e:
 section("Dependencies")
 try:
     import numpy as np
+
     print(f"  numpy: {np.__version__}")
 except ImportError:
     print("  ✗ numpy NOT FOUND — install with: pip install numpy")
@@ -81,6 +86,7 @@ except ImportError:
 
 try:
     import sklearn
+
     print(f"  scikit-learn: {sklearn.__version__}")
 except ImportError:
     print("  ✗ scikit-learn NOT FOUND — install with: pip install scikit-learn")
@@ -127,41 +133,53 @@ for field_name, condition in mandate_fields.items():
 
 # Check observation data richness
 section("Observation Data Richness")
-rich_obs = conn.execute("""
+rich_obs = conn.execute(
+    """
     SELECT COUNT(*) FROM observation_events
     WHERE raw_attributes_json IS NOT NULL
     AND raw_attributes_json != '{}'
     AND LENGTH(raw_attributes_json) > 10
-""").fetchone()[0]
-print(f"  Rich observations: {rich_obs:,} / {obs_count:,} ({rich_obs / max(obs_count, 1) * 100:.0f}%)")
+"""
+).fetchone()[0]
+print(
+    f"  Rich observations: {rich_obs:,} / {obs_count:,} ({rich_obs / max(obs_count, 1) * 100:.0f}%)"
+)
 
 # Sample observation domains
-domains = conn.execute("""
+domains = conn.execute(
+    """
     SELECT domain, COUNT(*) as cnt
     FROM observation_events
     GROUP BY domain
     ORDER BY cnt DESC
     LIMIT 10
-""").fetchall()
+"""
+).fetchall()
 print(f"  Domains: {', '.join(f'{d}={c:,}' for d, c in domains)}")
 
 # Check for process/network data in observations
-proc_obs = conn.execute("""
+proc_obs = conn.execute(
+    """
     SELECT COUNT(*) FROM observation_events
     WHERE raw_attributes_json LIKE '%process_name%'
     OR raw_attributes_json LIKE '%exe%'
     OR raw_attributes_json LIKE '%pid%'
-""").fetchone()[0]
-net_obs = conn.execute("""
+"""
+).fetchone()[0]
+net_obs = conn.execute(
+    """
     SELECT COUNT(*) FROM observation_events
     WHERE raw_attributes_json LIKE '%remote_ip%'
     OR raw_attributes_json LIKE '%dst_ip%'
-""").fetchone()[0]
-file_obs = conn.execute("""
+"""
+).fetchone()[0]
+file_obs = conn.execute(
+    """
     SELECT COUNT(*) FROM observation_events
     WHERE raw_attributes_json LIKE '%path%'
     OR raw_attributes_json LIKE '%file_path%'
-""").fetchone()[0]
+"""
+).fetchone()[0]
 print(f"  Process-bearing obs: {proc_obs:,}")
 print(f"  Network-bearing obs: {net_obs:,}")
 print(f"  File/Path-bearing obs: {file_obs:,}")
@@ -188,7 +206,13 @@ print(f"  Training rows: {metrics.get('total_training_rows', 0):,}")
 print(f"  Clusters trained: {metrics.get('clusters_trained', 0)}/5")
 
 section("Per-Cluster Results")
-cluster_names = ["process_tree", "network_seq", "kill_chain", "system_anomaly", "file_path"]
+cluster_names = [
+    "process_tree",
+    "network_seq",
+    "kill_chain",
+    "system_anomaly",
+    "file_path",
+]
 for name in cluster_names:
     cm = metrics.get(name, {})
     status = cm.get("status", "missing")
@@ -238,9 +262,13 @@ for name, cs in sorted(
     key=lambda x: x[1].calibrated_score,
     reverse=True,
 ):
-    bar = "█" * int(cs.calibrated_score * 20) + "░" * (20 - int(cs.calibrated_score * 20))
-    print(f"  {name:18s} [{bar}] {cs.calibrated_score:.3f} "
-          f"(conf={cs.confidence:.2f}, features={cs.features_used})")
+    bar = "█" * int(cs.calibrated_score * 20) + "░" * (
+        20 - int(cs.calibrated_score * 20)
+    )
+    print(
+        f"  {name:18s} [{bar}] {cs.calibrated_score:.3f} "
+        f"(conf={cs.confidence:.2f}, features={cs.features_used})"
+    )
     if cs.contributing_fields:
         print(f"    → top fields: {', '.join(cs.contributing_fields[:4])}")
 
@@ -257,11 +285,13 @@ banner("Step 5: Score Individual Security Events (Top 10 by Risk)")
 
 conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
-rows = conn.execute("""
+rows = conn.execute(
+    """
     SELECT * FROM security_events
     ORDER BY risk_score DESC, timestamp_ns DESC
     LIMIT 10
-""").fetchall()
+"""
+).fetchall()
 conn.close()
 
 print(f"  Scoring top {len(rows)} security events through INADS...\n")
@@ -273,8 +303,18 @@ for i, row in enumerate(rows):
     if isinstance(indicators, str):
         try:
             ind = json.loads(indicators)
-            for key in ["pid", "process_name", "exe", "remote_ip", "username",
-                        "cmdline", "ppid", "parent_name", "path", "sha256"]:
+            for key in [
+                "pid",
+                "process_name",
+                "exe",
+                "remote_ip",
+                "username",
+                "cmdline",
+                "ppid",
+                "parent_name",
+                "path",
+                "sha256",
+            ]:
                 if key in ind and not d.get(key):
                     d[key] = ind[key]
         except (json.JSONDecodeError, TypeError):
@@ -288,7 +328,11 @@ for i, row in enumerate(rows):
     desc = (d.get("description", "") or "")[:60]
 
     level_color = {
-        "CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢", "BENIGN": "⚪"
+        "CRITICAL": "🔴",
+        "HIGH": "🟠",
+        "MEDIUM": "🟡",
+        "LOW": "🟢",
+        "BENIGN": "⚪",
     }
     icon = level_color.get(r.threat_level, "⚪")
 
@@ -329,6 +373,7 @@ try:
 except Exception as e:
     print(f"  ✗ FusionEngine integration failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 
@@ -341,7 +386,8 @@ banner("INADS Phase 3 Deployment Summary")
 trained_count = metrics.get("clusters_trained", 0)
 total_rows = metrics.get("total_training_rows", 0)
 
-print(f"""
+print(
+    f"""
   Engine Status:     {'✓ OPERATIONAL' if trained_count >= 3 else '⚠ PARTIAL' if trained_count > 0 else '✗ FAILED'}
   Clusters Trained:  {trained_count}/5
   Training Data:     {total_rows:,} rows ({sec_count:,} security + {obs_count:,} observations)
@@ -367,21 +413,30 @@ print(f"""
                               └─────┬─────┘
                                     │
                               Incidents + DeviceRiskSnapshot
-""")
+"""
+)
 
 if trained_count < 5:
-    skipped = [n for n in cluster_names if metrics.get(n, {}).get("status") != "trained"]
+    skipped = [
+        n for n in cluster_names if metrics.get(n, {}).get("status") != "trained"
+    ]
     print(f"  ⚠ Skipped clusters: {', '.join(skipped)}")
     print(f"    This is expected if some data types are sparse.")
-    print(f"    INADS operates with available clusters — no blind spots, just fewer lenses.")
+    print(
+        f"    INADS operates with available clusters — no blind spots, just fewer lenses."
+    )
 
 if result.threat_level in ("HIGH", "CRITICAL"):
     print(f"\n  🚨 ACTIVE THREAT DETECTED")
-    print(f"     INADS score {result.inads_score:.3f} indicates {result.threat_level} threat")
+    print(
+        f"     INADS score {result.inads_score:.3f} indicates {result.threat_level} threat"
+    )
     print(f"     Kill chain at {result.kill_chain_stage or 'unknown'} stage")
     print(f"     Dominant signal from: {result.dominant_cluster}")
     print(f"     → FusionEngine will generate INADS_ML_DETECTION incident on next eval")
 
 print(f"\n  Metrics saved to: data/intel/models/inads/inads_metrics.json")
-print(f"  Run `PYTHONPATH=src python3 -m amoskys.intel.inads_engine --score-device {hostname}`")
+print(
+    f"  Run `PYTHONPATH=src python3 -m amoskys.intel.inads_engine --score-device {hostname}`"
+)
 print(f"  to re-score at any time.")

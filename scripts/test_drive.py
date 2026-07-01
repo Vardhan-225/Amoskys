@@ -171,7 +171,10 @@ def lap_preflight(results: DriveResults) -> bool:
     status("GeoIP (maxminddb + GeoLite2-City.mmdb)", geo.available)
     if geo.available:
         r = geo.lookup("77.88.55.77")
-        status(f"  Test: 77.88.55.77 → {r.get('country', '?')}/{r.get('city', '?')}", r.get("country") == "RU")
+        status(
+            f"  Test: 77.88.55.77 → {r.get('country', '?')}/{r.get('city', '?')}",
+            r.get("country") == "RU",
+        )
 
     asn = ASNEnricher()
     results.enrichment_asn = asn.available
@@ -216,9 +219,14 @@ def lap_preflight(results: DriveResults) -> bool:
     cert_path = Path("certs/agent.ed25519")
     status("Ed25519 signing key", cert_path.exists())
 
-    all_ok = results.subsystem_imports == results.subsystem_total and results.enrichment_geoip
-    print(f"\n  {'🏁' if all_ok else '⚠️ '} Preflight: {results.subsystem_imports}/{results.subsystem_total} subsystems, "
-          f"enrichment {'FULL' if results.enrichment_geoip else 'DEGRADED'}")
+    all_ok = (
+        results.subsystem_imports == results.subsystem_total
+        and results.enrichment_geoip
+    )
+    print(
+        f"\n  {'🏁' if all_ok else '⚠️ '} Preflight: {results.subsystem_imports}/{results.subsystem_total} subsystems, "
+        f"enrichment {'FULL' if results.enrichment_geoip else 'DEGRADED'}"
+    )
     return all_ok
 
 
@@ -234,7 +242,9 @@ def lap_baseline(results: DriveResults) -> bool:
     t0 = time.time()
     proc = subprocess.run(
         [sys.executable, "scripts/collect_and_store.py"],
-        capture_output=True, text=True, timeout=360,
+        capture_output=True,
+        text=True,
+        timeout=360,
         env={**os.environ, "PYTHONPATH": str(PROJECT_DIR / "src")},
     )
     elapsed = time.time() - t0
@@ -267,9 +277,13 @@ def lap_baseline(results: DriveResults) -> bool:
     ).fetchall()
     results.baseline_high_risk = sum(r[1] for r in high_risk)
 
-    section(f"High-risk events on idle machine (risk >= 0.7): {results.baseline_high_risk}")
+    section(
+        f"High-risk events on idle machine (risk >= 0.7): {results.baseline_high_risk}"
+    )
     for cat, cnt, avg_risk in high_risk[:10]:
-        results.baseline_false_positives.append({"category": cat, "count": cnt, "avg_risk": round(avg_risk, 3)})
+        results.baseline_false_positives.append(
+            {"category": cat, "count": cnt, "avg_risk": round(avg_risk, 3)}
+        )
         color = RED if cnt > 10 else YELLOW if cnt > 3 else DIM
         print(f"    {color}{cat}: {cnt} events (avg risk {avg_risk:.3f}){RESET}")
 
@@ -278,9 +292,13 @@ def lap_baseline(results: DriveResults) -> bool:
         "SELECT COUNT(*) FROM security_events "
         "WHERE timestamp_dt > datetime('now', '-3 minutes') AND training_exclude = 1"
     ).fetchone()[0]
-    results.baseline_self_noise_pct = round(self_noise / total * 100, 1) if total > 0 else 0
-    status(f"Self-noise (AMOSKYS detecting itself): {self_noise}/{total} ({results.baseline_self_noise_pct}%)",
-           results.baseline_self_noise_pct < 10)
+    results.baseline_self_noise_pct = (
+        round(self_noise / total * 100, 1) if total > 0 else 0
+    )
+    status(
+        f"Self-noise (AMOSKYS detecting itself): {self_noise}/{total} ({results.baseline_self_noise_pct}%)",
+        results.baseline_self_noise_pct < 10,
+    )
 
     # Geometric scoring
     has_geo = cur.execute(
@@ -291,19 +309,24 @@ def lap_baseline(results: DriveResults) -> bool:
         "SELECT COUNT(*) FROM security_events "
         "WHERE timestamp_dt > datetime('now', '-3 minutes') AND remote_ip IS NOT NULL AND remote_ip != ''"
     ).fetchone()[0]
-    results.baseline_geo_scoring_pct = round(has_geo / has_remote_ip * 100, 1) if has_remote_ip > 0 else 0
-    status(f"GeoIP scoring: {has_geo}/{has_remote_ip} network events enriched ({results.baseline_geo_scoring_pct}%)",
-           results.baseline_geo_scoring_pct > 50 or has_remote_ip == 0)
+    results.baseline_geo_scoring_pct = (
+        round(has_geo / has_remote_ip * 100, 1) if has_remote_ip > 0 else 0
+    )
+    status(
+        f"GeoIP scoring: {has_geo}/{has_remote_ip} network events enriched ({results.baseline_geo_scoring_pct}%)",
+        results.baseline_geo_scoring_pct > 50 or has_remote_ip == 0,
+    )
 
     # Quality distribution
     section("Event Quality Distribution")
     for qs in ["real", "valid", "degraded"]:
         cnt = cur.execute(
             f"SELECT COUNT(*) FROM security_events "
-            f"WHERE timestamp_dt > datetime('now', '-3 minutes') AND quality_state = ?", (qs,)
+            f"WHERE timestamp_dt > datetime('now', '-3 minutes') AND quality_state = ?",
+            (qs,),
         ).fetchone()[0]
         pct = round(cnt / total * 100, 1) if total > 0 else 0
-        ok = (qs != "degraded" or pct < 30)
+        ok = qs != "degraded" or pct < 30
         status(f"{qs}: {cnt} ({pct}%)", ok)
 
     # Fusion rules
@@ -324,9 +347,11 @@ def lap_baseline(results: DriveResults) -> bool:
     db.close()
 
     idle_ok = results.baseline_high_risk < 20
-    print(f"\n  {'🏁' if idle_ok else '⚠️ '} Baseline: {results.baseline_events} events, "
-          f"{results.baseline_high_risk} high-risk (false positives), "
-          f"{results.baseline_self_noise_pct}% self-noise")
+    print(
+        f"\n  {'🏁' if idle_ok else '⚠️ '} Baseline: {results.baseline_events} events, "
+        f"{results.baseline_high_risk} high-risk (false positives), "
+        f"{results.baseline_self_noise_pct}% self-noise"
+    )
     return idle_ok
 
 
@@ -342,14 +367,14 @@ ATTACK_TECHNIQUES = [
         "name": "LaunchAgent Implant",
         "setup": [
             "mkdir -p ~/Library/LaunchAgents",
-            'cat > /tmp/com.amoskys.testdrive.plist << \'PLIST\'\n'
+            "cat > /tmp/com.amoskys.testdrive.plist << 'PLIST'\n"
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
             '<plist version="1.0"><dict>\n'
-            '<key>Label</key><string>com.amoskys.testdrive</string>\n'
-            '<key>ProgramArguments</key><array><string>/usr/bin/true</string></array>\n'
-            '<key>RunAtLoad</key><false/>\n'
-            '</dict></plist>\nPLIST',
+            "<key>Label</key><string>com.amoskys.testdrive</string>\n"
+            "<key>ProgramArguments</key><array><string>/usr/bin/true</string></array>\n"
+            "<key>RunAtLoad</key><false/>\n"
+            "</dict></plist>\nPLIST",
             "cp /tmp/com.amoskys.testdrive.plist ~/Library/LaunchAgents/com.amoskys.testdrive.plist",
         ],
         "cleanup": [
@@ -493,9 +518,7 @@ ATTACK_TECHNIQUES = [
 def _run_cmd(cmd: str) -> tuple[bool, str]:
     """Run a shell command, return (success, output)."""
     try:
-        r = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=15
-        )
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
         return r.returncode == 0, r.stdout + r.stderr
     except Exception as e:
         return False, str(e)
@@ -540,7 +563,9 @@ def lap_attack(results: DriveResults) -> bool:
         t0 = time.time()
         proc = subprocess.run(
             [sys.executable, "scripts/collect_and_store.py"],
-            capture_output=True, text=True, timeout=360,
+            capture_output=True,
+            text=True,
+            timeout=360,
             env={**os.environ, "PYTHONPATH": str(PROJECT_DIR / "src")},
         )
         collect_time = time.time() - t0
@@ -559,21 +584,22 @@ def lap_attack(results: DriveResults) -> bool:
             "SELECT id, event_category, risk_score, confidence, quality_state, "
             "collection_agent, probe_name, geometric_score, process_name, remote_ip "
             "FROM security_events WHERE id > ? AND event_category LIKE ?",
-            (before_id, f"%{tech['expected_category']}%")
+            (before_id, f"%{tech['expected_category']}%"),
         ).fetchall()
 
         # Also check broader: any event from expected agent
         agent_events = cur.execute(
             "SELECT id, event_category, risk_score FROM security_events "
             "WHERE id > ? AND collection_agent = ?",
-            (before_id, tech["expected_agent"])
+            (before_id, tech["expected_agent"]),
         ).fetchall()
 
         # Check fusion
         fusion_db = sqlite3.connect("data/intel/fusion.db")
         fusion_incidents = fusion_db.execute(
             "SELECT rule_name, severity, summary FROM incidents "
-            "WHERE created_at > ?", (before_time,)
+            "WHERE created_at > ?",
+            (before_time,),
         ).fetchall()
         fusion_db.close()
 
@@ -616,12 +642,16 @@ def lap_attack(results: DriveResults) -> bool:
             ar.verdict = "MISS"
             icon = f"{RED}MISS{RESET}"
 
-        print(f"    Result: {icon} | events={ar.event_count} | risk={ar.max_risk_score:.2f} | "
-              f"quality={ar.quality_state} | fusion={'YES' if ar.fusion_rule_fired else 'no'}")
+        print(
+            f"    Result: {icon} | events={ar.event_count} | risk={ar.max_risk_score:.2f} | "
+            f"quality={ar.quality_state} | fusion={'YES' if ar.fusion_rule_fired else 'no'}"
+        )
         if agent_events and not matching:
             cats = set(e[1] for e in agent_events)
-            print(f"    {DIM}Agent '{tech['expected_agent']}' fired {len(agent_events)} events "
-                  f"but none matched '{tech['expected_category']}': {cats}{RESET}")
+            print(
+                f"    {DIM}Agent '{tech['expected_agent']}' fired {len(agent_events)} events "
+                f"but none matched '{tech['expected_category']}': {cats}{RESET}"
+            )
 
         attack_results.append(ar)
         db.close()
@@ -638,54 +668,86 @@ def lap_attack(results: DriveResults) -> bool:
 
 
 def lap_scorecard(results: DriveResults):
-    banner("SCORECARD — Test Drive Results", GREEN if results.detection_rate >= 0.7 else RED)
+    banner(
+        "SCORECARD — Test Drive Results",
+        GREEN if results.detection_rate >= 0.7 else RED,
+    )
 
     results.total_techniques = len(results.attacks)
     results.detected = sum(1 for a in results.attacks if a.verdict == "DETECT")
-    results.telemetry_only = sum(1 for a in results.attacks if a.verdict in ("TELEMETRY", "PARTIAL"))
+    results.telemetry_only = sum(
+        1 for a in results.attacks if a.verdict in ("TELEMETRY", "PARTIAL")
+    )
     results.missed = sum(1 for a in results.attacks if a.verdict == "MISS")
     results.detection_rate = (
         (results.detected + results.telemetry_only) / results.total_techniques
-        if results.total_techniques > 0 else 0
+        if results.total_techniques > 0
+        else 0
     )
 
     # Preflight summary
     section("Organism Health")
-    status(f"Subsystems: {results.subsystem_imports}/{results.subsystem_total}", results.subsystem_imports == results.subsystem_total)
+    status(
+        f"Subsystems: {results.subsystem_imports}/{results.subsystem_total}",
+        results.subsystem_imports == results.subsystem_total,
+    )
     status(f"GeoIP enrichment", results.enrichment_geoip)
     status(f"ASN enrichment", results.enrichment_asn)
 
     # Baseline summary
     section("Idle Noise Floor")
     status(f"Events on idle: {results.baseline_events}", True)
-    status(f"False positives (risk >= 0.7): {results.baseline_high_risk}",
-           results.baseline_high_risk < 20)
-    status(f"Self-noise: {results.baseline_self_noise_pct}%",
-           results.baseline_self_noise_pct < 10)
+    status(
+        f"False positives (risk >= 0.7): {results.baseline_high_risk}",
+        results.baseline_high_risk < 20,
+    )
+    status(
+        f"Self-noise: {results.baseline_self_noise_pct}%",
+        results.baseline_self_noise_pct < 10,
+    )
 
     # Attack matrix
     section("Detection Matrix")
     print()
-    print(f"    {'Technique':<35} {'MITRE':<12} {'Verdict':<12} {'Risk':>6} {'Quality':<10} {'Fusion'}")
+    print(
+        f"    {'Technique':<35} {'MITRE':<12} {'Verdict':<12} {'Risk':>6} {'Quality':<10} {'Fusion'}"
+    )
     print(f"    {'─' * 35} {'─' * 12} {'─' * 12} {'─' * 6} {'─' * 10} {'─' * 8}")
     for a in results.attacks:
         v_color = {
-            "DETECT": GREEN, "TELEMETRY": YELLOW,
-            "PARTIAL": YELLOW, "MISS": RED, "ERROR": RED,
+            "DETECT": GREEN,
+            "TELEMETRY": YELLOW,
+            "PARTIAL": YELLOW,
+            "MISS": RED,
+            "ERROR": RED,
         }.get(a.verdict, DIM)
-        print(f"    {a.description:<35} {a.mitre_id:<12} "
-              f"{v_color}{a.verdict:<12}{RESET} {a.max_risk_score:>5.2f} "
-              f"{a.quality_state:<10} {'✓' if a.fusion_rule_fired else '·'}")
+        print(
+            f"    {a.description:<35} {a.mitre_id:<12} "
+            f"{v_color}{a.verdict:<12}{RESET} {a.max_risk_score:>5.2f} "
+            f"{a.quality_state:<10} {'✓' if a.fusion_rule_fired else '·'}"
+        )
 
     # Final score
     print()
     print(f"    ┌──────────────────────────────────────────┐")
-    print(f"    │  DETECT:    {results.detected:>2}/{results.total_techniques}  (probe + fusion)       │")
-    print(f"    │  TELEMETRY: {results.telemetry_only:>2}/{results.total_techniques}  (probe only, no fusion)  │")
-    print(f"    │  MISS:      {results.missed:>2}/{results.total_techniques}  (blind)                  │")
+    print(
+        f"    │  DETECT:    {results.detected:>2}/{results.total_techniques}  (probe + fusion)       │"
+    )
+    print(
+        f"    │  TELEMETRY: {results.telemetry_only:>2}/{results.total_techniques}  (probe only, no fusion)  │"
+    )
+    print(
+        f"    │  MISS:      {results.missed:>2}/{results.total_techniques}  (blind)                  │"
+    )
     print(f"    │                                          │")
-    rate_color = GREEN if results.detection_rate >= 0.8 else YELLOW if results.detection_rate >= 0.5 else RED
-    print(f"    │  Detection Rate: {rate_color}{BOLD}{results.detection_rate * 100:.0f}%{RESET}                     │")
+    rate_color = (
+        GREEN
+        if results.detection_rate >= 0.8
+        else YELLOW if results.detection_rate >= 0.5 else RED
+    )
+    print(
+        f"    │  Detection Rate: {rate_color}{BOLD}{results.detection_rate * 100:.0f}%{RESET}                     │"
+    )
     print(f"    └──────────────────────────────────────────┘")
 
     # Save results
@@ -743,8 +805,11 @@ def lap_scorecard(results: DriveResults):
 
 def main():
     parser = argparse.ArgumentParser(description="AMOSKYS Test Drive")
-    parser.add_argument("--lap", choices=["preflight", "baseline", "attack", "scorecard"],
-                        help="Run a single lap instead of the full drive")
+    parser.add_argument(
+        "--lap",
+        choices=["preflight", "baseline", "attack", "scorecard"],
+        help="Run a single lap instead of the full drive",
+    )
     args = parser.parse_args()
 
     banner("AMOSKYS TEST DRIVE — Full System Validation", BOLD + CYAN)

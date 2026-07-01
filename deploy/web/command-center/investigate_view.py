@@ -49,18 +49,23 @@ _RELATIVE_UNITS = {"m": 60, "h": 3600, "d": 86400, "s": 1}
 @dataclass
 class Filter:
     """Parsed query. All sets empty = no constraint on that key."""
-    severities:    Set[str] = field(default_factory=set)
-    families:      Set[str] = field(default_factory=set)
-    ips:           Set[str] = field(default_factory=set)
-    event_types:   Set[str] = field(default_factory=set)  # substring matches
-    since_ms:      Optional[int] = None                   # epoch ms; older events filtered out
-    free_text:     str = ""                               # substring match against event_type
+
+    severities: Set[str] = field(default_factory=set)
+    families: Set[str] = field(default_factory=set)
+    ips: Set[str] = field(default_factory=set)
+    event_types: Set[str] = field(default_factory=set)  # substring matches
+    since_ms: Optional[int] = None  # epoch ms; older events filtered out
+    free_text: str = ""  # substring match against event_type
 
     @property
     def is_empty(self) -> bool:
         return (
-            not self.severities and not self.families and not self.ips
-            and not self.event_types and self.since_ms is None and not self.free_text
+            not self.severities
+            and not self.families
+            and not self.ips
+            and not self.event_types
+            and self.since_ms is None
+            and not self.free_text
         )
 
     def to_chips(self) -> List[Dict[str, str]]:
@@ -76,7 +81,13 @@ class Filter:
             chips.append({"key": "event_type", "value": et, "color": "#a78bfa"})
         if self.since_ms is not None:
             secs_ago = (int(time.time() * 1000) - self.since_ms) // 1000
-            chips.append({"key": "since", "value": _fmt_secs(secs_ago) + " ago", "color": "#6b7280"})
+            chips.append(
+                {
+                    "key": "since",
+                    "value": _fmt_secs(secs_ago) + " ago",
+                    "color": "#6b7280",
+                }
+            )
         if self.free_text:
             chips.append({"key": "text", "value": self.free_text, "color": "#6b7280"})
         return chips
@@ -171,18 +182,21 @@ def _resolve_window_ms(spec: str) -> Optional[int]:
 
 
 def _fmt_secs(secs: int) -> str:
-    if secs < 60: return f"{secs}s"
-    if secs < 3600: return f"{secs // 60}m"
-    if secs < 86400: return f"{secs // 3600}h"
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h"
     return f"{secs // 86400}d"
 
 
 def _sev_color(sev: str) -> str:
     return {
         "critical": "#dc2626",
-        "high":     "#ff3366",
-        "warn":     "#ffaa00",
-        "info":     "#00d9ff",
+        "high": "#ff3366",
+        "warn": "#ffaa00",
+        "info": "#00d9ff",
     }.get(sev, "#6b7280")
 
 
@@ -209,10 +223,10 @@ def _sev_color(sev: str) -> str:
 #     worker thread actually pays the parse cost when the log changes.
 # ─────────────────────────────────────────────────────────────────────
 
-_PARSED_CACHE:        Optional[List[Dict[str, Any]]] = None
-_PARSED_CACHE_OFFSET: int  = 0
-_PARSED_CACHE_INODE:  Optional[int] = None
-_PARSED_CACHE_LOCK    = threading.Lock()
+_PARSED_CACHE: Optional[List[Dict[str, Any]]] = None
+_PARSED_CACHE_OFFSET: int = 0
+_PARSED_CACHE_INODE: Optional[int] = None
+_PARSED_CACHE_LOCK = threading.Lock()
 
 
 def _read_from(log_path: str, start_offset: int) -> Tuple[List[Dict[str, Any]], int]:
@@ -232,7 +246,7 @@ def _read_from(log_path: str, start_offset: int) -> Tuple[List[Dict[str, Any]], 
                 break
             buf += chunk
             lines = buf.split(b"\n")
-            buf = lines.pop()   # keep trailing partial line
+            buf = lines.pop()  # keep trailing partial line
             for raw in lines:
                 raw = raw.strip()
                 if not raw:
@@ -335,6 +349,7 @@ def _family_of(event_type: str) -> str:
 # The filter engine — applied to the raw event stream
 # ─────────────────────────────────────────────────────────────────────
 
+
 def matches(ev: Dict[str, Any], f: Filter) -> bool:
     """Test one event against a filter. Hot path — keep cheap."""
     if f.severities and ev.get("severity") not in f.severities:
@@ -378,16 +393,17 @@ def collect(filter_: Filter, *, cap: int = 5000) -> List[Dict[str, Any]]:
 # Shape builder #1 — investigation page (rich result + facets)
 # ─────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class InvestigateResult:
-    total:       int
-    capped:      bool
-    rows:        List[Dict[str, Any]]      # newest-first event view-models
-    histogram:   List[Dict[str, Any]]      # bucketed for the strip chart
-    facets:      Dict[str, List[Dict[str, Any]]]   # field → top values w/ counts
-    severities:  Dict[str, int]            # for the colored summary tiles
-    families:    Dict[str, int]
-    chain_ok:    int
+    total: int
+    capped: bool
+    rows: List[Dict[str, Any]]  # newest-first event view-models
+    histogram: List[Dict[str, Any]]  # bucketed for the strip chart
+    facets: Dict[str, List[Dict[str, Any]]]  # field → top values w/ counts
+    severities: Dict[str, int]  # for the colored summary tiles
+    families: Dict[str, int]
+    chain_ok: int
     chain_breaks: int
 
 
@@ -397,20 +413,24 @@ _BUILD_CACHE_MAX = 100
 _BUILD_CACHE_LOCK = threading.Lock()
 
 
-def _filter_cache_key(f: "Filter", page_size: int, hist_bins: int) -> Tuple[str, int, int]:
+def _filter_cache_key(
+    f: "Filter", page_size: int, hist_bins: int
+) -> Tuple[str, int, int]:
     """Stable hashable identity for a filter — used as build-cache key."""
     parts = [
         "sev:" + ",".join(sorted(f.severities)),
         "fam:" + ",".join(sorted(f.families)),
-        "ip:"  + ",".join(sorted(f.ips)),
-        "et:"  + ",".join(sorted(f.event_types)),
+        "ip:" + ",".join(sorted(f.ips)),
+        "et:" + ",".join(sorted(f.event_types)),
         "since:" + str(f.since_ms or ""),
-        "q:"   + f.free_text,
+        "q:" + f.free_text,
     ]
     return ("|".join(parts), page_size, hist_bins)
 
 
-def build_investigate(filter_: Filter, *, page_size: int = 200, hist_bins: int = 60) -> InvestigateResult:
+def build_investigate(
+    filter_: Filter, *, page_size: int = 200, hist_bins: int = 60
+) -> InvestigateResult:
     """Apply `filter_` and return everything the /web/investigate page needs.
 
     Result is memoised for 15 s keyed on the filter; repeat hits with the
@@ -430,8 +450,8 @@ def build_investigate(filter_: Filter, *, page_size: int = 200, hist_bins: int =
 
     rows: List[Dict[str, Any]] = []
     severities: Counter[str] = Counter()
-    families:   Counter[str] = Counter()
-    ip_counts:  Counter[str] = Counter()
+    families: Counter[str] = Counter()
+    ip_counts: Counter[str] = Counter()
     type_counts: Counter[str] = Counter()
     chain_ok = 0
     chain_breaks = 0
@@ -441,9 +461,9 @@ def build_investigate(filter_: Filter, *, page_size: int = 200, hist_bins: int =
     for ev in iter_all_events():
         # Walk in order so chain check is right; only "match" rows go in `rows`
         if prev_sig is None:
-            chain_ok_inc = (ev.get("prev_sig") in (None, ""))
+            chain_ok_inc = ev.get("prev_sig") in (None, "")
         else:
-            chain_ok_inc = (ev.get("prev_sig") == prev_sig)
+            chain_ok_inc = ev.get("prev_sig") == prev_sig
         if chain_ok_inc:
             chain_ok += 1
         else:
@@ -471,9 +491,9 @@ def build_investigate(filter_: Filter, *, page_size: int = 200, hist_bins: int =
     histogram = build_histogram(matches_all, bins=hist_bins)
 
     facets = {
-        "severity":   _facet(severities, formatter=lambda k: k),
-        "family":     _facet(families,   formatter=lambda k: k),
-        "ip":         _facet(ip_counts,  formatter=lambda k: k, top=12),
+        "severity": _facet(severities, formatter=lambda k: k),
+        "family": _facet(families, formatter=lambda k: k),
+        "ip": _facet(ip_counts, formatter=lambda k: k, top=12),
         "event_type": _facet(type_counts, formatter=lambda k: k, top=12),
     }
 
@@ -515,32 +535,32 @@ def _event_view(ev: Dict[str, Any]) -> Dict[str, Any]:
     et = ev.get("event_type", "")
     meaning = _ev_sem.meaning_for(et)
     return {
-        "event_id":   ev.get("event_id"),
+        "event_id": ev.get("event_id"),
         "event_type": et,
-        "family":     _family_of(et),
-        "severity":   ev.get("severity", "info"),
-        "ts_ns":      ts_ns,
-        "ts_ms":      ts_ns // 1_000_000 if ts_ns else 0,
-        "site_id":    ev.get("site_id"),
-        "schema":     ev.get("schema_version", "?"),
+        "family": _family_of(et),
+        "severity": ev.get("severity", "info"),
+        "ts_ns": ts_ns,
+        "ts_ms": ts_ns // 1_000_000 if ts_ns else 0,
+        "site_id": ev.get("site_id"),
+        "schema": ev.get("schema_version", "?"),
         "request": {
             "method": req.get("method"),
-            "uri":    req.get("uri"),
-            "ip":     req.get("ip"),
-            "ua":     (req.get("ua") or "")[:120],
+            "uri": req.get("uri"),
+            "ip": req.get("ip"),
+            "ua": (req.get("ua") or "")[:120],
         },
         "attributes": ev.get("attributes") or {},
-        "sig":        sig,
-        "sig_short":  sig[:10] if sig else "",
-        "prev_sig":   ev.get("prev_sig"),
+        "sig": sig,
+        "sig_short": sig[:10] if sig else "",
+        "prev_sig": ev.get("prev_sig"),
         # ── Natural-English layer ──
-        "phrase":     meaning.phrase,
-        "detail":     meaning.detail,
-        "concern":    meaning.concern,
-        "category":   meaning.category,
-        "verdict":    meaning.verdict,
-        "action":     meaning.action,
-        "audience":   meaning.audience,
+        "phrase": meaning.phrase,
+        "detail": meaning.detail,
+        "concern": meaning.concern,
+        "category": meaning.category,
+        "verdict": meaning.verdict,
+        "action": meaning.action,
+        "audience": meaning.audience,
     }
 
 
@@ -553,7 +573,7 @@ def _facet(counter: Counter, *, formatter, top: int = 8) -> List[Dict[str, Any]]
         {
             "value": formatter(k),
             "count": n,
-            "pct":   round(100 * n / max_n, 1),
+            "pct": round(100 * n / max_n, 1),
         }
         for k, n in items
     ]
@@ -563,9 +583,13 @@ def _facet(counter: Counter, *, formatter, top: int = 8) -> List[Dict[str, Any]]
 # Shape builder #2 — histogram (events over time, bucketed)
 # ─────────────────────────────────────────────────────────────────────
 
-def build_histogram(events: List[Dict[str, Any]], *, bins: int = 60) -> List[Dict[str, Any]]:
+
+def build_histogram(
+    events: List[Dict[str, Any]], *, bins: int = 60
+) -> List[Dict[str, Any]]:
     """Bucket events by time. Window is [first_event, last_event] of the matched set,
-    or the user's `since:` window if specified (handled implicitly via the events list)."""
+    or the user's `since:` window if specified (handled implicitly via the events list).
+    """
     if not events:
         return []
     timestamps = [int(e.get("event_timestamp_ns") or 0) // 1_000_000 for e in events]
@@ -579,7 +603,9 @@ def build_histogram(events: List[Dict[str, Any]], *, bins: int = 60) -> List[Dic
         t_min -= 1000
         t_max += 1000
     bin_ms = max(1, (t_max - t_min) // bins)
-    buckets: Dict[int, Dict[str, int]] = defaultdict(lambda: {"info": 0, "warn": 0, "high": 0, "critical": 0})
+    buckets: Dict[int, Dict[str, int]] = defaultdict(
+        lambda: {"info": 0, "warn": 0, "high": 0, "critical": 0}
+    )
     for ev in events:
         ts = int(ev.get("event_timestamp_ns") or 0) // 1_000_000
         if ts <= 0:
@@ -593,14 +619,16 @@ def build_histogram(events: List[Dict[str, Any]], *, bins: int = 60) -> List[Dic
     out = []
     for i in range(bins):
         b = buckets.get(i, {"info": 0, "warn": 0, "high": 0, "critical": 0})
-        out.append({
-            "ts_ms":   t_min + i * bin_ms,
-            "info":     b.get("info", 0),
-            "warn":     b.get("warn", 0),
-            "high":     b.get("high", 0),
-            "critical": b.get("critical", 0),
-            "total":    sum(b.values()),
-        })
+        out.append(
+            {
+                "ts_ms": t_min + i * bin_ms,
+                "info": b.get("info", 0),
+                "warn": b.get("warn", 0),
+                "high": b.get("high", 0),
+                "critical": b.get("critical", 0),
+                "total": sum(b.values()),
+            }
+        )
     return out
 
 
@@ -608,13 +636,18 @@ def build_histogram(events: List[Dict[str, Any]], *, bins: int = 60) -> List[Dic
 # Shape builder #3 — vis-timeline data (groups + items)
 # ─────────────────────────────────────────────────────────────────────
 
-def build_timeline(events: List[Dict[str, Any]], *, max_items: int = 1500) -> Dict[str, Any]:
+
+def build_timeline(
+    events: List[Dict[str, Any]], *, max_items: int = 1500
+) -> Dict[str, Any]:
     """vis-timeline format: { groups: [...], items: [...] }.
 
     Groups are sensor families (one lane each). Items are events colored
     by severity. Capped to `max_items` newest to keep the DOM lean."""
     # Newest-first, then truncate
-    events = sorted(events, key=lambda e: int(e.get("event_timestamp_ns") or 0), reverse=True)
+    events = sorted(
+        events, key=lambda e: int(e.get("event_timestamp_ns") or 0), reverse=True
+    )
     if len(events) > max_items:
         events = events[:max_items]
 
@@ -641,22 +674,25 @@ def build_timeline(events: List[Dict[str, Any]], *, max_items: int = 1500) -> Di
         et = ev.get("event_type", "?")
         fam = _family_of(et)
         ip = (ev.get("request") or {}).get("ip") or ""
-        items.append({
-            "id":      ev.get("event_id") or f"{ts_ns}",
-            "group":   fam,
-            "start":   ts_ns // 1_000_000,
-            "type":    "point",
-            "title":   f"{et} · {sev}{(' · ' + ip) if ip else ''}",
-            "className": f"vis-sev-{sev}",
-            "severity": sev,
-            "event_id": ev.get("event_id"),
-        })
+        items.append(
+            {
+                "id": ev.get("event_id") or f"{ts_ns}",
+                "group": fam,
+                "start": ts_ns // 1_000_000,
+                "type": "point",
+                "title": f"{et} · {sev}{(' · ' + ip) if ip else ''}",
+                "className": f"vis-sev-{sev}",
+                "severity": sev,
+                "event_id": ev.get("event_id"),
+            }
+        )
     return {"groups": groups, "items": items, "truncated": len(items) >= max_items}
 
 
 # ─────────────────────────────────────────────────────────────────────
 # Shape builder #4 — vis-network entity graph (nodes + edges)
 # ─────────────────────────────────────────────────────────────────────
+
 
 def build_graph(events: List[Dict[str, Any]], *, top_ips: int = 30) -> Dict[str, Any]:
     """Three-tier graph: site (centre) ← family nodes ← top external IPs.
@@ -696,64 +732,74 @@ def build_graph(events: List[Dict[str, Any]], *, top_ips: int = 30) -> Dict[str,
     edges: List[Dict[str, Any]] = []
 
     # 1. Site node (centre)
-    nodes.append({
-        "id":      f"site::{site_id}",
-        "label":   site_url or site_id,
-        "group":   "site",
-        "shape":   "diamond",
-        "color":   {"background": "#00d9ff", "border": "#00b8d4"},
-        "size":    32,
-        "font":    {"color": "#00d9ff", "size": 14, "face": "Inter"},
-        "title":   f"Customer site (events: {len(events)})",
-    })
+    nodes.append(
+        {
+            "id": f"site::{site_id}",
+            "label": site_url or site_id,
+            "group": "site",
+            "shape": "diamond",
+            "color": {"background": "#00d9ff", "border": "#00b8d4"},
+            "size": 32,
+            "font": {"color": "#00d9ff", "size": 14, "face": "Inter"},
+            "title": f"Customer site (events: {len(events)})",
+        }
+    )
 
     # 2. Family nodes — connect each to site
     for fam, n in fam_counts.most_common():
         col = _sev_color(fam_severity.get(fam, "info"))
-        nodes.append({
-            "id":     f"fam::{fam}",
-            "label":  fam,
-            "group":  "family",
-            "shape":  "dot",
-            "color":  {"background": col, "border": col},
-            "size":   max(8, min(24, 6 + (n ** 0.5))),
-            "font":   {"color": "#fff", "size": 11, "face": "JetBrains Mono"},
-            "title":  f"{AEGIS_SENSOR_FAMILIES.get(f'aegis.{fam}', '')} — {n} events",
-        })
-        edges.append({
-            "from":   f"fam::{fam}",
-            "to":     f"site::{site_id}",
-            "value":  n,
-            "color":  {"color": col, "opacity": 0.4},
-            "title":  f"{n} events",
-        })
+        nodes.append(
+            {
+                "id": f"fam::{fam}",
+                "label": fam,
+                "group": "family",
+                "shape": "dot",
+                "color": {"background": col, "border": col},
+                "size": max(8, min(24, 6 + (n**0.5))),
+                "font": {"color": "#fff", "size": 11, "face": "JetBrains Mono"},
+                "title": f"{AEGIS_SENSOR_FAMILIES.get(f'aegis.{fam}', '')} — {n} events",
+            }
+        )
+        edges.append(
+            {
+                "from": f"fam::{fam}",
+                "to": f"site::{site_id}",
+                "value": n,
+                "color": {"color": col, "opacity": 0.4},
+                "title": f"{n} events",
+            }
+        )
 
     # 3. IP nodes — connect each to its dominant family/families
     for ip in keep_ips:
         sev = ip_severity.get(ip, "info")
         col = _sev_color(sev)
-        nodes.append({
-            "id":     f"ip::{ip}",
-            "label":  ip,
-            "group":  "ip",
-            "shape":  "dot",
-            "color":  {"background": col, "border": col},
-            "size":   max(6, min(18, 4 + (ip_counts[ip] ** 0.4))),
-            "font":   {"color": col, "size": 10, "face": "JetBrains Mono"},
-            "title":  f"{ip} — {ip_counts[ip]} events, worst severity {sev}",
-        })
+        nodes.append(
+            {
+                "id": f"ip::{ip}",
+                "label": ip,
+                "group": "ip",
+                "shape": "dot",
+                "color": {"background": col, "border": col},
+                "size": max(6, min(18, 4 + (ip_counts[ip] ** 0.4))),
+                "font": {"color": col, "size": 10, "face": "JetBrains Mono"},
+                "title": f"{ip} — {ip_counts[ip]} events, worst severity {sev}",
+            }
+        )
 
     for (ip, fam), n in ip_fam_count.items():
         if ip not in keep_ips:
             continue
         col = _sev_color(ip_severity.get(ip, "info"))
-        edges.append({
-            "from":   f"ip::{ip}",
-            "to":     f"fam::{fam}",
-            "value":  n,
-            "color":  {"color": col, "opacity": 0.6},
-            "title":  f"{n} events",
-        })
+        edges.append(
+            {
+                "from": f"ip::{ip}",
+                "to": f"fam::{fam}",
+                "value": n,
+                "color": {"color": col, "opacity": 0.6},
+                "title": f"{n} events",
+            }
+        )
 
     return {
         "nodes": nodes,
@@ -769,6 +815,7 @@ def build_graph(events: List[Dict[str, Any]], *, top_ips: int = 30) -> Dict[str,
 # Shape builder #5 — single-event drill-in
 # ─────────────────────────────────────────────────────────────────────
 
+
 def find_event(event_id: str) -> Optional[Dict[str, Any]]:
     """Linear scan of the JSONL — fine at this scale, eliminates an index."""
     for ev in iter_all_events():
@@ -777,9 +824,11 @@ def find_event(event_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def find_event_with_neighbors(event_id: str) -> Tuple[Optional[Dict[str, Any]],
-                                                     Optional[Dict[str, Any]],
-                                                     Optional[Dict[str, Any]]]:
+def find_event_with_neighbors(
+    event_id: str,
+) -> Tuple[
+    Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[Dict[str, Any]]
+]:
     """Return (prev, target, next) for the chain context view."""
     target = None
     prev = None
@@ -802,6 +851,7 @@ def find_event_with_neighbors(event_id: str) -> Tuple[Optional[Dict[str, Any]],
 def verify_sig(ev: Dict[str, Any]) -> Tuple[bool, str]:
     """Re-compute the sig server-side; return (ok, recomputed_sig)."""
     import hashlib
+
     body = {k: v for k, v in ev.items() if k != "sig"}
     canonical = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
     expected = hashlib.sha256(canonical.encode("utf-8")).hexdigest()

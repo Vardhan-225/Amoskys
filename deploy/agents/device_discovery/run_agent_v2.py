@@ -26,8 +26,10 @@ import sys
 # Try multiple possible locations (local dev, server deployment, pip install)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _possible_paths = [
-    os.path.join(_script_dir, "../../src"),  # Local dev: deployments/device_discovery/../../src
-    os.path.expanduser("~/amoskys-src"),      # Server: ~/amoskys-src/amoskys/
+    os.path.join(
+        _script_dir, "../../src"
+    ),  # Local dev: deployments/device_discovery/../../src
+    os.path.expanduser("~/amoskys-src"),  # Server: ~/amoskys-src/amoskys/
     os.path.join(os.path.expanduser("~"), "amoskys", "src"),  # Server alt
 ]
 

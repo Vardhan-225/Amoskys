@@ -29,7 +29,10 @@ WorkingDirectory=/opt/amoskys
 # under /var/lib/amoskys so the daemon never depends on its CWD.
 Environment=PYTHONPATH=/opt/amoskys/src
 Environment=AMOSKYS_DATA_DIR=/var/lib/amoskys
-Environment=AMOSKYS_TELEMETRY_DB=/var/lib/amoskys/fleet.db
+# TELEMETRY_DB backs the analyzer's OWN TelemetryStore (its full schema) — must
+# NOT be fleet.db. FLEET_DB is the command_center DB the brain re-scores in place.
+Environment=AMOSKYS_TELEMETRY_DB=/var/lib/amoskys/analyzer.db
+Environment=AMOSKYS_FLEET_DB=/var/lib/amoskys/fleet.db
 Environment=AMOSKYS_FUSION_DB=/var/lib/amoskys/intel/fusion.db
 Environment=AMOSKYS_THREAT_INTEL_DB=/var/lib/amoskys/threat_intel.db
 Environment=AMOSKYS_FLEET_RESCORE=1

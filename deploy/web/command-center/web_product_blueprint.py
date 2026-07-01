@@ -49,15 +49,30 @@ from .tenant import (
 )
 from .aegis_live import AegisTail, AEGIS_SENSOR_FAMILIES
 from .fleet_globe import (
-    build_sites_view, build_sites_json, build_arcs_json, build_stats,
-    build_live_globe, _FAMILY_TO_ATTACK,
+    build_sites_view,
+    build_sites_json,
+    build_arcs_json,
+    build_stats,
+    build_live_globe,
+    _FAMILY_TO_ATTACK,
 )
 from .geoip_cache import GeoIPCache, resolve_domain_ip
-from .threats_view import (build_live_feed, build_stats as threats_stats, build_recent_cves)
+from .threats_view import (
+    build_live_feed,
+    build_stats as threats_stats,
+    build_recent_cves,
+)
 from .preview_view import run_preview
 from .auth import (
-    sign_in, sign_out, check_credentials, signed_in, current_user_email,
-    current_user_site, customer_site, admin_email, is_auth_configured,
+    sign_in,
+    sign_out,
+    check_credentials,
+    signed_in,
+    current_user_email,
+    current_user_site,
+    customer_site,
+    admin_email,
+    is_auth_configured,
     require_signed_in,
 )
 from .crawler_classifier import summarize as summarize_crawlers
@@ -85,20 +100,30 @@ _geoip_cache = GeoIPCache()
 
 
 def _humantime(ts_ns):
-    if not ts_ns: return "—"
+    if not ts_ns:
+        return "—"
     import time
+
     d = time.time() - (ts_ns / 1e9)
-    if d < 0: return "in future"
-    if d < 60: return f"{int(d)}s ago"
-    if d < 3600: return f"{int(d/60)}m ago"
-    if d < 86400: return f"{int(d/3600)}h ago"
+    if d < 0:
+        return "in future"
+    if d < 60:
+        return f"{int(d)}s ago"
+    if d < 3600:
+        return f"{int(d/60)}m ago"
+    if d < 86400:
+        return f"{int(d/3600)}h ago"
     return f"{int(d/86400)}d ago"
 
 
 def _humantime_abs(ts_ns):
-    if not ts_ns: return "—"
+    if not ts_ns:
+        return "—"
     from datetime import datetime, timezone
-    return datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    return datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -108,6 +133,7 @@ def _humantime_abs(ts_ns):
 
 web_bp.add_app_template_filter(_humantime, "humantime")
 web_bp.add_app_template_filter(_humantime_abs, "humantime_abs")
+
 
 @web_bp.context_processor
 def _inject_common():
@@ -127,7 +153,8 @@ def _inject_common():
         "current_tenant": getattr(g, "tenant", None),
         "demo_tenants": demo_tenants(),
         "demo_mode": os.environ.get("AMOSKYS_WEB_DEMO", "true").lower() == "true",
-        "preview_mode": os.environ.get("AMOSKYS_WEB_PREVIEW", "false").lower() == "true",
+        "preview_mode": os.environ.get("AMOSKYS_WEB_PREVIEW", "false").lower()
+        == "true",
         "owasp_top10": OWASP_WEB_TOP10,
         "wp_attack_classes": WP_ATTACK_CLASSES,
         "aegis_sensors": AEGIS_SENSORS,
@@ -139,6 +166,7 @@ def _inject_common():
 # ─────────────────────────────────────────────────────────────────────
 # Marketing surface (no tenant required)
 # ─────────────────────────────────────────────────────────────────────
+
 
 @web_bp.route("/")
 @populate_tenant
@@ -165,9 +193,13 @@ def redemption():
         contact = (request.form.get("contact_email") or "").strip()
         consent = request.form.get("consent") == "on"
         if not target or not contact or not consent:
-            flash("Target URL, contact email, and signed consent are required.", "error")
-            return render_template("web/redemption.html",
-                                   form={"target_url": target, "contact_email": contact})
+            flash(
+                "Target URL, contact email, and signed consent are required.", "error"
+            )
+            return render_template(
+                "web/redemption.html",
+                form={"target_url": target, "contact_email": contact},
+            )
 
         engagement_id = "eng_" + uuid.uuid4().hex[:12]
         session["pending_engagement"] = {
@@ -194,6 +226,7 @@ def redemption_status(engagement_id: str):
 # Demo-only tenant switcher (gated on AMOSKYS_WEB_DEMO env)
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _require_demo():
     if os.environ.get("AMOSKYS_WEB_DEMO", "true").lower() != "true":
         abort(404)
@@ -219,6 +252,7 @@ def demo_clear_tenant():
 # ─────────────────────────────────────────────────────────────────────
 # Customer dashboard (tenant-gated)
 # ─────────────────────────────────────────────────────────────────────
+
 
 @web_bp.route("/sites")
 @require_tenant
@@ -305,6 +339,7 @@ def _site_tab(site_id: str, *, tab: str):
 # Red Team Arena — Argos on demand
 # ─────────────────────────────────────────────────────────────────────
 
+
 @web_bp.route("/arena")
 @require_tenant
 def arena():
@@ -344,8 +379,12 @@ def arena_start_scan():
         "intensity": intensity,
         "started_ts": time.time(),
         "phase_durations": {  # seconds
-            "consent": 2, "recon": 6, "fingerprint": 5,
-            "probe": 15, "triage": 4, "report": 3,
+            "consent": 2,
+            "recon": 6,
+            "fingerprint": 5,
+            "probe": 15,
+            "triage": 4,
+            "report": 3,
         },
     }
     session["arena_scan"] = scan
@@ -388,30 +427,35 @@ def arena_scan_progress():
     visible = all_findings[:n_visible]
 
     done = overall >= 1.0
-    return jsonify({
-        "status": "done" if done else "running",
-        "scan_id": scan["id"],
-        "site_domain": scan["site_domain"],
-        "intensity": scan["intensity"],
-        "current_phase": current_phase,
-        "phase_progress_pct": round(phase_progress * 100, 1),
-        "overall_pct": round(overall * 100, 1),
-        "elapsed_s": round(elapsed, 1),
-        "findings": [
-            {
-                "id": f.id,
-                "title": f.title,
-                "severity": f.severity,
-                "cvss": f.cvss,
-                "cve_id": f.cve_id,
-                "owasp": WP_ATTACK_BY_CODE[f.wp_attack_code].owasp
-                         if f.wp_attack_code in WP_ATTACK_BY_CODE else "—",
-                "bounty_ready": f.bounty_ready,
-                "affected_path": f.affected_path,
-            }
-            for f in visible
-        ],
-    })
+    return jsonify(
+        {
+            "status": "done" if done else "running",
+            "scan_id": scan["id"],
+            "site_domain": scan["site_domain"],
+            "intensity": scan["intensity"],
+            "current_phase": current_phase,
+            "phase_progress_pct": round(phase_progress * 100, 1),
+            "overall_pct": round(overall * 100, 1),
+            "elapsed_s": round(elapsed, 1),
+            "findings": [
+                {
+                    "id": f.id,
+                    "title": f.title,
+                    "severity": f.severity,
+                    "cvss": f.cvss,
+                    "cve_id": f.cve_id,
+                    "owasp": (
+                        WP_ATTACK_BY_CODE[f.wp_attack_code].owasp
+                        if f.wp_attack_code in WP_ATTACK_BY_CODE
+                        else "—"
+                    ),
+                    "bounty_ready": f.bounty_ready,
+                    "affected_path": f.affected_path,
+                }
+                for f in visible
+            ],
+        }
+    )
 
 
 @web_bp.route("/arena/scan/cancel", methods=["POST"])
@@ -425,15 +469,16 @@ def arena_cancel_scan():
 # Error handlers scoped to the blueprint
 # ─────────────────────────────────────────────────────────────────────
 
+
 @web_bp.errorhandler(404)
 def web_404(_):
     return render_template("web/404.html"), 404
 
 
-
 # ═════════════════════════════════════════════════════════════════════
 # 10-second passive preview — /web/preview — ease-of-use front door
 # ═════════════════════════════════════════════════════════════════════
+
 
 @web_bp.route("/preview", methods=["GET", "POST"])
 def preview():
@@ -443,11 +488,15 @@ def preview():
         submitted = (request.form.get("target") or "").strip()
         if submitted:
             result = run_preview(submitted)
-    return render_template("web/preview.html", submitted_target=submitted, result=result)
+    return render_template(
+        "web/preview.html", submitted_target=submitted, result=result
+    )
+
 
 # ═════════════════════════════════════════════════════════════════════
 # Operator Command Center — /web/command — REAL Aegis feed
 # ═════════════════════════════════════════════════════════════════════
+
 
 @web_bp.route("/command")
 def command():
@@ -461,23 +510,31 @@ def command():
     snap = _aegis_tail.snapshot(severity_filter=severity)
     last_event_ago = _humantime(snap.last_event_ns) if snap.last_event_ns else None
     from flask import make_response
-    response = make_response(render_template(
-        "web/command.html",
-        snap=snap,
-        sensor_catalog=AEGIS_SENSOR_FAMILIES,
-        last_event_ago=last_event_ago,
-    ))
+
+    response = make_response(
+        render_template(
+            "web/command.html",
+            snap=snap,
+            sensor_catalog=AEGIS_SENSOR_FAMILIES,
+            last_event_ago=last_event_ago,
+        )
+    )
     if request.args.get("token"):
         response.set_cookie(
-            "amoskys_command_token", expected,
-            max_age=30 * 86400, httponly=True,
-            secure=True, samesite="Strict",
+            "amoskys_command_token",
+            expected,
+            max_age=30 * 86400,
+            httponly=True,
+            secure=True,
+            samesite="Strict",
         )
     return response
+
 
 # ═════════════════════════════════════════════════════════════════════
 # Fleet Globe — /web/globe
 # ═════════════════════════════════════════════════════════════════════
+
 
 @web_bp.route("/globe")
 def globe():
@@ -485,7 +542,9 @@ def globe():
     sites_json = build_sites_json(sites_view)
     arcs_json = build_arcs_json(sites_view)
     snap = _aegis_tail.snapshot()
-    chain_pct = (100 * snap.chain_ok / snap.total_events) if snap.total_events else 100.0
+    chain_pct = (
+        (100 * snap.chain_ok / snap.total_events) if snap.total_events else 100.0
+    )
     stats = build_stats(sites_view, 0, chain_pct)
     return render_template(
         "web/globe.html",
@@ -495,9 +554,11 @@ def globe():
         stats=stats,
     )
 
+
 # ═════════════════════════════════════════════════════════════════════
 # Live Threat Wall — /web/threats
 # ═════════════════════════════════════════════════════════════════════
+
 
 @web_bp.route("/threats")
 def threats():
@@ -508,6 +569,7 @@ def threats():
         recent_cves=build_recent_cves(),
         stats=threats_stats(snap),
     )
+
 
 @web_bp.route("/healthz")
 def healthz():
@@ -522,8 +584,13 @@ def healthz():
 # ═════════════════════════════════════════════════════════════════════
 
 from .auth import (
-    AuthCore, SigninResult, SignupResult, get_core,
-    set_session_cookie, clear_session_cookie, current_user as _current_user,
+    AuthCore,
+    SigninResult,
+    SignupResult,
+    get_core,
+    set_session_cookie,
+    clear_session_cookie,
+    current_user as _current_user,
     get_client_info,
 )
 from . import auth_email
@@ -539,6 +606,7 @@ def _absolute(path: str) -> str:
     ProxyFix populates from X-Forwarded-* for real traffic).
     """
     import os as _os
+
     base = _os.environ.get("AMOSKYS_WEB_PUBLIC_URL", "").strip()
     if not base:
         base = request.url_root
@@ -549,7 +617,9 @@ def _absolute(path: str) -> str:
 def signin():
     error = None
     submitted_email = ""
-    next_path = request.form.get("next") or request.args.get("next") or url_for("web.dashboard")
+    next_path = (
+        request.form.get("next") or request.args.get("next") or url_for("web.dashboard")
+    )
     # If already signed in, skip the form
     if _current_user():
         return redirect(next_path)
@@ -594,9 +664,9 @@ def signup():
         return redirect(url_for("web.dashboard"))
 
     if request.method == "POST":
-        values["email"]     = (request.form.get("email") or "").strip().lower()
+        values["email"] = (request.form.get("email") or "").strip().lower()
         values["full_name"] = (request.form.get("full_name") or "").strip()
-        password            = request.form.get("password") or ""
+        password = request.form.get("password") or ""
 
         if not request.form.get("agree"):
             error = "Please accept the scope-consent terms to continue."
@@ -606,7 +676,9 @@ def signup():
             )
             if result == SignupResult.OK and user and token:
                 verify_url = _absolute(url_for("web.verify_email", token=token))
-                auth_email.send_verification(user.email, verify_url, full_name=user.full_name)
+                auth_email.send_verification(
+                    user.email, verify_url, full_name=user.full_name
+                )
                 session["pending_verify_email"] = user.email
                 return redirect(url_for("web.verify_pending"))
             if result == SignupResult.INVALID_EMAIL:
@@ -631,7 +703,11 @@ def verify_pending():
 
 @web_bp.route("/resend-verification", methods=["GET", "POST"])
 def resend_verification():
-    email = (request.form.get("email") or session.get("pending_verify_email") or "").strip().lower()
+    email = (
+        (request.form.get("email") or session.get("pending_verify_email") or "")
+        .strip()
+        .lower()
+    )
     sent_for = None
     if request.method == "POST" and email:
         user = get_core().find_user_by_email(email)
@@ -656,15 +732,28 @@ def verify_email(token: str):
     # We don't know their password here, so mint a session directly.
     import secrets as _secrets
     import time as _time
+
     session_token = _secrets.token_urlsafe(32)
     import sqlite3 as _sq
-    from .auth_core import _connect as _ac_connect, SESSION_TTL_SECS as _TTL, _ns as _ac_ns
+    from .auth_core import (
+        _connect as _ac_connect,
+        SESSION_TTL_SECS as _TTL,
+        _ns as _ac_ns,
+    )
+
     ip, ua = get_client_info()
     with _ac_connect() as c:
         c.execute(
             "INSERT INTO web_sessions (token, user_id, created_at, expires_at, ip_address, user_agent) "
             "VALUES (?,?,?,?,?,?)",
-            (session_token, user.id, _ac_ns(), int(_time.time()) + _TTL, ip or "", (ua or "")[:400]),
+            (
+                session_token,
+                user.id,
+                _ac_ns(),
+                int(_time.time()) + _TTL,
+                ip or "",
+                (ua or "")[:400],
+            ),
         )
     resp = redirect(url_for("web.welcome"))
     set_session_cookie(resp, session_token)
@@ -677,7 +766,9 @@ def verify_email(token: str):
 @web_bp.route("/welcome")
 @require_signed_in
 def welcome():
-    return render_template("web/welcome.html", user=_current_user(), site=customer_site())
+    return render_template(
+        "web/welcome.html", user=_current_user(), site=customer_site()
+    )
 
 
 @web_bp.route("/forgot-password", methods=["GET", "POST"])
@@ -703,7 +794,7 @@ def reset_password(token: str):
     error = None
     done = False
     if request.method == "POST":
-        new_pw  = request.form.get("password") or ""
+        new_pw = request.form.get("password") or ""
         confirm = request.form.get("confirm") or ""
         if new_pw != confirm:
             error = "Passwords don't match."
@@ -713,7 +804,9 @@ def reset_password(token: str):
                 done = True
             else:
                 error = err or "Reset link invalid or expired."
-    return render_template("web/reset_password.html", token=token, error=error, done=done)
+    return render_template(
+        "web/reset_password.html", token=token, error=error, done=done
+    )
 
 
 @web_bp.route("/signout")
@@ -741,7 +834,9 @@ def dashboard():
     # This is what replaces the engineer-debug view (raw aegis.* type strings)
     # with something an operator can scan in 2 seconds.
     humanized_recent = _ev_sem.humanize_events(
-        snap.recent, hide_internal=True, limit=10,
+        snap.recent,
+        hide_internal=True,
+        limit=10,
     )
     category_rollup = _ev_sem.category_rollup(snap.event_types)
     concerns = _ev_sem.active_concerns(
@@ -807,6 +902,7 @@ def dashboard():
 # This endpoint is the *truth source*: idle log → empty `events` → empty globe.
 # ─────────────────────────────────────────────────────────────────────
 
+
 @web_bp.route("/api/dashboard/live-arcs.json")
 @require_signed_in
 def dashboard_live_arcs():
@@ -823,11 +919,13 @@ def dashboard_live_arcs():
     server_now_ms = int(time.time() * 1000)
 
     if not site_geo:
-        return jsonify({
-            "now_ms": server_now_ms,
-            "events": [],
-            "site": None,
-        })
+        return jsonify(
+            {
+                "now_ms": server_now_ms,
+                "events": [],
+                "site": None,
+            }
+        )
 
     # snap.recent is newest-first (see AegisTail). We want oldest-first so
     # the client adds arcs in temporal order — matters for animation.
@@ -867,28 +965,32 @@ def dashboard_live_arcs():
         else:
             visible_ms = 1500  # default visible window for instant events
 
-        out.append({
-            "ts_ms":           ts_ms,
-            "ip":              ip,
-            "start_lat":       geo.lat,
-            "start_lng":       geo.lon,
-            "end_lat":         site_geo.lat,
-            "end_lng":         site_geo.lon,
-            "severity":        sev,
-            "event_type":      et,
-            "attack":          _FAMILY_TO_ATTACK.get(fam, et or "—"),
-            "real_duration_ms": real_dur_ms,
-            "visible_ms":      visible_ms,
-            "origin_city":     geo.city,
-            "origin_country":  geo.country,
-            "origin_org":      geo.org or geo.asn,
-        })
+        out.append(
+            {
+                "ts_ms": ts_ms,
+                "ip": ip,
+                "start_lat": geo.lat,
+                "start_lng": geo.lon,
+                "end_lat": site_geo.lat,
+                "end_lng": site_geo.lon,
+                "severity": sev,
+                "event_type": et,
+                "attack": _FAMILY_TO_ATTACK.get(fam, et or "—"),
+                "real_duration_ms": real_dur_ms,
+                "visible_ms": visible_ms,
+                "origin_city": geo.city,
+                "origin_country": geo.country,
+                "origin_org": geo.org or geo.asn,
+            }
+        )
 
     # Cap response to avoid 1MB JSON on first poll after long idle
-    return jsonify({
-        "now_ms":  server_now_ms,
-        "events":  out[-300:],
-    })
+    return jsonify(
+        {
+            "now_ms": server_now_ms,
+            "events": out[-300:],
+        }
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -914,12 +1016,14 @@ def dashboard_live_arcs():
 
 _WINDOW_UNITS = {"m": 60, "h": 3600, "d": 86400, "s": 1}
 
+
 def _parse_window_to_ms(spec: str, default_ms: int = 3600 * 1000) -> int:
     """Convert strings like '1h', '30m', '6h' to milliseconds.
     Falls back to default on parse failure."""
     if not spec:
         return default_ms
     import re
+
     m = re.fullmatch(r"(\d+)([smhd])", spec.strip().lower())
     if not m:
         return default_ms
@@ -929,7 +1033,9 @@ def _parse_window_to_ms(spec: str, default_ms: int = 3600 * 1000) -> int:
 @web_bp.route("/api/dashboard/threat-map.json")
 @require_signed_in
 def dashboard_threat_map():
-    window_ms = _parse_window_to_ms(request.args.get("window", "1h"), default_ms=3600_000)
+    window_ms = _parse_window_to_ms(
+        request.args.get("window", "1h"), default_ms=3600_000
+    )
     top_n = max(1, min(200, int(request.args.get("top", "50") or 50)))
     window_ms = max(60_000, min(window_ms, 7 * 86400 * 1000))  # clamp 1 min .. 7 days
 
@@ -944,6 +1050,7 @@ def dashboard_threat_map():
     # Avoids a second parse of the 93 MB JSONL just for the globe.
     from .investigate_view import _ensure_parsed_cache
     from .aegis_live import LOG_PATH
+
     events = _ensure_parsed_cache(LOG_PATH)
 
     # ── Aggregate per-IP over the window ──────────────────────────
@@ -966,39 +1073,45 @@ def dashboard_threat_map():
         a = actors.get(ip)
         if a is None:
             a = {
-                "ip":            ip,
-                "count":         0,
-                "max_concern":   0,
-                "concern_hist":  [0, 0, 0, 0, 0, 0],
-                "phrases":       {},
-                "categories":    {},
-                "first_ns":      ts_ns,
-                "last_ns":       ts_ns,
-                "ua":            (e.get("request") or {}).get("ua") or "",
+                "ip": ip,
+                "count": 0,
+                "max_concern": 0,
+                "concern_hist": [0, 0, 0, 0, 0, 0],
+                "phrases": {},
+                "categories": {},
+                "first_ns": ts_ns,
+                "last_ns": ts_ns,
+                "ua": (e.get("request") or {}).get("ua") or "",
             }
             actors[ip] = a
         a["count"] += 1
         a["concern_hist"][meaning.concern] += 1
         if meaning.concern > a["max_concern"]:
             a["max_concern"] = meaning.concern
-        if ts_ns < a["first_ns"]: a["first_ns"] = ts_ns
-        if ts_ns > a["last_ns"]:  a["last_ns"]  = ts_ns
+        if ts_ns < a["first_ns"]:
+            a["first_ns"] = ts_ns
+        if ts_ns > a["last_ns"]:
+            a["last_ns"] = ts_ns
         # Only count phrases that a human cares about — internal taxonomy
         # items (db summaries, http request heartbeats) would drown out
         # the useful ones.
         if meaning.audience == "user":
             a["phrases"][meaning.phrase] = a["phrases"].get(meaning.phrase, 0) + 1
-            a["categories"][meaning.category] = a["categories"].get(meaning.category, 0) + 1
+            a["categories"][meaning.category] = (
+                a["categories"].get(meaning.category, 0) + 1
+            )
 
     if not site_geo:
-        return jsonify({
-            "generated_at_ms": now_ms,
-            "window_ms": window_ms,
-            "site": None,
-            "actors": [],
-            "total_event_count": 0,
-            "total_actor_count": 0,
-        })
+        return jsonify(
+            {
+                "generated_at_ms": now_ms,
+                "window_ms": window_ms,
+                "site": None,
+                "actors": [],
+                "total_event_count": 0,
+                "total_actor_count": 0,
+            }
+        )
 
     # Sort actors by concern first (descending), then raw count.
     # Non-internal hits get a weight bonus so the globe prioritises
@@ -1023,43 +1136,52 @@ def dashboard_threat_map():
             # Skip unresolvable IPs on the globe but still carry a stub so
             # the client can report totals correctly.
             continue
-        top_phrases = sorted(a["phrases"].items(), key=lambda kv: kv[1], reverse=True)[:3]
-        out_actors.append({
-            "ip":              ip,
-            "count":           a["count"],
-            "max_concern":     a["max_concern"],
-            "concern_hist":    a["concern_hist"],
-            "first_ms":        a["first_ns"] // 1_000_000,
-            "last_ms":         a["last_ns"]  // 1_000_000,
-            "start_lat":       geo.lat,
-            "start_lng":       geo.lon,
-            "origin_city":     geo.city,
-            "origin_country":  geo.country,
-            "origin_org":      geo.org or geo.asn,
-            "top_phrases":     [{"phrase": p, "count": c} for p, c in top_phrases],
-            "top_category":    (max(a["categories"].items(), key=lambda kv: kv[1])[0]
-                                if a["categories"] else None),
-        })
+        top_phrases = sorted(a["phrases"].items(), key=lambda kv: kv[1], reverse=True)[
+            :3
+        ]
+        out_actors.append(
+            {
+                "ip": ip,
+                "count": a["count"],
+                "max_concern": a["max_concern"],
+                "concern_hist": a["concern_hist"],
+                "first_ms": a["first_ns"] // 1_000_000,
+                "last_ms": a["last_ns"] // 1_000_000,
+                "start_lat": geo.lat,
+                "start_lng": geo.lon,
+                "origin_city": geo.city,
+                "origin_country": geo.country,
+                "origin_org": geo.org or geo.asn,
+                "top_phrases": [{"phrase": p, "count": c} for p, c in top_phrases],
+                "top_category": (
+                    max(a["categories"].items(), key=lambda kv: kv[1])[0]
+                    if a["categories"]
+                    else None
+                ),
+            }
+        )
 
     total_events = sum(a["count"] for a in actors.values())
 
-    return jsonify({
-        "generated_at_ms":   now_ms,
-        "window_ms":         window_ms,
-        "site": {
-            "domain":  site,
-            "ip":      site_ip,
-            "end_lat": site_geo.lat,
-            "end_lng": site_geo.lon,
-            "city":    site_geo.city,
-            "country": site_geo.country,
-            "org":     site_geo.org or site_geo.asn,
-        },
-        "actors":              out_actors,
-        "total_event_count":   total_events,
-        "total_actor_count":   len(actors),
-        "resolved_actor_count": len(out_actors),
-    })
+    return jsonify(
+        {
+            "generated_at_ms": now_ms,
+            "window_ms": window_ms,
+            "site": {
+                "domain": site,
+                "ip": site_ip,
+                "end_lat": site_geo.lat,
+                "end_lng": site_geo.lon,
+                "city": site_geo.city,
+                "country": site_geo.country,
+                "org": site_geo.org or site_geo.asn,
+            },
+            "actors": out_actors,
+            "total_event_count": total_events,
+            "total_actor_count": len(actors),
+            "resolved_actor_count": len(out_actors),
+        }
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -1083,6 +1205,7 @@ def dashboard_threat_map():
 # Aegis snapshot. See igris_chat.py for the taxonomy.
 # ═════════════════════════════════════════════════════════════════════
 
+
 @web_bp.route("/api/igris/chat", methods=["POST"])
 @require_signed_in
 def igris_chat():
@@ -1102,7 +1225,11 @@ def igris_chat():
                 continue
             role = turn.get("role")
             content = turn.get("content")
-            if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            if (
+                role in ("user", "assistant")
+                and isinstance(content, str)
+                and content.strip()
+            ):
                 history.append({"role": role, "content": content[:4000]})
 
     snap = _aegis_tail.snapshot()
@@ -1121,14 +1248,16 @@ def igris_chat():
         active_concerns_payload=concerns,
     )
 
-    return jsonify({
-        "reply":   reply.text,
-        "backend": reply.backend,
-        "mode":    reply.mode,
-        "posture": reply.posture,
-        "took_ms": reply.took_ms,
-        "warning": reply.warning,
-    })
+    return jsonify(
+        {
+            "reply": reply.text,
+            "backend": reply.backend,
+            "mode": reply.mode,
+            "posture": reply.posture,
+            "took_ms": reply.took_ms,
+            "warning": reply.warning,
+        }
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -1226,6 +1355,7 @@ def event_detail(event_id: str):
 
 # ── JSON endpoints (shared) ─────────────────────────────────────────
 
+
 @web_bp.route("/api/investigate/events.json")
 @require_signed_in
 def investigate_events_json():
@@ -1233,15 +1363,17 @@ def investigate_events_json():
     q = request.args.get("q", "")
     flt = parse_query(q, default_window="1h")
     result = build_investigate(flt)
-    return jsonify({
-        "now_ms":     int(time.time() * 1000),
-        "total":      result.total,
-        "capped":     result.capped,
-        "rows":       result.rows,
-        "histogram":  result.histogram,
-        "facets":     result.facets,
-        "severities": result.severities,
-        "families":   result.families,
-        "chain_ok":   result.chain_ok,
-        "chain_breaks": result.chain_breaks,
-    })
+    return jsonify(
+        {
+            "now_ms": int(time.time() * 1000),
+            "total": result.total,
+            "capped": result.capped,
+            "rows": result.rows,
+            "histogram": result.histogram,
+            "facets": result.facets,
+            "severities": result.severities,
+            "families": result.families,
+            "chain_ok": result.chain_ok,
+            "chain_breaks": result.chain_breaks,
+        }
+    )

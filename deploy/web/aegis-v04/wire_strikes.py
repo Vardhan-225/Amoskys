@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Wire Aegis sensor strike handoffs → Block engine via WP action hook."""
 
-SENSORS = "/var/www/html/wp-content/plugins/amoskys-aegis/includes/class-aegis-sensors.php"
+SENSORS = (
+    "/var/www/html/wp-content/plugins/amoskys-aegis/includes/class-aegis-sensors.php"
+)
 BLOCK = "/var/www/html/wp-content/plugins/amoskys-aegis/includes/class-aegis-block.php"
 
 # 1. Block engine listens to the strike action
@@ -9,7 +11,10 @@ with open(BLOCK) as f:
     bsrc = f.read()
 if "amoskys_aegis_strike" not in bsrc:
     old = "add_action( 'plugins_loaded', array( $this, 'enforce' ), -1 );"
-    new = old + "\n\t\tadd_action( 'amoskys_aegis_strike', array( $this, 'count_strike' ), 10, 2 );"
+    new = (
+        old
+        + "\n\t\tadd_action( 'amoskys_aegis_strike', array( $this, 'count_strike' ), 10, 2 );"
+    )
     bsrc = bsrc.replace(old, new)
     with open(BLOCK, "w") as f:
         f.write(bsrc)
@@ -27,7 +32,7 @@ if "'amoskys_aegis_strike', 'auth_fail'" not in ssrc:
         "public function on_login_failed( string $user_login, $error ): void {",
         "public function on_login_failed( string $user_login, $error ): void {\n"
         "\t\t$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : null;\n"
-        "\t\tif ( $ip ) { do_action( 'amoskys_aegis_strike', 'auth_fail', $ip ); }"
+        "\t\tif ( $ip ) { do_action( 'amoskys_aegis_strike', 'auth_fail', $ip ); }",
     )
     print("  ✓ login_failed → auth_fail strike")
 
