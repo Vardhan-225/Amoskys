@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -44,7 +45,11 @@ import numpy as np
 
 logger = logging.getLogger("amoskys.soma")
 
-DATA_DIR = Path("data")
+# Honor AMOSKYS_DATA_DIR so SOMA's frequency memory lands under the intended
+# data location (e.g. /var/lib/amoskys/igris on ops) instead of a CWD-relative
+# path. Defaults to 'data/igris/memory.db' when the env var is unset, so
+# single-machine behavior is unchanged.
+DATA_DIR = Path(os.environ.get("AMOSKYS_DATA_DIR", "data"))
 MEMORY_DB = DATA_DIR / "igris" / "memory.db"
 
 # ── Dual-use process awareness ───────────────────────────────────────────

@@ -371,8 +371,9 @@ def run_l3_data_structures():
 
     # ProcessSnapshot
     try:
-        from amoskys.agents.os.macos.process.collector import ProcessSnapshot
         import inspect
+
+        from amoskys.agents.os.macos.process.collector import ProcessSnapshot
 
         sig = inspect.signature(ProcessSnapshot)
         params = list(sig.parameters.keys())
@@ -400,7 +401,7 @@ def run_l3_data_structures():
 
     # TelemetryEvent
     try:
-        from amoskys.agents.common.probes import TelemetryEvent, Severity
+        from amoskys.agents.common.probes import Severity, TelemetryEvent
 
         ev = TelemetryEvent(
             event_type="test",
@@ -452,7 +453,7 @@ def run_l3_data_structures():
 
     # KillChainState
     try:
-        from amoskys.agents.common.kill_chain import KillChainTracker, KILL_CHAIN_STAGES
+        from amoskys.agents.common.kill_chain import KILL_CHAIN_STAGES, KillChainTracker
 
         tracker = KillChainTracker(ttl_seconds=60)
         state = tracker.record_stage(
@@ -482,11 +483,11 @@ def run_l3_data_structures():
     # Coordination bus
     try:
         from amoskys.common.coordination import (
+            CoordinationConfig,
+            LocalBus,
             TacticalTopic,
             WatchDirective,
-            LocalBus,
             create_coordination_bus,
-            CoordinationConfig,
         )
 
         topics = [t.value for t in TacticalTopic]
@@ -828,6 +829,7 @@ def run_l6_enrichment():
     # Fusion engine
     try:
         import tempfile
+
         from amoskys.intel.fusion_engine import FusionEngine
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -941,9 +943,10 @@ def run_l7_detection():
 
     # Fusion rule evaluation with crafted attack scenario
     try:
-        from amoskys.intel.rules import evaluate_rules
-        from amoskys.intel.models import TelemetryEventView
         from datetime import timedelta
+
+        from amoskys.intel.models import TelemetryEventView
+        from amoskys.intel.rules import evaluate_rules
 
         now = datetime.now()
         events = []
@@ -1123,11 +1126,11 @@ def run_l9_igris():
 
     # IGRIS imports
     try:
-        from amoskys.igris.supervisor import Igris
-        from amoskys.igris.signals import SignalType, IgrisSignal, SignalEmitter
-        from amoskys.igris.metrics import MetricCollector
         from amoskys.igris.baseline import BaselineTracker
         from amoskys.igris.coherence import assess
+        from amoskys.igris.metrics import MetricCollector
+        from amoskys.igris.signals import IgrisSignal, SignalEmitter, SignalType
+        from amoskys.igris.supervisor import Igris
 
         signal_types = [s.value for s in SignalType]
         record("L9", "IGRIS imports", "PASS", f"signal types: {signal_types}")
@@ -1163,7 +1166,7 @@ def run_l9_igris():
 
     # Story engine
     try:
-        from amoskys.intel.story_engine import StoryEngine, KNOWN_PATTERNS
+        from amoskys.intel.story_engine import KNOWN_PATTERNS, StoryEngine
 
         engine = StoryEngine.__new__(StoryEngine)  # Don't connect to DB
         record(
@@ -1177,7 +1180,7 @@ def run_l9_igris():
 
     # Narrator
     try:
-        from amoskys.igris.narrator import Narrator, Briefing
+        from amoskys.igris.narrator import Briefing, Narrator
 
         narrator = Narrator(use_claude=False)  # Template mode only
         record(

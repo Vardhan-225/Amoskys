@@ -330,12 +330,16 @@ SHIP_TABLES = {
             "timestamp_dt",
             "device_id",
             "domain",
-            "record_type",
+            "query_type",
             "response_code",
             "risk_score",
             "process_name",
             "collection_agent",
         ],
+        # Local agent column -> key expected by the server ingest whitelist.
+        # The agent stores the DNS record type under "query_type"; the server
+        # column is "record_type", so ship it under that key to avoid a drop.
+        "aliases": {"query_type": "record_type"},
     },
     "persistence_events": {
         "columns": [
@@ -610,7 +614,7 @@ class TelemetryShipper:
 
             for table, meta in SHIP_TABLES.items():
                 try:
-                    self._ship_table(db, table, meta["columns"])
+                    self._ship_table(db, table, meta["columns"], meta.get("aliases"))
                 except Exception as e:
                     logger.debug("Ship %s failed: %s", table, e)
 
@@ -618,8 +622,21 @@ class TelemetryShipper:
         except Exception as e:
             logger.warning("Cannot open telemetry DB: %s", e)
 
-    def _ship_table(self, db: sqlite3.Connection, table: str, columns: list[str]):
-        """Ship new rows from a single table."""
+    def _ship_table(
+        self,
+        db: sqlite3.Connection,
+        table: str,
+        columns: list[str],
+        aliases: Optional[dict[str, str]] = None,
+    ):
+        """Ship new rows from a single table.
+
+        ``aliases`` maps a local column name to the key the event should be
+        shipped under (to match the server ingest whitelist when the local
+        and server column names differ, e.g. dns_events query_type ->
+        record_type).
+        """
+        aliases = aliases or {}
         last_id = self.cursors.get(table)
 
         # Check which columns actually exist in the table
@@ -647,7 +664,10 @@ class TelemetryShipper:
         events = []
         max_id = last_id
         for row in rows:
-            event = {valid_cols[i]: row[i] for i in range(len(valid_cols))}
+            event = {
+                aliases.get(valid_cols[i], valid_cols[i]): row[i]
+                for i in range(len(valid_cols))
+            }
             # Ensure device_id is set
             if not event.get("device_id"):
                 event["device_id"] = self.config.device_id

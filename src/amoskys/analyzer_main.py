@@ -128,7 +128,14 @@ def _build_fusion_view(event_data, device_id):
     return view
 
 
-def _rescore_fleet_db(db_path, scorer, enricher, fusion, batch: int = 500) -> int:
+def _rescore_fleet_db(
+    db_path,
+    scorer,
+    enricher,
+    fusion,
+    batch: int = 500,
+    max_total: int = 5000,
+) -> int:
     """Re-score a Command-Center fleet DB's ``security_events`` in place.
 
     fleet.db is written by command_center from shipped agent telemetry and has
@@ -136,23 +143,41 @@ def _rescore_fleet_db(db_path, scorer, enricher, fusion, batch: int = 500) -> in
     brain") the scorer for fleet events: it enriches each unscored row, runs the
     ScoringEngine, best-effort feeds fusion, and writes the 8 score columns back.
 
+    Continuous drain + short transactions: instead of scoring a single LIMIT
+    ``batch`` slice per invocation (which left ~34% of the fleet unscored, oldest
+    ~3 days), this drains the whole pending backlog by looping the SELECT/score/
+    UPDATE in sub-batches until a sub-batch returns fewer than ``batch`` rows
+    (backlog exhausted). Total work per call is bounded to ``max_total`` so a
+    ``--once`` invocation always terminates. Commits happen every ~50 rows
+    (``_COMMIT_EVERY``), so the write transaction stays short (~tens of ms) and
+    does not back up concurrent command_center inserts — the old single
+    end-of-call commit held a ~1s write txn.
+
     Selection: rows WHERE composite_score IS NULL OR last_scored IS NULL, and
     (to avoid racing fresh command_center inserts) only rows at least ~2s old.
     ``received_at`` is an epoch REAL in fleet.db, so ``received_at <
     strftime('%s','now')-2`` compares like-for-like; if that column is absent we
-    fall back to an id-based cutoff (id <= max(id)-batch guard via ORDER BY id).
+    fall back to id-based ordering (oldest first). Because each scored row has
+    ``last_scored`` set, it drops out of the ``need`` predicate on the next
+    sub-batch, so re-SELECTing with ``ORDER BY id LIMIT`` walks strictly forward
+    through the backlog without re-scoring rows.
 
     Args:
         db_path: Path to the fleet DB (sqlite3 file).
         scorer: A ScoringEngine (mutates event dict with score columns).
         enricher: An EnrichmentPipeline (or None) — enrich runs before scoring.
         fusion: A FusionEngine (or None) — add_event is best-effort.
-        batch: Max rows to score per call.
+        batch: Rows to SELECT/score per sub-batch (also the drain-done sentinel:
+            a sub-batch returning < ``batch`` rows means the backlog is drained).
+        max_total: Upper bound on rows scored across all sub-batches this call,
+            so ``--once`` terminates even on a very large backlog.
 
     Returns:
         Number of rows successfully scored this call.
     """
     import sqlite3 as _sqlite3
+
+    _COMMIT_EVERY = 50  # keep each write transaction short (~50 UPDATEs)
 
     scored = 0
     skipped = 0
@@ -183,78 +208,116 @@ def _rescore_fleet_db(db_path, scorer, enricher, fusion, batch: int = 500) -> in
             # 2s-race guard is unavailable, so we simply take the oldest rows.
             age_guard = ""
 
-        rows = conn.execute(
-            f"SELECT * FROM security_events WHERE {need} {age_guard} "
-            f"ORDER BY id LIMIT ?",
-            (batch,),
-        ).fetchall()
-
         now_epoch = int(time.time())
-        for row in rows:
-            # Bind id up-front (before any risky work) so the error handler can
-            # always name the offending row.
-            try:
-                row_id = row["id"]
-            except (IndexError, KeyError):
-                row_id = None
-            try:
-                event_data = {k: row[k] for k in row.keys()}
-                device_id = event_data.get("device_id", "") or "unknown"
+        pending_commit = 0  # UPDATEs accumulated since the last commit
 
-                # mitre_techniques is stored as a JSON string in fleet.db —
-                # decode so scoring/fusion see a list, not a raw string.
-                mt = event_data.get("mitre_techniques")
-                if isinstance(mt, str) and mt:
-                    try:
-                        event_data["mitre_techniques"] = json.loads(mt)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+        # ── Drain loop: keep pulling sub-batches until the backlog is empty ──
+        # A sub-batch shorter than ``batch`` means no more pending rows remain
+        # under the predicate. ``max_total`` caps total work so --once ends.
+        while scored + skipped < max_total:
+            remaining = max_total - (scored + skipped)
+            sub_limit = min(batch, remaining)
 
-                # Enrich (GeoIP/ASN/ThreatIntel) then score. Both mutate in place.
-                if enricher is not None:
-                    try:
-                        enricher.enrich(event_data)
-                    except Exception:
-                        logger.debug(
-                            "Fleet enrich failed for id=%s", row_id, exc_info=True
-                        )
+            rows = conn.execute(
+                f"SELECT * FROM security_events WHERE {need} {age_guard} "
+                f"ORDER BY id LIMIT ?",
+                (sub_limit,),
+            ).fetchall()
 
-                scorer.score_event(event_data)
+            if not rows:
+                break
 
-                # Best-effort fusion feed — never let a fusion error abort scoring.
-                if fusion is not None:
-                    try:
-                        view = _build_fusion_view(event_data, device_id)
-                        if view is not None:
-                            fusion.add_event(view)
-                    except Exception:
-                        logger.debug(
-                            "Fleet fusion feed failed for id=%s", row_id, exc_info=True
-                        )
+            for row in rows:
+                # Bind id up-front (before any risky work) so the error handler
+                # can always name the offending row.
+                try:
+                    row_id = row["id"]
+                except (IndexError, KeyError):
+                    row_id = None
+                try:
+                    event_data = {k: row[k] for k in row.keys()}
+                    device_id = event_data.get("device_id", "") or "unknown"
 
-                conn.execute(
-                    "UPDATE security_events SET "
-                    "risk_score_raw=?, geometric_score=?, temporal_score=?, "
-                    "behavioral_score=?, composite_score=?, final_classification=?, "
-                    "enrichment_status=?, last_scored=? WHERE id=?",
-                    (
-                        event_data.get("risk_score_raw"),
-                        event_data.get("geometric_score"),
-                        event_data.get("temporal_score"),
-                        event_data.get("behavioral_score"),
-                        event_data.get("composite_score"),
-                        event_data.get("final_classification"),
-                        event_data.get("enrichment_status"),
-                        now_epoch,
-                        row_id,
-                    ),
-                )
-                scored += 1
-            except Exception as e:
-                # One bad row must not abort the batch.
-                skipped += 1
-                logger.warning("Fleet rescore: skipping row id=%s: %s", row_id, e)
+                    # mitre_techniques is stored as a JSON string in fleet.db —
+                    # decode so scoring/fusion see a list, not a raw string.
+                    mt = event_data.get("mitre_techniques")
+                    if isinstance(mt, str) and mt:
+                        try:
+                            event_data["mitre_techniques"] = json.loads(mt)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
 
+                    # Enrich (GeoIP/ASN/ThreatIntel) then score. Both mutate
+                    # in place.
+                    if enricher is not None:
+                        try:
+                            enricher.enrich(event_data)
+                        except Exception:
+                            logger.debug(
+                                "Fleet enrich failed for id=%s",
+                                row_id,
+                                exc_info=True,
+                            )
+
+                    scorer.score_event(event_data)
+
+                    # Best-effort fusion feed — never let a fusion error abort
+                    # scoring.
+                    if fusion is not None:
+                        try:
+                            view = _build_fusion_view(event_data, device_id)
+                            if view is not None:
+                                fusion.add_event(view)
+                        except Exception:
+                            logger.debug(
+                                "Fleet fusion feed failed for id=%s",
+                                row_id,
+                                exc_info=True,
+                            )
+
+                    conn.execute(
+                        "UPDATE security_events SET "
+                        "risk_score_raw=?, geometric_score=?, temporal_score=?, "
+                        "behavioral_score=?, composite_score=?, "
+                        "final_classification=?, enrichment_status=?, "
+                        "last_scored=? WHERE id=?",
+                        (
+                            event_data.get("risk_score_raw"),
+                            event_data.get("geometric_score"),
+                            event_data.get("temporal_score"),
+                            event_data.get("behavioral_score"),
+                            event_data.get("composite_score"),
+                            event_data.get("final_classification"),
+                            event_data.get("enrichment_status"),
+                            now_epoch,
+                            row_id,
+                        ),
+                    )
+                    scored += 1
+                    pending_commit += 1
+
+                    # Short transaction: commit every ~50 UPDATEs so the write
+                    # lock is held only briefly and command_center inserts do
+                    # not back up behind a long rescore transaction.
+                    if pending_commit >= _COMMIT_EVERY:
+                        conn.commit()
+                        pending_commit = 0
+                except Exception as e:
+                    # One bad row must not abort the batch.
+                    skipped += 1
+                    logger.warning("Fleet rescore: skipping row id=%s: %s", row_id, e)
+
+            # Commit the tail of this sub-batch so scored rows drop out of
+            # ``need`` before the next SELECT walks forward.
+            if pending_commit > 0:
+                conn.commit()
+                pending_commit = 0
+
+            # Fewer rows than requested ⇒ backlog drained; stop looping.
+            if len(rows) < sub_limit:
+                break
+
+        # Final safety commit (no-op if already committed above).
         conn.commit()
     except Exception as e:
         logger.error("Fleet rescore failed for %s: %s", db_path, e)

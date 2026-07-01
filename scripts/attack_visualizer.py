@@ -885,12 +885,12 @@ def generate_baseline():
         sys.path.insert(0, str(ROOT / "src"))
         os.environ.setdefault("PYTHONPATH", str(ROOT / "src"))
 
+        from amoskys.agents.os.macos.auth.probes import create_auth_probes
         from amoskys.agents.os.macos.infostealer_guard.probes import (
             create_infostealer_guard_probes,
         )
-        from amoskys.agents.os.macos.process.probes import create_process_probes
         from amoskys.agents.os.macos.network.probes import create_network_probes
-        from amoskys.agents.os.macos.auth.probes import create_auth_probes
+        from amoskys.agents.os.macos.process.probes import create_process_probes
 
         for agent_name, factory in [
             ("InfostealerGuard", create_infostealer_guard_probes),

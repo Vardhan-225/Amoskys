@@ -46,15 +46,15 @@ banner("Step 1: Verify INADS Engine Imports")
 
 try:
     from amoskys.intel.inads_engine import (
+        CalibratedFusion,
+        ClusterScore,
+        FilePathCluster,
         INADSEngine,
         INADSResult,
-        CalibratedFusion,
-        ProcessTreeCluster,
-        NetworkSequenceCluster,
         KillChainStateMachine,
+        NetworkSequenceCluster,
+        ProcessTreeCluster,
         SystemAnomalyCluster,
-        FilePathCluster,
-        ClusterScore,
     )
 
     print("  ✓ inads_engine.py imports OK")

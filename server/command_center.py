@@ -1022,7 +1022,8 @@ def device_detail(device_id):
 
     # Recent security events
     events = db.execute(
-        """SELECT id, timestamp_dt, event_category, risk_score,
+        """SELECT id, timestamp_dt, event_category,
+                  COALESCE(composite_score, risk_score) as risk_score,
                   description, collection_agent, mitre_techniques,
                   process_name, remote_ip, detection_source
            FROM security_events
@@ -1068,7 +1069,8 @@ def device_telemetry(device_id):
 
     # Security events (last 24h)
     sec_events = db.execute(
-        """SELECT id, timestamp_dt, event_category, risk_score, confidence,
+        """SELECT id, timestamp_dt, event_category,
+                  COALESCE(composite_score, risk_score) as risk_score, confidence,
                   description, collection_agent, mitre_techniques,
                   process_name, remote_ip, username, domain, path,
                   detection_source, probe_name, geo_src_country, asn_src_org
@@ -1079,8 +1081,9 @@ def device_telemetry(device_id):
 
     # Category breakdown
     categories = db.execute(
-        """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk,
-                  MAX(risk_score) as max_risk
+        """SELECT event_category, COUNT(*) as cnt,
+                  AVG(COALESCE(composite_score, risk_score)) as avg_risk,
+                  MAX(COALESCE(composite_score, risk_score)) as max_risk
            FROM security_events WHERE device_id = ? AND timestamp_ns > ?
            GROUP BY event_category ORDER BY cnt DESC""",
         (device_id, day_ago_ns),
@@ -1171,8 +1174,11 @@ def device_telemetry(device_id):
     timeline = db.execute(
         """SELECT substr(timestamp_dt, 1, 13) as hour,
                   COUNT(*) as cnt,
-                  SUM(CASE WHEN risk_score >= 0.8 THEN 1 ELSE 0 END) as critical,
-                  SUM(CASE WHEN risk_score >= 0.6 AND risk_score < 0.8 THEN 1 ELSE 0 END) as high
+                  SUM(CASE WHEN COALESCE(composite_score, risk_score) >= 0.8
+                           THEN 1 ELSE 0 END) as critical,
+                  SUM(CASE WHEN COALESCE(composite_score, risk_score) >= 0.6
+                           AND COALESCE(composite_score, risk_score) < 0.8
+                           THEN 1 ELSE 0 END) as high
            FROM security_events WHERE device_id = ? AND timestamp_ns > ?
            GROUP BY hour ORDER BY hour""",
         (device_id, day_ago_ns),
@@ -1289,7 +1295,7 @@ def query_events():
         query += " AND event_category = ?"
         params.append(category)
     if min_risk is not None:
-        query += " AND risk_score >= ?"
+        query += " AND COALESCE(composite_score, risk_score) >= ?"
         params.append(min_risk)
 
     query += " ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?"
@@ -1345,20 +1351,24 @@ def fleet_status():
     ).fetchone()[0]
 
     critical = db.execute(
-        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8{se_org}",
+        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? "
+        f"AND COALESCE(composite_score, risk_score) >= 0.8{se_org}",
         [day_ago_ns] + se_org_params,
     ).fetchone()[0]
 
     high = db.execute(
-        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8{se_org}",
+        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? "
+        f"AND COALESCE(composite_score, risk_score) >= 0.6 "
+        f"AND COALESCE(composite_score, risk_score) < 0.8{se_org}",
         [day_ago_ns] + se_org_params,
     ).fetchone()[0]
 
     # Top threat categories (last 24h)
     top_categories = db.execute(
-        f"""SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
+        f"""SELECT event_category, COUNT(*) as cnt,
+                  AVG(COALESCE(composite_score, risk_score)) as avg_risk
            FROM security_events
-           WHERE timestamp_ns > ? AND risk_score > 0{se_org}
+           WHERE timestamp_ns > ? AND COALESCE(composite_score, risk_score) > 0{se_org}
            GROUP BY event_category
            ORDER BY cnt DESC LIMIT 10""",
         [day_ago_ns] + se_org_params,
@@ -1396,9 +1406,12 @@ def fleet_status():
         f"""SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
                   d.status, d.last_seen, d.public_ip, d.org_id,
                   COUNT(se.id) as event_count,
-                  MAX(se.risk_score) as max_risk,
-                  SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
-                  SUM(CASE WHEN se.risk_score >= 0.6 AND se.risk_score < 0.8 THEN 1 ELSE 0 END) as high_count
+                  MAX(COALESCE(se.composite_score, se.risk_score)) as max_risk,
+                  SUM(CASE WHEN COALESCE(se.composite_score, se.risk_score) >= 0.8
+                           THEN 1 ELSE 0 END) as critical_count,
+                  SUM(CASE WHEN COALESCE(se.composite_score, se.risk_score) >= 0.6
+                           AND COALESCE(se.composite_score, se.risk_score) < 0.8
+                           THEN 1 ELSE 0 END) as high_count
            FROM devices d
            LEFT JOIN security_events se ON d.device_id = se.device_id
                 AND se.timestamp_ns > ?

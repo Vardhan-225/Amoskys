@@ -23,7 +23,6 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
-
 # ===========================================================================
 # Agent-to-Capability Mapping
 # ===========================================================================

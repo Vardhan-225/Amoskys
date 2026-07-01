@@ -39,8 +39,16 @@ _PRIVATE_NETWORKS = [
 ]
 
 # High-risk event categories (behavioral boost)
+#
+# The original set used generic MITRE-ish names (brute_force, exfiltration, …)
+# that the live probes never emit. The probes emit the concrete category names
+# below (full_kill_chain, c2_beacon_suspect, cloud_exfil_detected, …), so those
+# genuine attack categories were silently missing the high-risk behavioral boost
+# — a root cause of the broken calibration where a literal kill chain scored as
+# "legitimate". Both the legacy and the live probe category names are kept.
 _HIGH_RISK_CATEGORIES = frozenset(
     {
+        # Legacy / generic
         "brute_force",
         "credential_stuffing",
         "lateral_movement",
@@ -50,17 +58,58 @@ _HIGH_RISK_CATEGORIES = frozenset(
         "dns_tunnel",
         "reverse_shell",
         "rootkit",
+        # Live fleet probe categories (the ones actually present in the data)
+        "full_kill_chain",
+        "execute_to_exfil",
+        "c2_beacon_suspect",
+        "cloud_exfil_detected",
+        "exfil_spike",
+        "lolbin_execution",
+        "dns_beaconing_detected",
+        "dns_beaconing_suspected",
+        "dga_domain_detected",
+        "port_scan_detected",
+        "log_tampering_detected",
+        "sudo_escalation",
+        "credential_access_indirect",
     }
 )
+
+# Per-category composite risk FLOORS.
+#
+# Some attack categories describe a compromise that is intrinsically severe
+# regardless of how "familiar" the pattern looks to a single device's baseline.
+# Baseline suppression (up to -70% behavioral) was crushing these below the
+# 0.40 "suspicious" threshold on the live single-device fleet, so a genuine
+# multi-stage compromise read as legitimate and the 0.70 "malicious" band was
+# mathematically unreachable.
+#
+# These floors are applied to the composite AFTER fusion so the category can
+# never be classified below the intended band. full_kill_chain — an actual
+# multi-stage compromise with confirmed impact — floors into the malicious
+# band; single-stage exfil/C2/staging categories floor at "suspicious".
+# Benign categories are intentionally absent so they stay low.
+_MALICIOUS_THRESHOLD = 0.70
+_SUSPICIOUS_THRESHOLD = 0.40
+
+_CATEGORY_RISK_FLOORS: Dict[str, float] = {
+    "full_kill_chain": _MALICIOUS_THRESHOLD,  # 0.70 — confirmed multi-stage compromise
+    "execute_to_exfil": _MALICIOUS_THRESHOLD,  # 0.70 — execution chained to exfiltration
+    "cloud_exfil_detected": _SUSPICIOUS_THRESHOLD + 0.05,  # 0.45
+    "exfil_spike": _SUSPICIOUS_THRESHOLD + 0.05,  # 0.45
+    "c2_beacon_suspect": _SUSPICIOUS_THRESHOLD,  # 0.40
+    "log_tampering_detected": _SUSPICIOUS_THRESHOLD,  # 0.40 — anti-forensics
+}
+
+# Categories whose severity must NOT be diluted by baseline/SOMA suppression.
+# For these, "familiarity" is not exculpatory — a device beaconing to C2 every
+# hour is not less malicious for being consistent about it.
+_SUPPRESSION_EXEMPT_CATEGORIES = frozenset(_CATEGORY_RISK_FLOORS.keys())
 
 # Fusion weights for final classification
 _GEO_WEIGHT = 0.35
 _TEMP_WEIGHT = 0.25
 _BEHAV_WEIGHT = 0.40
-
-# Classification thresholds
-_MALICIOUS_THRESHOLD = 0.70
-_SUSPICIOUS_THRESHOLD = 0.40
 
 
 def _is_private_ip(ip_str: str) -> bool:
@@ -1044,6 +1093,15 @@ class ScoringEngine:
         # DETECTION mode — full scoring with baseline awareness
         known_factor = device_bl.is_known_pattern(event)
 
+        # High-severity attack categories are exempt from familiarity-based
+        # suppression: a category like full_kill_chain / c2_beacon_suspect /
+        # cloud_exfil_detected describes a compromise whose severity does not
+        # diminish just because the (single) device keeps doing it. Suppressing
+        # these below "suspicious" is exactly the calibration bug we are fixing.
+        raw_category = event.get("event_category", "")
+        cat_key = (raw_category or "").lower().replace(" ", "_")
+        suppression_exempt = cat_key in _SUPPRESSION_EXEMPT_CATEGORIES
+
         # Continue learning in DETECTION mode — baselines evolve with the system.
         # New legitimate patterns get absorbed; the known_factor for familiar
         # events grows over time, naturally suppressing repeat benign activity.
@@ -1063,7 +1121,8 @@ class ScoringEngine:
         # Apply baseline suppression: known patterns reduce behavioral score
         # known_factor=1.0 → behavioral reduced by 70% (familiar pattern)
         # known_factor=0.0 → full behavioral score (novel event)
-        if known_factor > 0.1:
+        # NEVER suppress high-severity attack categories on familiarity.
+        if known_factor > 0.1 and not suppression_exempt:
             suppression = 0.70 * known_factor
             original_behav = behav_score
             behav_score = behav_score * (1.0 - suppression)
@@ -1089,7 +1148,7 @@ class ScoringEngine:
             )
             soma.close()
 
-            if soma_result.suppression_factor > 0.1:
+            if soma_result.suppression_factor > 0.1 and not suppression_exempt:
                 original_behav = behav_score
                 behav_score = behav_score * (1.0 - soma_result.suppression_factor)
                 if original_behav > 0.01:
@@ -1159,6 +1218,27 @@ class ScoringEngine:
                 w_geo * geo_score + w_temp * temp_score + w_behav * behav_score
             )
         composite = max(0.0, min(1.0, (raw_composite + offset) * agent_weight))
+
+        # Per-category risk FLOOR — genuine attack categories cannot be scored
+        # below their intended band, no matter how much familiarity-based
+        # suppression fired upstream. This is what lets full_kill_chain reach the
+        # malicious band (≥0.70) and exfil/C2/staging categories reach
+        # "suspicious" (≥0.40) on the single-device fleet where every attack
+        # pattern is "familiar". Applied BEFORE the trust caps below, so a
+        # trusted apple_system/self actor still wins and is pulled back down.
+        floor = _CATEGORY_RISK_FLOORS.get(cat_key, 0.0)
+        if floor > 0.0 and composite < floor:
+            behav_factors.append(
+                {
+                    "name": "Attack Category Floor",
+                    "contribution": round(floor - composite, 3),
+                    "detail": (
+                        f"Category '{raw_category}' floored to {floor:.2f} "
+                        "(intrinsic severity; not suppressible by baseline)"
+                    ),
+                }
+            )
+            composite = floor
 
         # Classify using dynamic thresholds (auto-calibrated per category)
         sus_thresh, mal_thresh = self._dynamic_thresholds.get_thresholds(

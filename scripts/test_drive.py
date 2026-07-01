@@ -163,8 +163,8 @@ def lap_preflight(results: DriveResults) -> bool:
 
     # ── Enrichment pipeline ──
     section("Enrichment Pipeline")
-    from amoskys.enrichment.geoip import GeoIPEnricher
     from amoskys.enrichment.asn import ASNEnricher
+    from amoskys.enrichment.geoip import GeoIPEnricher
 
     geo = GeoIPEnricher()
     results.enrichment_geoip = geo.available
@@ -181,8 +181,9 @@ def lap_preflight(results: DriveResults) -> bool:
     status("ASN (maxminddb + GeoLite2-ASN.mmdb)", asn.available)
 
     # Threat intel & MITRE via WALProcessor init
-    from amoskys.storage.wal_processor import WALProcessor
     import logging
+
+    from amoskys.storage.wal_processor import WALProcessor
 
     logging.disable(logging.INFO)
     proc = WALProcessor("data/telemetry.db")
