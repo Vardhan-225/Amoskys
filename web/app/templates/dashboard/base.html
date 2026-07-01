@@ -133,6 +133,33 @@
             margin: 0 0.25rem; flex-shrink: 0;
         }
 
+        /* ── NAV GROUPS (hover dropdowns to expose all data domains) ────── */
+        .hdr-nav-group { position: relative; height: var(--header-height); display: flex; align-items: center; }
+        .hdr-nav-group > .hdr-nav-link { cursor: default; }
+        .hdr-nav-caret { font-size: 0.6rem; opacity: 0.6; margin-left: 0.15rem; transition: transform 0.2s; }
+        .hdr-nav-group:hover .hdr-nav-caret { transform: rotate(180deg); }
+        .hdr-nav-group:hover > .hdr-nav-link { color: var(--text-primary); background: rgba(0,217,255,0.05); }
+        .hdr-nav-menu {
+            display: none; position: absolute; top: 100%; left: 0; margin-top: 0;
+            background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+            border-radius: 0 0 10px 10px; min-width: 210px; padding: 0.4rem 0;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.55); z-index: 2000;
+        }
+        .hdr-nav-group:hover .hdr-nav-menu { display: block; }
+        .hdr-nav-menu a {
+            display: flex; align-items: center; gap: 0.6rem;
+            padding: 0.55rem 1rem; color: var(--text-secondary); text-decoration: none;
+            font-size: 0.8rem; font-weight: 500; transition: all 0.15s; white-space: nowrap;
+        }
+        .hdr-nav-menu a:hover { background: rgba(0,217,255,0.08); color: var(--neural-primary); }
+        .hdr-nav-menu a .mi { width: 1.1rem; text-align: center; opacity: 0.75; font-size: 0.85rem; }
+        .hdr-nav-menu a .md { margin-left: auto; font-size: 0.68rem; color: var(--text-muted); opacity: 0.7; }
+        .hdr-nav-menu-label {
+            padding: 0.3rem 1rem 0.4rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.8px;
+            text-transform: uppercase; color: var(--text-muted); opacity: 0.6;
+        }
+        .hdr-nav-menu-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 0.3rem 0; }
+
         /* ── RIGHT STATUS AREA ────────────────────────────────────────── */
         .hdr-right {
             display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; margin-left: auto;
@@ -460,10 +487,28 @@
     <div class="mobile-nav-drawer" id="mobileDrawer">
         <div class="mobile-nav-panel">
             <a href="/dashboard/" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F3E0;</span> Overview</a>
-            <a href="/dashboard/threats" class="mobile-nav-link"><span class="hdr-nav-icon">&#x26A0;</span> Threats</a>
             <a href="/dashboard/devices" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4BB;</span> Devices</a>
-            <a href="/dashboard/igris" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F9E0;</span> IGRIS</a>
             <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
+            <div class="hdr-nav-menu-label">Detection</div>
+            <a href="/dashboard/threats" class="mobile-nav-link"><span class="hdr-nav-icon">&#x26A0;</span> Threats</a>
+            <a href="/dashboard/incidents" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4CB;</span> Incidents</a>
+            <a href="/dashboard/threat-feed" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4E1;</span> Threat Feed</a>
+            <a href="/dashboard/mitre" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F3AF;</span> MITRE ATT&amp;CK</a>
+            <a href="/dashboard/hunt" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F50D;</span> Hunt</a>
+            <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
+            <div class="hdr-nav-menu-label">Telemetry</div>
+            <a href="/dashboard/processes" class="mobile-nav-link"><span class="hdr-nav-icon">&#x25A3;</span> Processes</a>
+            <a href="/dashboard/network" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F310;</span> Network</a>
+            <a href="/dashboard/dns" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2317;</span> DNS</a>
+            <a href="/dashboard/file-integrity" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4C1;</span> File Integrity</a>
+            <a href="/dashboard/peripherals" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F50C;</span> Peripherals</a>
+            <a href="/dashboard/posture" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F6E1;</span> Posture</a>
+            <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
+            <div class="hdr-nav-menu-label">Intelligence &amp; Ops</div>
+            <a href="/dashboard/igris" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F9E0;</span> IGRIS</a>
+            <a href="/dashboard/soma" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2B22;</span> SOMA</a>
+            <a href="/dashboard/agents" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F916;</span> Agents</a>
+            <a href="/dashboard/system" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F5A5;</span> System</a>
             <a href="/dashboard/deploy" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F6E1;</span> Deploy</a>
             <a href="/dashboard/settings" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2699;</span> Settings</a>
             {% if user and user.role.value == 'admin' %}
@@ -489,32 +534,75 @@
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 6v8.5a.5.5 0 00.5.5H6V10h4v5h4.5a.5.5 0 00.5-.5V6L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
                 </span> Overview
             </a>
-            <a href="/dashboard/threats" class="hdr-nav-link" data-nav="threats">
-                <span class="hdr-nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 14h14L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3M8 11v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                </span> Threats
-            </a>
+            <!-- Detection group -->
+            <div class="hdr-nav-group" data-nav-group="detection">
+                <span class="hdr-nav-link" data-nav="threats">
+                    <span class="hdr-nav-icon">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 14h14L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3M8 11v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    </span> Detection <span class="hdr-nav-caret">▼</span>
+                </span>
+                <div class="hdr-nav-menu">
+                    <div class="hdr-nav-menu-label">Threats &amp; response</div>
+                    <a href="/dashboard/threats"><span class="mi">&#x26A0;</span> Threats <span class="md">correlated</span></a>
+                    <a href="/dashboard/incidents"><span class="mi">&#x1F4CB;</span> Incidents <span class="md">manage</span></a>
+                    <a href="/dashboard/threat-feed"><span class="mi">&#x1F4E1;</span> Threat Feed <span class="md">live events</span></a>
+                    <div class="hdr-nav-menu-sep"></div>
+                    <a href="/dashboard/mitre"><span class="mi">&#x1F3AF;</span> MITRE ATT&amp;CK <span class="md">coverage</span></a>
+                    <a href="/dashboard/hunt"><span class="mi">&#x1F50D;</span> Hunt <span class="md">query</span></a>
+                </div>
+            </div>
+            <!-- Devices (fleet + per-device telemetry) -->
             <a href="/dashboard/devices" class="hdr-nav-link" data-nav="devices">
                 <span class="hdr-nav-icon">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
                 </span> Devices
             </a>
-            <a href="/dashboard/igris" class="hdr-nav-link" data-nav="igris">
-                <span class="hdr-nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 6h.01M10 6h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.5 8a2.5 2.5 0 003 0" stroke="currentColor" stroke-width="1.2"/><path d="M5 12v2M11 12v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                </span> IGRIS
-            </a>
+            <!-- Telemetry group (per-device domains) -->
+            <div class="hdr-nav-group" data-nav-group="telemetry">
+                <span class="hdr-nav-link" data-nav="telemetry">
+                    <span class="hdr-nav-icon">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8h3l2-5 3 10 2-5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span> Telemetry <span class="hdr-nav-caret">▼</span>
+                </span>
+                <div class="hdr-nav-menu">
+                    <div class="hdr-nav-menu-label">Sensor domains</div>
+                    <a href="/dashboard/processes"><span class="mi">&#x25A3;</span> Processes</a>
+                    <a href="/dashboard/network"><span class="mi">&#x1F310;</span> Network</a>
+                    <a href="/dashboard/dns"><span class="mi">&#x2317;</span> DNS</a>
+                    <a href="/dashboard/file-integrity"><span class="mi">&#x1F4C1;</span> File Integrity</a>
+                    <a href="/dashboard/peripherals"><span class="mi">&#x1F50C;</span> Peripherals</a>
+                    <a href="/dashboard/posture"><span class="mi">&#x1F6E1;</span> Posture</a>
+                </div>
+            </div>
+            <!-- Intelligence group -->
+            <div class="hdr-nav-group" data-nav-group="intelligence">
+                <span class="hdr-nav-link" data-nav="igris">
+                    <span class="hdr-nav-icon">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 6h.01M10 6h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.5 8a2.5 2.5 0 003 0" stroke="currentColor" stroke-width="1.2"/><path d="M5 12v2M11 12v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    </span> Intelligence <span class="hdr-nav-caret">▼</span>
+                </span>
+                <div class="hdr-nav-menu">
+                    <div class="hdr-nav-menu-label">Brain &amp; supervision</div>
+                    <a href="/dashboard/igris"><span class="mi">&#x1F9E0;</span> IGRIS <span class="md">supervisor</span></a>
+                    <a href="/dashboard/soma"><span class="mi">&#x2B22;</span> SOMA <span class="md">correlation</span></a>
+                </div>
+            </div>
             <div class="hdr-nav-sep"></div>
-            <a href="/dashboard/deploy" class="hdr-nav-link" data-nav="deploy">
-                <span class="hdr-nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 5v4c0 4 2.5 7 6 8 3.5-1 6-4 6-8V5L8 1z" stroke="currentColor" stroke-width="1.4"/><path d="M6 8l2 2 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span> Deploy
-            </a>
-            <a href="/dashboard/settings" class="hdr-nav-link" data-nav="settings">
-                <span class="hdr-nav-icon">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M13 3l-1.5 1.5M4.5 11.5L3 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                </span> Settings
-            </a>
+            <!-- Fleet ops group -->
+            <div class="hdr-nav-group" data-nav-group="ops">
+                <span class="hdr-nav-link" data-nav="deploy">
+                    <span class="hdr-nav-icon">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 5v4c0 4 2.5 7 6 8 3.5-1 6-4 6-8V5L8 1z" stroke="currentColor" stroke-width="1.4"/><path d="M6 8l2 2 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span> Ops <span class="hdr-nav-caret">▼</span>
+                </span>
+                <div class="hdr-nav-menu">
+                    <div class="hdr-nav-menu-label">Fleet operations</div>
+                    <a href="/dashboard/agents"><span class="mi">&#x1F916;</span> Agents <span class="md">health</span></a>
+                    <a href="/dashboard/system"><span class="mi">&#x1F5A5;</span> System <span class="md">vitals</span></a>
+                    <a href="/dashboard/deploy"><span class="mi">&#x1F680;</span> Deploy</a>
+                    <a href="/dashboard/settings"><span class="mi">&#x2699;</span> Settings</a>
+                </div>
+            </div>
         </nav>
 
         <!-- Mobile menu button -->

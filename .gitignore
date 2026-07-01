@@ -238,3 +238,4 @@ src/amoskys/agents/Web/wordpress/wp-content/*
 src/amoskys/agents/Web/wordpress/wp-content/plugins/*
 !src/amoskys/agents/Web/wordpress/wp-content/plugins/amoskys-aegis/
 
+webpreview-venv/

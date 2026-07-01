@@ -95,8 +95,10 @@ def require_login(f):
                 id="test-user-id",
                 username="test",
                 email="test@amoskys.local",
+                full_name="Test User",
                 role=SimpleNamespace(value="admin"),
                 is_active=True,
+                setup_completed=True,
                 org_id="test-org-id",
             )
             return f(*args, **kwargs)

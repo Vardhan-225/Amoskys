@@ -8,6 +8,37 @@ from . import dashboard_bp
 _DEVICES_URL = "/dashboard/devices"
 
 
+def _primary_device_id():
+    """The most-active device id, so bare telemetry routes can land on real
+    data (a device's domain page) instead of bouncing to the device list.
+    Returns None if it can't be resolved (→ caller falls back to /devices)."""
+    try:
+        import sqlite3
+
+        from . import insight_service
+
+        path = insight_service.resolve_db_path()
+        if not path:
+            return None
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3)
+        try:
+            row = con.execute(
+                "SELECT device_id FROM security_events "
+                "GROUP BY device_id ORDER BY COUNT(*) DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            con.close()
+        return row[0] if row and row[0] else None
+    except Exception:
+        return None
+
+
+def _telemetry_landing(domain: str):
+    """Redirect a bare telemetry route to the primary device's domain page."""
+    dev = _primary_device_id()
+    return redirect(f"/dashboard/device/{dev}/{domain}" if dev else _DEVICES_URL)
+
+
 @dashboard_bp.route("/")
 @require_login
 def dashboard_home():
@@ -119,8 +150,8 @@ def system_monitoring():
 @dashboard_bp.route("/processes")
 @require_login
 def processes_redirect():
-    """Processes without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Processes — land on the primary device's process view."""
+    return _telemetry_landing("processes")
 
 
 @dashboard_bp.route("/device/<device_id>/processes")
@@ -134,8 +165,8 @@ def process_telemetry(device_id):
 @dashboard_bp.route("/peripherals")
 @require_login
 def peripherals_redirect():
-    """Peripherals without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Peripherals — land on the primary device's peripheral view."""
+    return _telemetry_landing("peripherals")
 
 
 @dashboard_bp.route("/device/<device_id>/peripherals")
@@ -220,8 +251,8 @@ def soma_brain_dashboard():
 @dashboard_bp.route("/network")
 @require_login
 def network_redirect():
-    """Network without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Network — land on the primary device's network view."""
+    return _telemetry_landing("network")
 
 
 @dashboard_bp.route("/device/<device_id>/network")
@@ -273,8 +304,8 @@ def guardian_dashboard():
 @dashboard_bp.route("/posture")
 @require_login
 def posture_redirect():
-    """Posture without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Posture — land on the primary device's posture view."""
+    return _telemetry_landing("posture")
 
 
 @dashboard_bp.route("/device/<device_id>/posture")
@@ -288,8 +319,8 @@ def device_posture(device_id):
 @dashboard_bp.route("/dns")
 @require_login
 def dns_redirect():
-    """DNS without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """DNS — land on the primary device's DNS view."""
+    return _telemetry_landing("dns")
 
 
 @dashboard_bp.route("/device/<device_id>/dns")
@@ -305,8 +336,8 @@ def dns_intelligence(device_id):
 @dashboard_bp.route("/file-integrity")
 @require_login
 def file_integrity_redirect():
-    """FIM without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """File Integrity — land on the primary device's FIM view."""
+    return _telemetry_landing("file-integrity")
 
 
 @dashboard_bp.route("/device/<device_id>/file-integrity")
