@@ -309,28 +309,38 @@ class ExecuteToExfilProbe(MicroProbe):
 
 
 class FullKillChainProbe(MicroProbe):
-    """Detects multi-stage kill chains across a 300-second sliding window.
+    """Detects a CAUSAL, ORDERED download→execute→act kill chain.
 
-    THE BIG ONE.  Maintains a rolling timeline of all provenance events
-    across scans.  Scores the timeline against a 6-stage kill chain model:
+    Rewritten 2026-07-01 (detection roadmap increment 2). The previous
+    implementation counted *co-occurring* stage labels in a 300s window —
+    "a messaging app was open AND a browser was open AND some file appeared
+    AND some process spawned AND something connected out" — which is the
+    steady state of any developer machine (Axelsson's base-rate fallacy:
+    co-occurrence of individually-common events is expected, not rare).
+    It alerted constantly and meant nothing.
 
-        Stage 1: Messaging app active           (weight 1)
-        Stage 2: Browser active                 (weight 1)
-        Stage 3: New download                   (weight 2)
-        Stage 4: New process from download      (weight 3)
-        Stage 5: Credential access              (weight 4)
-        Stage 6: Network exfiltration           (weight 4)
+    A kill chain is now only asserted when the stages are CAUSALLY LINKED
+    to one actor, in chronological order, inside the window:
 
-    Scoring:
-        - 4+ stages matched: CRITICAL
-        - 3 stages matched: HIGH
-        - <3 stages: no alert
+        1. DOWNLOAD   file F appears in ~/Downloads at t1
+        2. EXECUTE    a NEW process P starts at t2 > t1 whose exe/cmdline
+                      references F (the downloaded artifact itself runs)
+        3. ACT        the SAME pid P then touches credentials (t3 >= t2)
+                      and/or makes an outbound network connection
+
+    Passive context (messaging/browser apps active before the download) no
+    longer counts as chain stages — it only nudges confidence, reflecting a
+    plausible delivery vector. No ordered same-actor chain → NO alert.
+
+    Severity:
+        - chain with credential access AND network egress: CRITICAL
+        - chain with one of the two: HIGH
 
     MITRE: T1566.002 (Phishing: Spearphishing Link) — full chain
     """
 
     name = "macos_provenance_full_kill_chain"
-    description = "Detects multi-stage cross-application kill chains"
+    description = "Detects causally-linked download→execute→exfil chains"
     platforms = ["darwin"]
     mitre_techniques = ["T1566.002"]
     mitre_tactics = ["initial_access", "execution", "exfiltration"]
@@ -339,110 +349,134 @@ class FullKillChainProbe(MicroProbe):
 
     WINDOW_SECONDS = 300.0
 
-    _STAGE_WEIGHTS = {
-        "messaging": 1,
-        "browser": 1,
-        "download": 2,
-        "execute": 3,
-        "credential": 4,
-        "network": 4,
-    }
-
     def __init__(self) -> None:
         super().__init__()
         self._timeline_window: List[Any] = []  # List[TimelineEvent]
+        self._proc_window: Dict[int, Any] = {}  # pid -> NewProcess (rolling)
+        self._alerted_chains: set = set()  # (pid, download_path) already fired
+
+    @staticmethod
+    def _parse_download(detail: str) -> str:
+        """Extract the path from a file_created detail string."""
+        # detail format: "file=<name> size=<n> path=<path>"
+        idx = detail.find("path=")
+        return detail[idx + 5 :].strip() if idx >= 0 else ""
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         events: List[TelemetryEvent] = []
         data = context.shared_data
         now = time.time()
-
-        # Append current timeline to the rolling window
-        current_timeline = data.get("timeline", [])
-        self._timeline_window.extend(current_timeline)
-
-        # Prune events older than the window
         cutoff = now - self.WINDOW_SECONDS
+
+        # ── Maintain rolling windows ──────────────────────────────────────
+        self._timeline_window.extend(data.get("timeline", []))
         self._timeline_window = [
             e for e in self._timeline_window if e.timestamp > cutoff
         ]
-
-        if not self._timeline_window:
-            return events
-
-        # Score each kill chain stage
-        stages_hit: Dict[str, List[str]] = {}
-
-        for event in self._timeline_window:
-            if event.event_type == "app_active":
-                if "category=messaging" in event.detail:
-                    stages_hit.setdefault("messaging", []).append(event.app_name)
-                elif "category=browser" in event.detail:
-                    stages_hit.setdefault("browser", []).append(event.app_name)
-            elif event.event_type == "file_created":
-                stages_hit.setdefault("download", []).append(event.detail)
-            elif event.event_type == "process_spawned":
-                # Check for credential access patterns
-                detail_lower = event.detail.lower()
-                app_lower = event.app_name.lower()
-                if any(
-                    pat in detail_lower or pat in app_lower
-                    for pat in _SENSITIVE_FILE_PATTERNS
-                ):
-                    stages_hit.setdefault("credential", []).append(event.app_name)
-                else:
-                    stages_hit.setdefault("execute", []).append(
-                        f"pid={event.pid} {event.app_name}"
-                    )
-            elif event.event_type == "network_connect":
-                stages_hit.setdefault("network", []).append(event.detail)
-
-        # Also check pid_connections for network stage
-        pid_connections = data.get("pid_connections", {})
-        new_processes = data.get("new_processes", [])
-        for proc in new_processes:
-            if proc.pid in pid_connections:
-                stages_hit.setdefault("network", []).append(
-                    f"pid={proc.pid} {proc.name}"
-                )
-
-        stage_count = len(stages_hit)
-
-        if stage_count < 3:
-            return events
-
-        # Calculate weighted score
-        total_score = sum(self._STAGE_WEIGHTS.get(stage, 0) for stage in stages_hit)
-
-        severity = Severity.CRITICAL if stage_count >= 4 else Severity.HIGH
-        confidence = min(0.95, 0.5 + (stage_count * 0.1))
-
-        # Build stage breakdown for analyst
-        stage_breakdown = {
-            stage: details[:3]  # Cap details for readability
-            for stage, details in stages_hit.items()
+        for proc in data.get("new_processes", []):
+            self._proc_window[proc.pid] = proc
+        self._proc_window = {
+            pid: p for pid, p in self._proc_window.items() if p.create_time > cutoff
+        }
+        # Expire alerted-chain dedup entries outside the window
+        self._alerted_chains = {
+            key for key in self._alerted_chains if key[2] > cutoff
         }
 
-        events.append(
-            self._create_event(
-                event_type="full_kill_chain",
-                severity=severity,
-                data={
-                    "probe_name": self.name,
-                    "detection_source": "cross_agent",
-                    "stages_matched": stage_count,
-                    "total_score": total_score,
-                    "max_possible_score": sum(self._STAGE_WEIGHTS.values()),
-                    "stage_breakdown": stage_breakdown,
-                    "stages_hit": list(stages_hit.keys()),
-                    "window_seconds": self.WINDOW_SECONDS,
-                    "timeline_events_in_window": len(self._timeline_window),
-                    "chain_stage": "full_chain",
-                },
-                confidence=confidence,
-                correlation_id=f"kill_chain_{int(now)}",
-            )
+        if not self._timeline_window or not self._proc_window:
+            return events
+
+        # ── Stage 1: downloads in window (ordered) ────────────────────────
+        downloads = [
+            (e.timestamp, self._parse_download(e.detail))
+            for e in self._timeline_window
+            if e.event_type == "file_created"
+        ]
+        downloads = [(ts, p) for ts, p in downloads if p]
+        if not downloads:
+            return events
+
+        pid_connections = data.get("pid_connections", {})
+
+        # Credential access BY PID (same-actor requirement): timeline
+        # process_spawned rows whose detail matches sensitive patterns.
+        cred_pids: Dict[int, float] = {}
+        for e in self._timeline_window:
+            if e.event_type != "process_spawned" or not e.pid:
+                continue
+            hay = f"{e.detail} {e.app_name}".lower()
+            if any(pat in hay for pat in _SENSITIVE_FILE_PATTERNS):
+                cred_pids[e.pid] = min(cred_pids.get(e.pid, e.timestamp), e.timestamp)
+
+        # Passive delivery context (confidence nudge only, NOT a stage)
+        delivery_ctx = sorted(
+            {
+                "messaging" if "category=messaging" in e.detail else "browser"
+                for e in self._timeline_window
+                if e.event_type == "app_active"
+                and ("category=messaging" in e.detail or "category=browser" in e.detail)
+            }
         )
+
+        # ── Stages 2+3: a NEW process that IS the downloaded artifact and
+        #    then acts (credential and/or network) — same pid, ordered ─────
+        for pid, proc in self._proc_window.items():
+            exe = (proc.exe or "").strip()
+            cmdline = " ".join(proc.cmdline or [])
+            for dl_ts, dl_path in downloads:
+                if proc.create_time <= dl_ts:
+                    continue  # ORDER: execute must FOLLOW the download
+                if not dl_path or (dl_path != exe and dl_path not in cmdline):
+                    continue  # CAUSALITY: the downloaded file itself must run
+
+                has_network = pid in pid_connections and pid_connections[pid]
+                cred_ts = cred_pids.get(pid)
+                has_cred = cred_ts is not None and cred_ts >= proc.create_time
+                if not has_network and not has_cred:
+                    continue  # no same-actor action yet — keep watching
+
+                key = (pid, dl_path, now)
+                if any(k[0] == pid and k[1] == dl_path for k in self._alerted_chains):
+                    continue  # already alerted this chain in-window
+                self._alerted_chains.add(key)
+
+                severity = (
+                    Severity.CRITICAL if (has_network and has_cred) else Severity.HIGH
+                )
+                confidence = min(
+                    0.95, 0.8 + 0.05 * len(delivery_ctx) + (0.05 if has_cred else 0.0)
+                )
+                conns = [
+                    str(c) for c in list(pid_connections.get(pid, []))[:3]
+                ]
+                events.append(
+                    self._create_event(
+                        event_type="full_kill_chain",
+                        severity=severity,
+                        data={
+                            "probe_name": self.name,
+                            "detection_source": "cross_agent",
+                            "chain": {
+                                "download": {"path": dl_path, "at": dl_ts},
+                                "execute": {
+                                    "pid": pid,
+                                    "exe": exe,
+                                    "parent": proc.parent_name,
+                                    "at": proc.create_time,
+                                },
+                                "credential_access": bool(has_cred),
+                                "network_egress": conns,
+                            },
+                            "causally_linked": True,
+                            "ordered": True,
+                            "delivery_context": delivery_ctx,
+                            "window_seconds": self.WINDOW_SECONDS,
+                            "chain_stage": "full_chain",
+                        },
+                        confidence=confidence,
+                        correlation_id=f"kill_chain_{pid}_{int(dl_ts)}",
+                    )
+                )
 
         return events
 
