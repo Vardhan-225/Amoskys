@@ -106,6 +106,11 @@ _CATEGORY_RISK_FLOORS: Dict[str, float] = {
 # hour is not less malicious for being consistent about it.
 _SUPPRESSION_EXEMPT_CATEGORIES = frozenset(_CATEGORY_RISK_FLOORS.keys())
 
+# Home / commonly-benign egress regions. A source outside these is a weak
+# corroboration signal for the floored attack categories (see the corroboration
+# gate on the category floor below). Not exhaustive; deliberately conservative.
+_HOME_REGIONS = frozenset({"US", "GB", "IE", "NL", "CA", "DE", "FR", "AU"})
+
 # Fusion weights for final classification
 _GEO_WEIGHT = 0.35
 _TEMP_WEIGHT = 0.25
@@ -1228,17 +1233,46 @@ class ScoringEngine:
         # trusted apple_system/self actor still wins and is pulled back down.
         floor = _CATEGORY_RISK_FLOORS.get(cat_key, 0.0)
         if floor > 0.0 and composite < floor:
-            behav_factors.append(
-                {
-                    "name": "Attack Category Floor",
-                    "contribution": round(floor - composite, 3),
-                    "detail": (
-                        f"Category '{raw_category}' floored to {floor:.2f} "
-                        "(intrinsic severity; not suppressible by baseline)"
-                    ),
-                }
+            # ── Corroboration gate (2026-07-01) ──────────────────────────────
+            # A scary category LABEL alone must not launder an event into the
+            # malicious band. The old code floored full_kill_chain / execute_to_
+            # exfil to 0.70 unconditionally, so the OWNER'S OWN ssh/curl deploy
+            # (trust_disposition="unknown") read as "malicious exfiltration".
+            # The floor now applies at full strength ONLY when the detection is
+            # INDEPENDENTLY corroborated:
+            #   • a threat-intel match, OR
+            #   • the fusion sub-detectors (geo/temporal/behavioral) already put
+            #     the composite at/above the suspicious line on their own, OR
+            #   • the source is outside the home regions (foreign egress).
+            # Otherwise the category is capped at the SUSPICIOUS floor
+            # ("worth a look"), never malicious. Measured on live fleet data this
+            # demotes 11/16 false "malicious" (owner deploy) to worth-a-look while
+            # keeping every corroborated detection. Threat-intel hits still
+            # escalate to malicious unconditionally (see risk reconciliation).
+            country = str(event.get("geo_src_country") or "").upper()
+            foreign = bool(country) and country not in _HOME_REGIONS
+            corroborated = (
+                bool(event.get("threat_intel_match"))
+                or composite >= _SUSPICIOUS_THRESHOLD
+                or foreign
             )
-            composite = floor
+            effective_floor = floor if corroborated else min(floor, _SUSPICIOUS_THRESHOLD)
+            if composite < effective_floor:
+                behav_factors.append(
+                    {
+                        "name": "Attack Category Floor",
+                        "contribution": round(effective_floor - composite, 3),
+                        "detail": (
+                            f"Category '{raw_category}' floored to {effective_floor:.2f} "
+                            + (
+                                "(corroborated: intel/sub-scores/foreign)"
+                                if corroborated
+                                else "(uncorroborated label — capped at suspicious)"
+                            )
+                        ),
+                    }
+                )
+                composite = effective_floor
 
         # Classify using dynamic thresholds (auto-calibrated per category)
         sus_thresh, mal_thresh = self._dynamic_thresholds.get_thresholds(
