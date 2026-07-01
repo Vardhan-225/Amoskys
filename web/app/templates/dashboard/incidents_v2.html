@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMOSKYS — Incidents</title>
+<link rel="stylesheet" href="/static/css/amoskys.css">
+<style>
+.filters{display:flex;gap:8px;margin:0 2px 16px;flex-wrap:wrap}
+.fbtn{font-size:12.5px;padding:8px 15px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
+  color:var(--ink-2);cursor:pointer;font-family:inherit;transition:.15s}
+.fbtn:hover{border-color:var(--line-2)} .fbtn.on{border-color:var(--cyan);color:var(--cyan);background:rgba(53,224,240,.08)}
+.queue{display:flex;flex-direction:column;gap:11px}
+.empty{color:var(--ink-3);text-align:center;padding:60px;font-size:14px}
+.scrim{position:fixed;inset:0;background:rgba(3,5,9,.6);backdrop-filter:blur(3px);opacity:0;pointer-events:none;
+  transition:opacity .25s;z-index:70}.scrim.on{opacity:1;pointer-events:auto}
+.flyout{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);z-index:80;background:linear-gradient(180deg,var(--bg1),var(--bg0));
+  border-left:1px solid var(--line-2);transform:translateX(100%);transition:transform .32s cubic-bezier(.4,0,.1,1);
+  display:flex;flex-direction:column;box-shadow:-30px 0 80px rgba(0,0,0,.5)}.flyout.on{transform:translateX(0)}
+.fly-h{padding:22px 24px 18px;border-bottom:1px solid var(--line)}
+.fly-h .close{float:right;background:var(--bg2);border:1px solid var(--line);color:var(--ink-2);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px}
+.fly-h h2{font-size:20px;font-weight:700;margin-right:44px;line-height:1.25}
+.fly-b{padding:22px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:20px}
+.fly-b .h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px}
+.why{font-size:14px;line-height:1.6;color:var(--ink-2)}
+.band-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin:0 0 10px}
+.factors{display:flex;flex-wrap:wrap;gap:6px}
+.verdict-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vbtn{padding:13px;border-radius:11px;border:1px solid var(--line-2);background:var(--bg2);color:var(--ink);cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:600;text-align:left;transition:.15s;display:flex;flex-direction:column;gap:3px}
+.vbtn small{font-weight:400;color:var(--ink-3);font-size:11px}
+.vbtn:hover{border-color:var(--cyan)} .vbtn.sel{border-color:var(--cyan);background:rgba(53,224,240,.10)}
+.vbtn.exp:hover,.vbtn.exp.sel{border-color:var(--calm);background:var(--calm-bg)}
+.vbtn.threat:hover,.vbtn.threat.sel{border-color:var(--red);background:var(--red-bg)}
+</style>
+</head>
+<body class="amoskys">
+<nav class="amk-nav">
+  <div class="amk-brand"><span class="dot"></span>AMOSKYS</div>
+  <a class="amk-link" href="/dashboard/">Command</a>
+  <a class="amk-link on" href="/dashboard/incidents-view">Incidents</a>
+  <a class="amk-link" href="/dashboard/device-view">Device</a>
+  <div class="amk-grow"></div>
+  <div class="pill" id="updated">updated —</div>
+</nav>
+
+<div class="wrap">
+  <div class="sec-h"><h2>Incidents</h2><span id="sub">the prioritized, correlated queue</span></div>
+  <div class="filters" id="filters">
+    <button class="fbtn on" data-f="all">All</button>
+    <button class="fbtn" data-f="red">Act now</button>
+    <button class="fbtn" data-f="amber">Worth a look</button>
+    <button class="fbtn" data-f="calm">Expected</button>
+  </div>
+  <div class="queue" id="queue"></div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeFly()"></div>
+<div class="flyout" id="flyout" role="dialog" aria-modal="true">
+  <div class="fly-h"><button class="close" onclick="closeFly()" aria-label="Close">✕</button>
+    <div class="band-chip" id="fband"></div><h2 id="ftitle">—</h2></div>
+  <div class="fly-b" id="flybody"></div>
+</div>
+
+<script>
+let INCIDENTS=[], FILTER='all', selV={};
+const $=s=>document.querySelector(s);
+const SEV={calm:'✓',amber:'!',red:'▲'};
+const bandBg=b=>b==='red'?'var(--red-bg)':b==='amber'?'var(--amber-bg)':'var(--calm-bg)';
+const bandC=b=>b==='red'?'var(--red)':b==='amber'?'var(--amber)':'var(--calm)';
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function render(){
+  const list = FILTER==='all'?INCIDENTS:INCIDENTS.filter(i=>i.band===FILTER);
+  $('#sub').textContent = INCIDENTS.filter(i=>i.band!=='calm').length+' to review · '+INCIDENTS.filter(i=>i.band==='calm').length+' expected';
+  $('#queue').innerHTML = list.length ? list.map((i)=>{
+    const gi=INCIDENTS.indexOf(i);
+    const mitre=(i.mitre||[]).slice(0,3).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join('');
+    const facts=(i.factors||[]).slice(0,3).map(f=>'<span class="mchip">'+esc(f)+'</span>').join('');
+    return '<div class="inc '+i.band+'" onclick="openFly('+gi+')"><div class="sev">'+SEV[i.band]+'</div>'
+      +'<div><div class="t">'+esc(i.title)+'</div><div class="meta">'+mitre+facts+'</div></div>'
+      +'<div class="right"><span class="vpill '+i.band+'">'+esc(i.verdict_label)+'</span>'
+      +'<span class="cnt tnum">'+i.count+' event'+(i.count!==1?'s':'')+'</span></div></div>';
+  }).join('') : '<div class="empty">Nothing in this filter. That’s good news.</div>';
+}
+function setFilter(f){FILTER=f;[...document.querySelectorAll('.fbtn')].forEach(b=>b.classList.toggle('on',b.dataset.f===f));render();}
+document.getElementById('filters').addEventListener('click',e=>{if(e.target.dataset.f)setFilter(e.target.dataset.f);});
+
+function openFly(ix){
+  const i=INCIDENTS[ix]; const c=bandC(i.band);
+  const fb=$('#fband');fb.style.background=bandBg(i.band);fb.style.color=c;fb.textContent=esc((i.verdict_label||'').toUpperCase());
+  $('#ftitle').textContent=i.title;
+  const mitre=(i.mitre||[]).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join(' ')||'—';
+  const facts=(i.factors||[]).map(f=>'<span class="chip">'+esc(f)+'</span>').join('');
+  const sel=selV[i.id]||i.verdict;
+  const vb=(k,cls,lab,sub)=>'<button class="vbtn '+cls+(sel===k?' sel':'')+'" onclick="setV(\''+i.id+'\',\''+k+'\',this)"><span>'+lab+'</span><small>'+sub+'</small></button>';
+  $('#flybody').innerHTML=
+    '<div><div class="h">The correlation</div><div class="why">'+esc(i.why)+'</div></div>'
+    +'<div><div class="h">Evidence</div><div class="chip">'+i.count+' events</div> <div class="chip">MITRE '+mitre+'</div></div>'
+    +'<div><div class="h">Signals</div><div class="factors">'+facts+'</div></div>'
+    +'<div><div class="h">Your verdict — teaches AMOSKYS</div><div class="verdict-btns">'
+      +vb('expected','exp','Expected activity','suppress this pattern')+vb('suspicious','','Suspicious','keep watching')
+      +vb('threat','threat','Threat','escalate + alert')+vb('dismiss','','Not now','leave unset')
+    +'</div><div id="vfeed" style="font-size:12px;color:var(--ink-3);margin-top:10px;min-height:16px"></div></div>';
+  $('#scrim').classList.add('on');$('#flyout').classList.add('on');
+}
+function setV(id,k,el){selV[id]=k;[...el.parentNode.children].forEach(b=>b.classList.remove('sel'));el.classList.add('sel');
+  const m={expected:'✓ Learned. AMOSKYS will auto-clear this pattern next time.',suspicious:'◐ Kept on the watchlist.',
+    threat:'▲ Escalated.',dismiss:'Left unset.'}[k];
+  $('#vfeed').textContent=m;$('#vfeed').style.color=k==='expected'?'var(--calm)':k==='threat'?'var(--red)':'var(--ink-3)';}
+function closeFly(){$('#scrim').classList.remove('on');$('#flyout').classList.remove('on');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFly();});
+
+async function load(){
+  try{const r=await fetch('/dashboard/api/insight',{cache:'no-store',headers:{'Accept':'application/json'}});
+    if(r.ok){const d=await r.json(); INCIDENTS=d.incidents||[];
+      $('#updated').textContent='updated '+(d.generated_at?new Date(d.generated_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—');}}
+  catch(e){console.warn(e);}
+  render();
+}
+load();
+</script>
+</body>
+</html>

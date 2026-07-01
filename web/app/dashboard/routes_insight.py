@@ -37,6 +37,14 @@ def api_insight():
     return jsonify(insight_service.get_model(force=force)), 200
 
 
+@dashboard_bp.route("/incidents-view")
+@require_login
+def incidents_view():
+    """The full, filterable incident queue (primary triage view)."""
+    user = get_current_user()
+    return render_template("dashboard/incidents_v2.html", user=user)
+
+
 @dashboard_bp.route("/device-view")
 @require_login
 def device_view():
