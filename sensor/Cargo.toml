@@ -1,0 +1,19 @@
+[package]
+name = "amoskys-sensor"
+version = "0.1.0"
+edition = "2021"
+description = "AMOSKYS kernel-witness sensor core. Phase 0 source: Apple eslogger (ESF). Phase 1 source: native ESF System Extension. Same Rust parse/normalize/trust core."
+license = "MIT"
+
+[[bin]]
+name = "amoskys-sensor"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"   # a security sensor never unwinds on hostile input; abort + restart
