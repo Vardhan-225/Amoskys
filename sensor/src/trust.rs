@@ -61,6 +61,7 @@ impl Trust {
 /// synced/expandable; here it demonstrates the "trust a vendor once" principle.
 /// (Team ID survives certificate rotation, unlike a cert-hash rule.)
 pub const KNOWN_TEAM_IDS: &[(&str, &str)] = &[
+    ("4Z5335ZWBH", "AMOSKYS (Akash Thanneeru)"), // our own signed components — self-trust
     ("EQHXZ8M8AV", "Google"),
     ("UBF8T346G9", "Microsoft"),
     ("9BNSXJN65R", "Docker"),
