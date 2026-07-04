@@ -239,3 +239,6 @@ src/amoskys/agents/Web/wordpress/wp-content/plugins/*
 !src/amoskys/agents/Web/wordpress/wp-content/plugins/amoskys-aegis/
 
 webpreview-venv/
+
+# Apple signing vault — certs, keys, CSRs, profiles. NEVER commit.
+/signing/

@@ -376,4 +376,90 @@ mod tests {
         let m = serde_json::json!({ "event": { "open": { "file": {} } } });
         assert!(parse_exec(&m).is_none());
     }
+
+    // ── process lifecycle (fork/exit) ──────────────────────────────────────
+    #[test]
+    fn parses_fork_lineage() {
+        let m = serde_json::json!({
+            "time": "t", "mach_time": 2u64,
+            "process": {"audit_token": {"pid": 900}},
+            "event": {"fork": {"child": {
+                "executable": {"path": "/bin/zsh"},
+                "audit_token": {"pid": 901, "euid": 501}, "ppid": 900}}}
+        });
+        let e = parse_fork(&m).expect("fork");
+        assert_eq!(e.kind, "process_fork");
+        assert_eq!(e.pid, 901);
+        assert_eq!(e.ppid, 900); // captured child→parent lineage
+        assert!(parse_any(&m).unwrap().0.contains("process_fork"));
+    }
+
+    #[test]
+    fn parses_exit_with_code() {
+        let m = serde_json::json!({
+            "time": "t", "mach_time": 3u64,
+            "process": {"executable": {"path": "/bin/zsh"}, "audit_token": {"pid": 901}, "ppid": 900},
+            "event": {"exit": {"stat": 0}}
+        });
+        let e = parse_exit(&m).expect("exit");
+        assert_eq!(e.kind, "process_exit");
+        assert_eq!(e.pid, 901);
+        assert_eq!(e.exit_code, Some(0));
+    }
+
+    // ── filesystem provenance ──────────────────────────────────────────────
+    #[test]
+    fn flags_launchagent_write_as_sensitive() {
+        // A process planting a LaunchAgent = persistence → sensitive → suspicion.
+        let m = serde_json::json!({
+            "time": "t", "mach_time": 4u64,
+            "process": {"executable": {"path": "/usr/bin/osascript"}, "audit_token": {"pid": 900, "euid": 501}},
+            "event": {"create": {"destination": {"new_path": {
+                "dir": {"path": "/Users/x/Library/LaunchAgents"}, "filename": "com.evil.plist"}}}}
+        });
+        let e = parse_file(&m).expect("create");
+        assert_eq!(e.kind, "file_create");
+        assert!(e.path.ends_with("/LaunchAgents/com.evil.plist"));
+        assert_eq!(e.process, "/usr/bin/osascript");
+        assert!(e.sensitive);
+        assert!(e.suspicion > 0.0);
+    }
+
+    #[test]
+    fn benign_temp_write_is_provenance() {
+        let m = serde_json::json!({
+            "time": "t", "mach_time": 5u64,
+            "process": {"executable": {"path": "/bin/cp"}, "audit_token": {"pid": 901}},
+            "event": {"unlink": {"target": {"path": "/tmp/scratch.tmp"}}}
+        });
+        let e = parse_file(&m).expect("unlink");
+        assert_eq!(e.kind, "file_unlink");
+        assert!(!e.sensitive);
+        assert_eq!(e.suspicion, 0.0);
+    }
+
+    #[test]
+    fn rename_captures_source_and_dest() {
+        let m = serde_json::json!({
+            "time": "t", "mach_time": 6u64,
+            "process": {"executable": {"path": "/bin/mv"}, "audit_token": {"pid": 902}},
+            "event": {"rename": {
+                "source": {"path": "/tmp/a"},
+                "destination": {"new_path": {"dir": {"path": "/Users/x/.ssh"}, "filename": "authorized_keys"}}}}
+        });
+        let e = parse_file(&m).expect("rename");
+        assert_eq!(e.kind, "file_rename");
+        assert_eq!(e.path, "/tmp/a");
+        assert_eq!(e.dest.as_deref(), Some("/Users/x/.ssh/authorized_keys"));
+        assert!(e.sensitive); // dest is ~/.ssh → sensitive
+    }
+
+    #[test]
+    fn sensitive_marker_detection() {
+        assert!(is_sensitive("/Users/x/Library/LaunchAgents/foo.plist"));
+        assert!(is_sensitive("/Users/x/.ssh/id_rsa"));
+        assert!(is_sensitive("/etc/sudoers"));
+        assert!(!is_sensitive("/Users/x/Documents/report.pdf"));
+        assert!(!is_sensitive("/tmp/build.o"));
+    }
 }
