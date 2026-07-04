@@ -1,43 +1,110 @@
-// AMOSKYS macOS ESF shim — Phase 1 production sensor source (SKELETON).
+// AMOSKYS Sentinel — native ESF blocking daemon (Phase 1, front #4).
 //
-// This is the thin, Apple-native layer the research says is mandatory: it owns
-// the System Extension lifecycle and the Endpoint Security client, and does
-// NOTHING but marshal each es_message into the Rust core (../sensor) and, for
-// AUTH events, ship the Rust core's verdict back with es_respond_auth_result.
+// Division of labor (per the research):
+//   • WITNESS  = eslogger → amoskys-sensor → Brain   (observe; already live)
+//   • BLOCKER  = THIS daemon                          (AUTH deny; stop mid-exec)
 //
-// It replaces the Phase-0 `eslogger` source with the real kernel event stream.
-// It CANNOT run without the restricted entitlement
-//   com.apple.developer.endpoint-security.client
-// plus root + Full Disk Access. For local dev: sign with an Apple Development
-// identity and `systemextensionsctl developer on` (SIP stays on). See
-// ../docs/_local/amoskys_redesign/ARCHITECTURE_2.0.md §9.
+// It subscribes ONLY to ES_EVENT_TYPE_AUTH_EXEC and makes one decision per exec:
+// deny a narrow, high-confidence set (unsigned/ad-hoc binaries launching from
+// quarantine/Downloads, or a cdhash on the blocklist); ALLOW everything else.
+// It FAILS OPEN — a slow/buggy/dead sentinel must never brick the machine
+// (Santa's default; the CrowdStrike lesson). A deadline watchdog guarantees a
+// response before the kernel SIGKILLs us.
 //
-// Build (once entitled):  swiftc -framework EndpointSecurity main.swift -o amoskys-esf
-//
-// The deadline discipline below is the load-bearing correctness pattern
-// (WWDC20 + Santa): never work in the handler; retain; offload; arm a watchdog
-// that fires a DEFAULT response just before es_message.deadline so the kernel
-// never SIGKILLs the client (Namespace ENDPOINTSECURITY, Code 2).
+// Requires: root + Full Disk Access + the (already-approved) entitlement
+//   com.apple.developer.endpoint-security.client   on App ID com.amoskys.agent.
+// Build/sign/run: see BUILD.md.  swiftc -parse verifies this compiles vs the SDK.
 
 import EndpointSecurity
 import Foundation
 
-// FFI into the Rust core. In production, cbindgen exposes:
-//   amoskys_classify_exec(path, team_id, is_platform, cs_flags) -> u8 (Trust)
-//   amoskys_emit(json)  // hand normalized event to the shipping pipeline
-// Here we sketch the boundary; the Rust side already exists in ../sensor.
-@_silgen_name("amoskys_classify_exec")
-func amoskys_classify_exec(_ path: UnsafePointer<CChar>,
-                           _ teamId: UnsafePointer<CChar>,
-                           _ isPlatform: Bool,
-                           _ csFlags: UInt64) -> UInt8
+// ── Policy knobs ──────────────────────────────────────────────────────────────
+// MONITOR (default): never deny, only log would-blocks — measure FP≈0 first.
+// ENFORCE: actually deny the narrow high-confidence set.
+let ENFORCE = ProcessInfo.processInfo.environment["AMOSKYS_ENFORCE"] == "1"
 
-let AMOSKYS_ALLOW: UInt8 = 0   // Trust::Platform / KnownVendor / Signed
-let AMOSKYS_FLAG: UInt8  = 1   // Untrusted (observe, don't block by default)
-let AMOSKYS_DENY: UInt8  = 2   // known-bad (only in an explicit block policy)
+// cdhashes known-bad (hex, lowercase). Wire to threat-intel later.
+let BLOCKED_CDHASHES: Set<String> = []
 
-// A dedicated serial queue for slow decision work — NEVER decide in the handler.
-let decisionQueue = DispatchQueue(label: "com.amoskys.sensor.decision", qos: .userInitiated)
+// Launch locations that are suspicious for an UNSIGNED binary.
+let RISKY_PREFIXES = ["/Users/", "/private/tmp/", "/tmp/", "/Volumes/"]
+let RISKY_SUBPATHS = ["/Downloads/", "/Library/Caches/"]
+
+// CS_* (xnu cs_blobs.h)
+let CS_VALID: UInt32 = 0x0000_0001
+let CS_ADHOC: UInt32 = 0x0000_0002
+let CS_PLATFORM_BINARY: UInt32 = 0x0400_0000
+let CS_SIGNED: UInt32 = 0x2000_0000
+
+let decisionQueue = DispatchQueue(label: "com.amoskys.sentinel.decision", qos: .userInitiated)
+
+@inline(__always)
+func tok(_ t: es_string_token_t) -> String {
+    guard t.length > 0, let d = t.data else { return "" }
+    return String(decoding: UnsafeRawBufferPointer(start: d, count: t.length), as: UTF8.self)
+}
+
+func cdhashHex(_ proc: UnsafePointer<es_process_t>) -> String {
+    withUnsafeBytes(of: proc.pointee.cdhash) { raw in
+        raw.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// The block decision for one exec. Returns true to DENY.
+func shouldDeny(path: String, csFlags: UInt32, isPlatform: Bool, cdhash: String) -> (deny: Bool, why: String) {
+    if isPlatform || (csFlags & CS_PLATFORM_BINARY) != 0 { return (false, "platform") }
+    if BLOCKED_CDHASHES.contains(cdhash) { return (true, "blocklisted cdhash") }
+
+    let signed = (csFlags & CS_SIGNED) != 0
+    let valid = (csFlags & CS_VALID) != 0
+    let adhoc = (csFlags & CS_ADHOC) != 0
+    let untrusted = !signed || adhoc || (signed && !valid)
+
+    if untrusted {
+        let risky =
+            RISKY_SUBPATHS.contains(where: { path.contains($0) })
+            || RISKY_PREFIXES.contains(where: { path.hasPrefix($0) }) && path.contains("/Downloads/")
+        if risky { return (true, "unsigned binary from a download/temp location") }
+    }
+    return (false, "allow")
+}
+
+func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
+    let m = msg.pointee
+    guard m.event_type == ES_EVENT_TYPE_AUTH_EXEC, let target = m.event.exec.target else {
+        // Not ours (or malformed) — allow immediately, never hold the kernel.
+        es_respond_auth_result(client, msg, ES_AUTH_RESULT_ALLOW, false)
+        return
+    }
+    let path = tok(target.pointee.executable.pointee.path)
+    let csFlags = target.pointee.codesigning_flags
+    let isPlatform = target.pointee.is_platform_binary
+    let cdhash = cdhashHex(target)
+
+    // Retain; decide async; guarantee a response before the deadline (fail-open).
+    es_retain_message(msg)
+    let deadlineNs = machToNanos(m.deadline)
+    let nowNs = machToNanos(mach_absolute_time())
+    let budget = deadlineNs > nowNs ? Int(min(deadlineNs - nowNs, 20_000_000)) : 0 // cap 20ms
+    let watchdog = DispatchWorkItem {
+        es_respond_auth_result(client, msg, ES_AUTH_RESULT_ALLOW, false) // FAIL OPEN
+        es_release_message(msg)
+    }
+    decisionQueue.asyncAfter(deadline: .now() + .nanoseconds(max(0, budget * 4 / 5)), execute: watchdog)
+
+    decisionQueue.async {
+        let (deny, why) = shouldDeny(path: path, csFlags: csFlags, isPlatform: isPlatform, cdhash: cdhash)
+        if watchdog.isCancelled { return }
+        watchdog.cancel()
+        let result: es_auth_result_t = (deny && ENFORCE) ? ES_AUTH_RESULT_DENY : ES_AUTH_RESULT_ALLOW
+        if deny {
+            FileHandle.standardError.write(Data(
+                "\(ENFORCE ? "DENIED" : "WOULD-DENY") exec \(path) — \(why)\n".utf8))
+        }
+        es_respond_auth_result(client, msg, result, true /*cache identical decisions*/)
+        es_release_message(msg)
+    }
+}
 
 func machToNanos(_ mach: UInt64) -> UInt64 {
     var tb = mach_timebase_info_data_t()
@@ -45,104 +112,26 @@ func machToNanos(_ mach: UInt64) -> UInt64 {
     return mach * UInt64(tb.numer) / UInt64(tb.denom)
 }
 
-func tokenString(_ t: es_string_token_t) -> String {
-    guard t.length > 0, let p = t.data else { return "" }
-    return String(bytes: UnsafeBufferPointer(start: UnsafeRawPointer(p).assumingMemoryBound(to: UInt8.self),
-                                             count: t.length), encoding: .utf8) ?? ""
-}
-
-func path(of proc: UnsafePointer<es_process_t>) -> String {
-    tokenString(proc.pointee.executable.pointee.path)
-}
-
-// ── The event handler ─────────────────────────────────────────────────────────
-// Fast, allocation-light. AUTH => retain + offload + deadline watchdog.
-func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
-    let m = msg.pointee
-    guard let target = m.event.exec.target else { // exec target es_process_t
-        return
-    }
-    let p = path(of: target)
-    let teamId = tokenString(target.pointee.team_id)
-    let isPlatform = target.pointee.is_platform_binary
-    let csFlags = UInt64(target.pointee.codesigning_flags)
-
-    switch m.action_type {
-    case ES_ACTION_TYPE_NOTIFY:
-        // Observe-only: classify + emit off the hot path. No response needed.
-        decisionQueue.async {
-            _ = p.withCString { pc in teamId.withCString { tc in
-                amoskys_classify_exec(pc, tc, isPlatform, csFlags)
-            }}
-            // amoskys_emit(normalizedJson)  // → DeviceTelemetry protobuf → Brain
-        }
-
-    case ES_ACTION_TYPE_AUTH:
-        // Blocking path. Retain the message, decide async, and guarantee a
-        // response before the kernel deadline via a watchdog.
-        es_retain_message(msg)
-        let deadlineNs = machToNanos(m.deadline)
-        let nowNs = machToNanos(mach_absolute_time())
-        // Fire the default (fail-OPEN) just before the deadline if we're slow.
-        let safety = deadlineNs > nowNs ? (deadlineNs - nowNs) : 0
-        let watchdog = DispatchWorkItem {
-            es_respond_auth_result(client, msg, ES_AUTH_RESULT_ALLOW, false) // fail-open
-            es_release_message(msg)
-        }
-        decisionQueue.asyncAfter(deadline: .now() + .nanoseconds(Int(safety * 4 / 5)), execute: watchdog)
-
-        decisionQueue.async {
-            let verdict = p.withCString { pc in teamId.withCString { tc in
-                amoskys_classify_exec(pc, tc, isPlatform, csFlags)
-            }}
-            if watchdog.isCancelled { return }
-            watchdog.cancel()
-            // Default policy = MONITOR: always ALLOW (log would-blocks). Only an
-            // explicit high-confidence block policy returns DENY.
-            let result = (verdict == AMOSKYS_DENY) ? ES_AUTH_RESULT_DENY : ES_AUTH_RESULT_ALLOW
-            es_respond_auth_result(client, msg, result, true /*cache*/)
-            es_release_message(msg)
-        }
-
-    default:
-        break
-    }
-}
-
-// ── Client bring-up ───────────────────────────────────────────────────────────
 func run() {
     var client: OpaquePointer?
     let res = es_new_client(&client) { c, msg in handle(c, msg) }
     guard res == ES_NEW_CLIENT_RESULT_SUCCESS, let client else {
+        let msg: String
         switch res {
-        case ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED:
-            FileHandle.standardError.write(Data("missing com.apple.developer.endpoint-security.client entitlement\n".utf8))
-        case ES_NEW_CLIENT_RESULT_ERR_NOT_PRIVILEGED:
-            FileHandle.standardError.write(Data("must run as root\n".utf8))
-        case ES_NEW_CLIENT_RESULT_ERR_NOT_PERMITTED:
-            FileHandle.standardError.write(Data("needs Full Disk Access (TCC)\n".utf8))
-        default:
-            FileHandle.standardError.write(Data("es_new_client failed: \(res)\n".utf8))
+        case ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED: msg = "missing com.apple.developer.endpoint-security.client entitlement"
+        case ES_NEW_CLIENT_RESULT_ERR_NOT_PRIVILEGED: msg = "must run as root"
+        case ES_NEW_CLIENT_RESULT_ERR_NOT_PERMITTED: msg = "needs Full Disk Access (TCC)"
+        default: msg = "es_new_client failed: \(res)"
         }
+        FileHandle.standardError.write(Data("amoskys-sentinel: \(msg)\n".utf8))
         exit(1)
     }
-
-    // Subscribe in ONE call (early-boot correctness). Start with the process
-    // tree; expand to file/injection/persistence per ARCHITECTURE_2.0 §7.
-    var events: [es_event_type_t] = [
-        ES_EVENT_TYPE_NOTIFY_EXEC,
-        ES_EVENT_TYPE_NOTIFY_FORK,
-        ES_EVENT_TYPE_NOTIFY_EXIT,
-        // ES_EVENT_TYPE_AUTH_EXEC,   // enable for the sentinel (blocking) phase
-    ]
+    var events = [ES_EVENT_TYPE_AUTH_EXEC]
     guard es_subscribe(client, &events, events.count) == ES_RETURN_SUCCESS else {
-        FileHandle.standardError.write(Data("es_subscribe failed\n".utf8))
-        exit(1)
+        FileHandle.standardError.write(Data("es_subscribe failed\n".utf8)); exit(1)
     }
-
-    // Mute the noisiest known-benign instigators by audit token (cheap) — e.g.
-    // Spotlight — to cut event volume before it reaches us.
-    FileHandle.standardError.write(Data("amoskys-esf: witnessing the kernel.\n".utf8))
+    FileHandle.standardError.write(Data(
+        "amoskys-sentinel: guarding exec (mode=\(ENFORCE ? "ENFORCE" : "MONITOR"), fail-open).\n".utf8))
     dispatchMain()
 }
 
