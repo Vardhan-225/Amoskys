@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  AMOSKYS ESF sensor — boot LaunchDaemon (Phase 0, eslogger-backed).
+
+  Runs the supervised kernel-witness pipeline as root at boot and keeps it
+  alive. The responsible process (this daemon) needs Full Disk Access — grant
+  it once in System Settings › Privacy & Security › Full Disk Access (add the
+  amoskys_esf_sensor.sh script, or the eslogger binary), or via MDM/PPPC.
+
+  Install:
+    sudo cp deploy/com.amoskys.esf-sensor.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.amoskys.esf-sensor.plist
+    sudo chmod 644        /Library/LaunchDaemons/com.amoskys.esf-sensor.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.amoskys.esf-sensor.plist
+  Uninstall:
+    sudo launchctl bootout system/com.amoskys.esf-sensor
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.esf-sensor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/athanneeru/Amoskys_recovered/scripts/amoskys_esf_sensor.sh</string>
+    </array>
+
+    <!-- The runner already supervises + backs off; RunAtLoad + KeepAlive make
+         launchd the outer watchdog so the sensor survives reboots and hard kills. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/athanneeru/Amoskys_recovered/logs/esf_sensor.daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/athanneeru/Amoskys_recovered/logs/esf_sensor.daemon.log</string>
+
+    <!-- Don't hammer if it exits instantly (e.g. FDA not yet granted). -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

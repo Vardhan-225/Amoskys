@@ -34,32 +34,52 @@ fn main() {
 
     let stdin = io::stdin();
     let stdout = io::stdout();
-    let mut out = stdout.lock();
-    let (mut seen, mut execs, mut flagged) = (0u64, 0u64, 0u64);
+    let mut out = io::BufWriter::new(stdout.lock());
+    let (mut seen, mut emitted, mut flagged, mut parse_err) = (0u64, 0u64, 0u64, 0u64);
+    let mut last_health = std::time::Instant::now();
 
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) if !l.trim().is_empty() => l,
+            Err(_) => break, // stdin closed / eslogger died — exit so the supervisor restarts us
             _ => continue,
         };
         seen += 1;
-        // eslogger emits one JSON object per line. Hostile/garbage input must
-        // never crash the sensor — parse errors are skipped, not panicked.
+        // Hostile/garbage input must never crash the sensor — parse errors are
+        // counted and skipped, not panicked. (panic=abort in release backs this.)
         let msg: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(_) => {
+                parse_err += 1;
+                continue;
+            }
         };
-        if let Some(ev) = event::parse_exec(&msg) {
-            execs += 1;
-            if ev.suspicion > 0.0 {
+        // Dispatch across exec / fork / exit (full process lifecycle).
+        if let Some((js, is_exec, susp)) = event::parse_any(&msg) {
+            emitted += 1;
+            if is_exec && susp > 0.0 {
                 flagged += 1;
             }
-            if let Ok(js) = serde_json::to_string(&ev) {
-                let _ = writeln!(out, "{js}");
+            // A broken pipe (downstream bridge died) means we should exit so the
+            // supervisor rebuilds the whole chain, rather than spin.
+            if writeln!(out, "{js}").is_err() {
+                break;
             }
+            let _ = out.flush();
+        }
+        // Emit a health heartbeat to stderr every 60s (observability; the
+        // supervisor/log can confirm the sensor is alive and flowing).
+        if last_health.elapsed().as_secs() >= 60 {
+            eprintln!(
+                "[amoskys-sensor] health: seen={seen} emitted={emitted} flagged={flagged} parse_err={parse_err}"
+            );
+            last_health = std::time::Instant::now();
         }
     }
-    eprintln!("[amoskys-sensor] processed {seen} messages · {execs} execs · {flagged} above baseline");
+    let _ = out.flush();
+    eprintln!(
+        "[amoskys-sensor] processed {seen} messages · {emitted} lifecycle events · {flagged} above baseline · {parse_err} unparseable"
+    );
 }
 
 /// Prove the whole pipeline without eslogger/sudo: feed synthetic es_messages

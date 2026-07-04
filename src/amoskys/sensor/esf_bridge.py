@@ -51,10 +51,40 @@ def _severity(suspicion: float) -> str:
     return "INFO"
 
 
+_LIFECYCLE_KINDS = {"process_exec", "process_fork", "process_exit"}
+
+
 def sensor_event_to_proto(ev: dict, idx: int, ts_ns: int) -> t.TelemetryEvent:
-    """Convert one normalized sensor exec event into a TelemetryEvent."""
-    suspicion = float(ev.get("suspicion", 0.0) or 0.0)
+    """Convert one normalized sensor event (exec/fork/exit) into a TelemetryEvent."""
+    kind = ev.get("kind", "process_exec")
     path = ev.get("path", "")
+
+    # fork/exit are pure provenance (the process tree) — always OBSERVATION.
+    if kind in ("process_fork", "process_exit"):
+        pe = t.TelemetryEvent(
+            event_id=f"{_SOURCE}_{kind}_{idx}_{ts_ns}",
+            event_type="OBSERVATION",
+            severity="INFO",
+            event_timestamp_ns=ts_ns,
+            source_component=_SOURCE,
+            confidence_score=0.0,
+        )
+        attrs = {
+            "event_category": kind,
+            "exe": path,
+            "process_name": path.rsplit("/", 1)[-1] if path else "",
+            "pid": ev.get("pid"),
+            "ppid": ev.get("ppid"),
+            "username": _uid_str(ev.get("uid")),
+            "exit_code": ev.get("exit_code"),
+            "sensor": "esf",
+        }
+        for k, v in attrs.items():
+            if v is not None and v != "":
+                pe.attributes[k] = str(v)
+        return pe
+
+    suspicion = float(ev.get("suspicion", 0.0) or 0.0)
     argv = ev.get("argv", []) or []
     trust = ev.get("trust", "unknown")
 
@@ -143,7 +173,7 @@ def convert_lines(lines: Iterable[str], device_id: str) -> t.DeviceTelemetry:
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if ev.get("kind") != "process_exec":
+        if ev.get("kind") not in _LIFECYCLE_KINDS:
             continue
         proto_events.append(sensor_event_to_proto(ev, idx, ts_ns))
     return build_device_telemetry(proto_events, device_id)
@@ -197,9 +227,9 @@ def main(argv: list[str] | None = None) -> int:
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if ev.get("kind") != "process_exec":
+        if ev.get("kind") not in _LIFECYCLE_KINDS:
             continue
-        if float(ev.get("suspicion", 0.0) or 0.0) > 0.0:
+        if ev.get("kind") == "process_exec" and float(ev.get("suspicion", 0.0) or 0.0) > 0.0:
             flagged += 1
         batch.append(sensor_event_to_proto(ev, total, int(time.time() * 1e9)))
         if len(batch) >= FLUSH_EVERY or (time.time() - last_flush) >= FLUSH_SECS:

@@ -137,6 +137,77 @@ pub fn parse_exec(msg: &Value) -> Option<ExecEvent> {
     })
 }
 
+/// A process-lifecycle event (fork/exit) — pure provenance, no verdict. These
+/// give the Brain the real process TREE (captured, not reconstructed), which is
+/// what the causal kill-chain needs to assert same-actor lineage.
+#[derive(Debug, Serialize)]
+pub struct LifecycleEvent {
+    pub kind: &'static str, // "process_fork" | "process_exit"
+    pub path: String,
+    pub pid: i64,
+    pub ppid: i64,
+    pub uid: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i64>,
+    pub suspicion: f32, // always 0.0 — lifecycle is provenance, not a verdict
+    pub mach_time: u64,
+    pub time: String,
+}
+
+/// Parse an ESF fork message → the NEW child process and its parent lineage.
+pub fn parse_fork(msg: &Value) -> Option<LifecycleEvent> {
+    let child = msg
+        .get("event")
+        .and_then(|e| e.get("fork"))
+        .and_then(|f| f.get("child"))?;
+    Some(LifecycleEvent {
+        kind: "process_fork",
+        path: s(child, &["executable", "path"]).unwrap_or_default(),
+        pid: i(child, &["audit_token", "pid"]).unwrap_or(0),
+        ppid: i(child, &["ppid"])
+            .or_else(|| i(msg, &["process", "audit_token", "pid"]))
+            .unwrap_or(0),
+        uid: i(child, &["audit_token", "euid"]).unwrap_or(-1),
+        exit_code: None,
+        suspicion: 0.0,
+        mach_time: u(msg, &["mach_time"]).unwrap_or(0),
+        time: s(msg, &["time"]).unwrap_or_default(),
+    })
+}
+
+/// Parse an ESF exit message → the exiting process + its status code.
+pub fn parse_exit(msg: &Value) -> Option<LifecycleEvent> {
+    let exit = msg.get("event").and_then(|e| e.get("exit"))?;
+    let proc = msg.get("process").unwrap_or(exit);
+    Some(LifecycleEvent {
+        kind: "process_exit",
+        path: s(proc, &["executable", "path"]).unwrap_or_default(),
+        pid: i(proc, &["audit_token", "pid"]).unwrap_or(0),
+        ppid: i(proc, &["ppid"]).unwrap_or(0),
+        uid: i(proc, &["audit_token", "euid"]).unwrap_or(-1),
+        exit_code: i(exit, &["stat"]),
+        suspicion: 0.0,
+        mach_time: u(msg, &["mach_time"]).unwrap_or(0),
+        time: s(msg, &["time"]).unwrap_or_default(),
+    })
+}
+
+/// Dispatch a raw es_message to whichever parser matches, serializing to one
+/// normalized JSON line. Returns (json, is_exec, suspicion) or None.
+pub fn parse_any(msg: &Value) -> Option<(String, bool, f32)> {
+    if let Some(ev) = parse_exec(msg) {
+        let susp = ev.suspicion;
+        return serde_json::to_string(&ev).ok().map(|j| (j, true, susp));
+    }
+    if let Some(ev) = parse_fork(msg) {
+        return serde_json::to_string(&ev).ok().map(|j| (j, false, 0.0));
+    }
+    if let Some(ev) = parse_exit(msg) {
+        return serde_json::to_string(&ev).ok().map(|j| (j, false, 0.0));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
