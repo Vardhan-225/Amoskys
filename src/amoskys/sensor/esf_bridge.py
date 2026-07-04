@@ -52,12 +52,63 @@ def _severity(suspicion: float) -> str:
 
 
 _LIFECYCLE_KINDS = {"process_exec", "process_fork", "process_exit"}
+_FILE_KINDS = {"file_create", "file_write", "file_rename", "file_unlink"}
+_SENSOR_KINDS = _LIFECYCLE_KINDS | _FILE_KINDS
 
 
 def sensor_event_to_proto(ev: dict, idx: int, ts_ns: int) -> t.TelemetryEvent:
-    """Convert one normalized sensor event (exec/fork/exit) into a TelemetryEvent."""
+    """Convert one normalized sensor event (exec/fork/exit/file) into a TelemetryEvent."""
     kind = ev.get("kind", "process_exec")
     path = ev.get("path", "")
+
+    # File provenance: a write/create to a persistence/credential path by a
+    # non-system actor is SECURITY; everything else is provenance OBSERVATION.
+    if kind in _FILE_KINDS:
+        suspicion = float(ev.get("suspicion", 0.0) or 0.0)
+        proc = ev.get("process", "")
+        if suspicion > 0.0:
+            se = t.SecurityEvent(
+                event_category=kind,
+                event_action=kind.replace("file_", ""),
+                risk_score=suspicion,
+                analyst_notes=f"{proc or '?'} → {path}"
+                + (f" → {ev.get('dest')}" if ev.get("dest") else "")
+                + " (sensitive path)",
+            )
+            se.mitre_techniques.append("T1543" if "Launch" in path else "T1074")
+            pe = t.TelemetryEvent(
+                event_id=f"{_SOURCE}_{kind}_{idx}_{ts_ns}",
+                event_type="SECURITY",
+                severity=_severity(suspicion),
+                event_timestamp_ns=ts_ns,
+                source_component=_SOURCE,
+                security_event=se,
+                confidence_score=suspicion,
+            )
+        else:
+            pe = t.TelemetryEvent(
+                event_id=f"{_SOURCE}_{kind}_{idx}_{ts_ns}",
+                event_type="OBSERVATION",
+                severity="INFO",
+                event_timestamp_ns=ts_ns,
+                source_component=_SOURCE,
+                confidence_score=0.0,
+            )
+        attrs = {
+            "event_category": kind,
+            "path": path,
+            "dest": ev.get("dest"),
+            "exe": proc,
+            "process_name": proc.rsplit("/", 1)[-1] if proc else "",
+            "pid": ev.get("pid"),
+            "username": _uid_str(ev.get("uid")),
+            "sensitive": ev.get("sensitive"),
+            "sensor": "esf",
+        }
+        for k, v in attrs.items():
+            if v is not None and v != "":
+                pe.attributes[k] = str(v)
+        return pe
 
     # fork/exit are pure provenance (the process tree) — always OBSERVATION.
     if kind in ("process_fork", "process_exit"):
@@ -173,7 +224,7 @@ def convert_lines(lines: Iterable[str], device_id: str) -> t.DeviceTelemetry:
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if ev.get("kind") not in _LIFECYCLE_KINDS:
+        if ev.get("kind") not in _SENSOR_KINDS:
             continue
         proto_events.append(sensor_event_to_proto(ev, idx, ts_ns))
     return build_device_telemetry(proto_events, device_id)
@@ -227,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if ev.get("kind") not in _LIFECYCLE_KINDS:
+        if ev.get("kind") not in _SENSOR_KINDS:
             continue
         if ev.get("kind") == "process_exec" and float(ev.get("suspicion", 0.0) or 0.0) > 0.0:
             flagged += 1

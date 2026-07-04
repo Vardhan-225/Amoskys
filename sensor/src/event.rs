@@ -192,6 +192,103 @@ pub fn parse_exit(msg: &Value) -> Option<LifecycleEvent> {
     })
 }
 
+/// A filesystem event — what a process created/modified/moved/deleted. This is
+/// file PROVENANCE: which actor touched which path, the other half (with the
+/// process tree) of a real attack story. Writes to sensitive locations
+/// (LaunchAgents, ~/.ssh, login items) carry a small suspicion nudge.
+#[derive(Debug, Serialize)]
+pub struct FileEvent {
+    pub kind: &'static str, // file_create | file_write | file_rename | file_unlink
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dest: Option<String>, // rename destination
+    pub process: String,
+    pub pid: i64,
+    pub uid: i64,
+    pub sensitive: bool,
+    pub suspicion: f32,
+    pub mach_time: u64,
+    pub time: String,
+}
+
+/// Paths where a new/modified file is security-relevant (persistence, creds).
+const SENSITIVE_MARKERS: &[&str] = &[
+    "/LaunchAgents/", "/LaunchDaemons/", "/.ssh/", "/StartupItems/",
+    "/Library/Application Support/com.apple.backgroundtaskmanagement",
+    "/cron", "/.bash_profile", "/.zshrc", "/.zprofile", "/sudoers",
+];
+
+fn is_sensitive(path: &str) -> bool {
+    SENSITIVE_MARKERS.iter().any(|m| path.contains(m))
+}
+
+fn file_common(msg: &Value) -> (String, i64, i64) {
+    // The instigating process is the message's `process` es_process_t.
+    let proc = msg.get("process");
+    let process = proc
+        .and_then(|p| s(p, &["executable", "path"]))
+        .unwrap_or_default();
+    let pid = proc.and_then(|p| i(p, &["audit_token", "pid"])).unwrap_or(0);
+    let uid = proc.and_then(|p| i(p, &["audit_token", "euid"])).unwrap_or(-1);
+    (process, pid, uid)
+}
+
+fn make_file(msg: &Value, kind: &'static str, path: String, dest: Option<String>) -> FileEvent {
+    let (process, pid, uid) = file_common(msg);
+    let sensitive = is_sensitive(&path) || dest.as_deref().map(is_sensitive).unwrap_or(false);
+    FileEvent {
+        kind,
+        path,
+        dest,
+        process,
+        pid,
+        uid,
+        sensitive,
+        // A write/create to a persistence/credential path by a non-system actor
+        // is worth a look; everything else is provenance (0.0). The Brain
+        // corroborates — this is only a nudge, not a verdict.
+        suspicion: if sensitive { 0.3 } else { 0.0 },
+        mach_time: u(msg, &["mach_time"]).unwrap_or(0),
+        time: s(msg, &["time"]).unwrap_or_default(),
+    }
+}
+
+/// Parse ESF file events (create/write/rename/unlink). Defensive against the
+/// several shapes eslogger uses for destinations.
+pub fn parse_file(msg: &Value) -> Option<FileEvent> {
+    let event = msg.get("event")?;
+    if let Some(c) = event.get("create") {
+        // destination is either an existing file or a (dir + new filename)
+        let dest = c.get("destination").unwrap_or(c);
+        let path = s(dest, &["existing_file", "path"])
+            .or_else(|| {
+                let dir = s(dest, &["new_path", "dir", "path"])?;
+                let name = s(dest, &["new_path", "filename"]).unwrap_or_default();
+                Some(format!("{}/{}", dir.trim_end_matches('/'), name))
+            })
+            .or_else(|| s(c, &["target", "path"]))?;
+        return Some(make_file(msg, "file_create", path, None));
+    }
+    if let Some(w) = event.get("write") {
+        let path = s(w, &["target", "path"])?;
+        return Some(make_file(msg, "file_write", path, None));
+    }
+    if let Some(r) = event.get("rename") {
+        let src = s(r, &["source", "path"]).unwrap_or_default();
+        let dst = s(r, &["destination", "existing_file", "path"]).or_else(|| {
+            let dir = s(r, &["destination", "new_path", "dir", "path"])?;
+            let name = s(r, &["destination", "new_path", "filename"]).unwrap_or_default();
+            Some(format!("{}/{}", dir.trim_end_matches('/'), name))
+        });
+        return Some(make_file(msg, "file_rename", src, dst));
+    }
+    if let Some(u_) = event.get("unlink") {
+        let path = s(u_, &["target", "path"])?;
+        return Some(make_file(msg, "file_unlink", path, None));
+    }
+    None
+}
+
 /// Dispatch a raw es_message to whichever parser matches, serializing to one
 /// normalized JSON line. Returns (json, is_exec, suspicion) or None.
 pub fn parse_any(msg: &Value) -> Option<(String, bool, f32)> {
@@ -204,6 +301,10 @@ pub fn parse_any(msg: &Value) -> Option<(String, bool, f32)> {
     }
     if let Some(ev) = parse_exit(msg) {
         return serde_json::to_string(&ev).ok().map(|j| (j, false, 0.0));
+    }
+    if let Some(ev) = parse_file(msg) {
+        let susp = ev.suspicion;
+        return serde_json::to_string(&ev).ok().map(|j| (j, false, susp));
     }
     None
 }

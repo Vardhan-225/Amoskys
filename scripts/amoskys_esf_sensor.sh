@@ -32,7 +32,7 @@ MODE="--dry-run"
 [ -n "${AMOSKYS_SERVER:-}" ] && MODE="--ship"
 
 # Events to witness. exec = the verdict path; fork/exit = the process tree.
-ES_EVENTS="${AMOSKYS_ES_EVENTS:-exec fork exit}"
+ES_EVENTS="${AMOSKYS_ES_EVENTS:-exec fork exit create rename unlink}"
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG" >&2; }
 
