@@ -166,7 +166,7 @@
         <div class="s3-logo"><img src="/static/images/amoskys-logo.svg" alt="AMOSKYS"></div>
         <h1 class="s3-title">AMOSKYS</h1>
         <p class="s3-sub">Your partner in securing your devices.</p>
-        <a href="/dashboard/deploy" class="install-btn">
+        <a href="/dashboard/deploy" class="install-btn" id="install-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7v6c0 5.5 4.2 10.7 10 12 5.8-1.3 10-6.5 10-12V7L12 2z" stroke="currentColor" stroke-width="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Install on my Mac
         </a>
@@ -274,6 +274,14 @@
     document.getElementById('skip-setup').addEventListener('click',async function(){
         await fetch('/dashboard/api/setup/complete',{method:'POST'});
         window.location.href='/dashboard';
+    });
+
+    // Mark setup complete BEFORE going to the deploy page — otherwise the
+    // setup-gate middleware bounces /dashboard/deploy straight back here.
+    document.getElementById('install-btn').addEventListener('click',async function(ev){
+        ev.preventDefault();
+        try { await fetch('/dashboard/api/setup/complete',{method:'POST'}); } catch(e) {}
+        window.location.href='/dashboard/deploy';
     });
 
     // ── Agent showcase sequence ──

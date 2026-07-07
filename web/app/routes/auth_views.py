@@ -125,9 +125,34 @@ def logout():
     """
     Handle logout via GET request (for links/buttons).
 
-    This is a convenience route that redirects to login after logout.
-    For programmatic logout, use POST /api/auth/logout instead.
+    Invalidates the session server-side and clears the cookie — a plain
+    redirect here left the session alive, so "logout" links didn't log out.
     """
-    # The actual logout is handled by JavaScript calling the API
-    # This route just provides a destination after logout
-    return redirect("/auth/login?logged_out=1")
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if session_token:
+        try:
+            client_info = {
+                "ip_address": request.headers.get(
+                    "X-Forwarded-For", request.remote_addr
+                ),
+                "user_agent": request.headers.get("User-Agent", ""),
+            }
+            with get_web_session_context() as db:
+                AuthService(db).logout(
+                    session_token=session_token,
+                    ip_address=client_info["ip_address"],
+                    user_agent=client_info["user_agent"],
+                )
+        except Exception:
+            logger.warning("GET /auth/logout: server-side invalidation failed", exc_info=True)
+
+    response = make_response(redirect("/auth/login?logged_out=1"))
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        "",
+        httponly=True,
+        secure=request.is_secure,
+        samesite="Lax",
+        max_age=0,
+    )
+    return response

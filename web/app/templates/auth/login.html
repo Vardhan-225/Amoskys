@@ -134,11 +134,24 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok && data.success) {
                 // Check if MFA is required
                 if (data.requires_mfa) {
-                    window.location.href = '/auth/mfa?methods=' + data.mfa_methods.join(',');
+                    // No MFA verification flow exists in this build — redirecting
+                    // to /auth/mfa would 404. Fail honestly instead.
+                    showError('This account requires MFA, but the MFA login flow is not available in this build yet. Contact your administrator.');
                 } else {
                     // Success - route based on setup status
                     showSuccess('Login successful! Redirecting...');
                     var dest = '/dashboard';
+                    // Honor ?next= (set by the middleware when a deep link or an
+                    // expired session bounced the user here) — same-origin only.
+                    var nextParam = new URLSearchParams(window.location.search).get('next');
+                    if (nextParam) {
+                        try {
+                            var u = new URL(nextParam, window.location.origin);
+                            if (u.origin === window.location.origin && u.pathname.charAt(0) === '/') {
+                                dest = u.pathname + u.search + u.hash;
+                            }
+                        } catch (e) { /* keep default */ }
+                    }
                     if (data.user && data.user.setup_completed === false) {
                         dest = '/dashboard/setup';
                     }
