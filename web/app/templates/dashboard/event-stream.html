@@ -62,7 +62,7 @@
             <option value="168">Last 7d</option>
         </select>
         <input type="text" id="es-search" class="es-search" placeholder="Search events...">
-        <button id="es-refresh-btn" class="es-btn" onclick="esApp.load()">Refresh</button>
+        <button id="es-refresh-btn" class="es-btn">Refresh</button>
     </div>
 
     <!-- ===== EVENT LIST ===== -->
@@ -70,9 +70,9 @@
 
     <!-- ===== PAGINATION ===== -->
     <div class="es-pagination" id="es-pagination" style="display:none;">
-        <button class="es-btn es-btn-sm" id="es-prev" onclick="esApp.prevPage()">Previous</button>
+        <button class="es-btn es-btn-sm" id="es-prev">Previous</button>
         <span class="es-page-info" id="es-page-info">--</span>
-        <button class="es-btn es-btn-sm" id="es-next" onclick="esApp.nextPage()">Next</button>
+        <button class="es-btn es-btn-sm" id="es-next">Next</button>
     </div>
 </div>
 
@@ -183,7 +183,10 @@
 .es-sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
 .es-event-type { font-size: 0.8rem; color: var(--text-primary); font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .es-event-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-event-expected { font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin-top: 0.2rem; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-event-expected b { color: var(--neural-success); font-weight: 600; font-style: normal; }
 .es-event-risk { font-size: 0.72rem; font-weight: 600; min-width: 40px; text-align: right; }
+.es-mitre-name { color: var(--text-muted); font-weight: 400; }
 
 /* Expanded detail */
 .es-event-detail {
@@ -200,6 +203,17 @@
     padding: 0.6rem 0.8rem; font-family: monospace; font-size: 0.7rem;
     color: var(--text-muted); max-height: 200px; overflow-y: auto; white-space: pre-wrap;
 }
+
+/* Inline explanation */
+.es-explain-box {
+    display: none; margin-top: 0.6rem; background: rgba(0,217,255,0.04);
+    border: 1px solid rgba(0,217,255,0.15); border-radius: 8px;
+    padding: 0.7rem 0.9rem; font-size: 0.76rem; cursor: default;
+}
+.es-explain-box.open { display: block; }
+.es-explain-verdict { font-weight: 700; text-transform: uppercase; }
+.es-explain-row { margin-top: 0.35rem; color: var(--text-muted); }
+.es-explain-row b { color: var(--text-primary); font-weight: 600; }
 
 /* Pagination */
 .es-pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; padding: 0.5rem 0; }
@@ -271,6 +285,19 @@ const esApp = {
             this._debounce = setTimeout(() => { this.offset = 0; this.load(); }, 400);
         });
 
+        // CSP-safe delegation (inline onclick is blocked by the CSP nonce policy)
+        document.getElementById('es-refresh-btn').addEventListener('click', () => this.load());
+        document.getElementById('es-prev').addEventListener('click', () => this.prevPage());
+        document.getElementById('es-next').addEventListener('click', () => this.nextPage());
+        document.getElementById('es-events').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-explain-idx]');
+            if (btn) { e.stopPropagation(); this.explain(parseInt(btn.dataset.explainIdx, 10)); return; }
+            if (e.target.closest('.es-explain-box')) return; // don't collapse while reading
+            const row = e.target.closest('.es-event');
+            if (row) row.classList.toggle('expanded');
+        });
+
+        this.loadMitreVocab();
         this.load();
         this.loadTimeline();
         // Auto-refresh every 30s
@@ -431,13 +458,14 @@ const esApp = {
             const cat = ev.event_category || 'unknown';
             const agent = ev.agent || 'Other';
             const desc = ev.description || '';
+            const expected = ev.expected_reason || '';
             const indicators = typeof ev.indicators === 'object' ? JSON.stringify(ev.indicators, null, 2) : (ev.indicators || '');
-            const mitre = ev.mitre_technique || '';
+            const mitreHtml = this.fmtMitre(ev);
             const src = ev.source_table || 'security';
             const srcColor = srcColors[src] || '#666';
             const srcLabel = srcLabels[src] || src.toUpperCase();
 
-            return '<div class="es-event" data-idx="' + i + '" onclick="esApp.toggleEvent(this)">' +
+            return '<div class="es-event" data-idx="' + i + '">' +
                 '<div class="es-event-top">' +
                     '<span class="es-event-time">' + time + '</span>' +
                     '<span class="es-event-src" style="background:' + srcColor + '22;color:' + srcColor + ';">' + srcLabel + '</span>' +
@@ -446,25 +474,92 @@ const esApp = {
                     '<span class="es-event-type">' + this.fmtCategory(cat) + '</span>' +
                     '<span class="es-event-risk" style="color:' + riskColor(risk) + ';">' + (risk * 100).toFixed(0) + '%</span>' +
                 '</div>' +
-                (desc ? '<div class="es-event-desc">' + desc + '</div>' : '') +
+                (desc ? '<div class="es-event-desc">' + this.escHtml(desc) + '</div>' : '') +
+                (expected ? '<div class="es-event-expected"><b>Expected:</b> ' + this.escHtml(expected) + '</div>' : '') +
                 '<div class="es-event-detail">' +
                     '<div class="es-detail-grid">' +
-                        '<div class="es-detail-item"><div class="es-detail-label">Category</div><div class="es-detail-value">' + cat + '</div></div>' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Category</div><div class="es-detail-value">' + this.escHtml(cat) + '</div></div>' +
                         '<div class="es-detail-item"><div class="es-detail-label">Risk Score</div><div class="es-detail-value" style="color:' + riskColor(risk) + ';">' + (risk * 100).toFixed(1) + '%</div></div>' +
                         '<div class="es-detail-item"><div class="es-detail-label">Classification</div><div class="es-detail-value">' + (ev.final_classification || '--') + '</div></div>' +
-                        (mitre ? '<div class="es-detail-item"><div class="es-detail-label">MITRE ATT&CK</div><div class="es-detail-value" style="color:var(--neural-primary);">' + mitre + '</div></div>' : '') +
+                        (mitreHtml ? '<div class="es-detail-item"><div class="es-detail-label">MITRE ATT&CK</div><div class="es-detail-value" style="color:var(--neural-primary);">' + mitreHtml + '</div></div>' : '') +
+                        (expected ? '<div class="es-detail-item"><div class="es-detail-label">Why it looks routine</div><div class="es-detail-value">' + this.escHtml(expected) + '</div></div>' : '') +
                         '<div class="es-detail-item"><div class="es-detail-label">Timestamp</div><div class="es-detail-value">' + ts + '</div></div>' +
                         '<div class="es-detail-item"><div class="es-detail-label">Agent</div><div class="es-detail-value">' + agent + '</div></div>' +
                         '<div class="es-detail-item"><div class="es-detail-label">Source</div><div class="es-detail-value" style="color:' + srcColor + ';">' + src + '_events</div></div>' +
                     '</div>' +
                     (indicators ? '<div class="es-detail-json">' + this.escHtml(indicators) + '</div>' : '') +
+                    '<div style="margin-top:0.6rem;"><button class="es-btn es-btn-sm" data-explain-idx="' + i + '">Explain</button></div>' +
+                    '<div class="es-explain-box" id="es-explain-' + i + '"></div>' +
                 '</div>' +
             '</div>';
         }).join('');
     },
 
-    toggleEvent(el) {
-        el.classList.toggle('expanded');
+    // ── MITRE vocabulary (fetched once, cached in JS) ──
+    mitreVocab: null,
+
+    async loadMitreVocab() {
+        try {
+            const resp = await fetch('/dashboard/api/mitre/techniques');
+            const v = await resp.json();
+            this.mitreVocab = (v && v.techniques) ? v.techniques : (v || {});
+            if (this.events.length) this.renderEvents();
+        } catch (e) { this.mitreVocab = {}; }
+    },
+
+    techName(tid, ev) {
+        if (ev && ev.technique_names && ev.technique_names[tid]) return ev.technique_names[tid];
+        const vb = this.mitreVocab || {};
+        const hit = vb[tid] || (tid.indexOf('.') > 0 ? vb[tid.split('.')[0]] : null);
+        return hit ? hit.name : '';
+    },
+
+    fmtMitre(ev) {
+        const ids = ev.mitre_techniques || [];
+        if (!ids.length) return '';
+        return ids.map(tid => {
+            const nm = this.techName(tid, ev);
+            return this.escHtml(tid) + (nm ? ' <span class="es-mitre-name">— ' + this.escHtml(nm) + '</span>' : '');
+        }).join('<br>');
+    },
+
+    // ── Inline event explanation ──
+    async explain(idx) {
+        const ev = this.events[idx];
+        const box = document.getElementById('es-explain-' + idx);
+        if (!ev || !box) return;
+        if (box.classList.contains('open')) { box.classList.remove('open'); return; }
+        box.classList.add('open');
+        if (box.dataset.loaded) return;
+        box.innerHTML = '<span style="color:var(--text-muted);">Explaining&hellip;</span>';
+        try {
+            const src = ev.source_table || 'security';
+            const resp = await fetch('/dashboard/api/explain/event/' + ev.id + '?source=' + encodeURIComponent(src));
+            const d = await resp.json();
+            if (d.status !== 'success' || !d.explanation) throw new Error(d.message || 'No explanation available');
+            box.innerHTML = this.renderExplanation(d.explanation);
+            box.dataset.loaded = '1';
+        } catch (e) {
+            box.innerHTML = '<span style="color:#ff3366;">Could not explain this event: ' + this.escHtml(e.message) + '</span>';
+        }
+    },
+
+    renderExplanation(x) {
+        const vColor = { malicious: '#ff3366', suspicious: '#ffaa00', legitimate: '#00ff88' };
+        let html = '<div><span class="es-explain-verdict" style="color:' + (vColor[x.verdict] || 'var(--neural-primary)') + ';">' + this.escHtml(x.verdict || 'unknown') + '</span>' +
+            (typeof x.confidence === 'number' ? ' <span style="color:var(--text-muted);">&middot; confidence ' + Math.round(x.confidence * 100) + '%</span>' : '') +
+            (x.recommendation ? ' <span style="color:var(--text-muted);">&middot; recommended: <b style="color:var(--text-primary);">' + this.escHtml(x.recommendation) + '</b></span>' : '') +
+            '</div>';
+        (x.factors || []).forEach(f => {
+            html += '<div class="es-explain-row"><b>' + this.escHtml(f.name || '') + '</b>' + (f.detail ? ' — ' + this.escHtml(f.detail) : '') + '</div>';
+        });
+        (x.mitre_techniques_detail || []).forEach(m => {
+            html += '<div class="es-explain-row"><b>' + this.escHtml(m.id || '') + '</b> &middot; ' + this.escHtml(m.tactic || '') + ' — ' + this.escHtml(m.description || '') + '</div>';
+        });
+        if (!(x.factors || []).length && !(x.mitre_techniques_detail || []).length && x.mitre_context) {
+            html += '<div class="es-explain-row">' + this.escHtml(x.mitre_context) + '</div>';
+        }
+        return html;
     },
 
     renderPagination() {

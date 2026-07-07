@@ -289,6 +289,36 @@
     font-weight: 700;
     font-family: 'Courier New', monospace;
 }
+.hunt-expected-td {
+    padding: 0 0.5rem 0.4rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-style: italic;
+    white-space: normal;
+    max-width: none;
+}
+.hunt-expected-td b {
+    color: #00ff88;
+    font-weight: 600;
+    font-style: normal;
+}
+.hunt-explain-td {
+    white-space: normal;
+    max-width: none;
+    padding: 0.25rem 0.5rem 0.6rem;
+    cursor: default;
+}
+.hunt-explain-box {
+    background: rgba(0,217,255,0.04);
+    border: 1px solid rgba(0,217,255,0.15);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.78rem;
+}
+.hunt-explain-box .xr {
+    margin-top: 0.3rem;
+    color: var(--text-secondary);
+}
 </style>
 
 {% endblock %}
@@ -307,6 +337,45 @@ document.getElementById('hunt-query').addEventListener('keydown', function(e) {
 });
 
 loadSavedQueries();
+loadMitreVocab();
+
+/* ── MITRE vocabulary (fetched once, cached in JS) ── */
+var mitreVocab = null;
+
+function loadMitreVocab() {
+    fetch('/dashboard/api/mitre/techniques')
+        .then(function(r) { return r.json(); })
+        .then(function(v) { mitreVocab = (v && v.techniques) ? v.techniques : (v || {}); })
+        .catch(function() { mitreVocab = {}; });
+}
+
+function mitreName(tid) {
+    if (!mitreVocab || !tid) return '';
+    var hit = mitreVocab[tid] || (tid.indexOf('.') > 0 ? mitreVocab[tid.split('.')[0]] : null);
+    return hit ? hit.name : '';
+}
+
+/* Render a mitre_techniques field (JSON list of T-IDs) with names */
+function fmtMitreField(v) {
+    var ids = v;
+    try {
+        if (typeof ids === 'string') ids = JSON.parse(ids);
+        if (typeof ids === 'string') ids = JSON.parse(ids);
+    } catch (e) { /* fall through to raw display */ }
+    if (!Array.isArray(ids) || ids.length === 0) return escapeHtml(String(v));
+    var parts = [];
+    for (var i = 0; i < ids.length; i++) {
+        var nm = mitreName(ids[i]);
+        parts.push('<span style="color:var(--neural-primary);font-family:monospace;">' + escapeHtml(ids[i]) + '</span>'
+            + (nm ? ' <span style="color:var(--text-muted);">— ' + escapeHtml(nm) + '</span>' : ''));
+    }
+    return parts.join('<br>');
+}
+
+/* Map hunt table name → explain endpoint source param */
+function tableToSource(table) {
+    return String(table || 'security_events').replace(/_events$/, '');
+}
 
 async function huntSearch(offset) {
     if (offset === undefined) offset = 0;
@@ -421,13 +490,63 @@ function renderResults(rows, table) {
         }
         var eid = row.id || '';
         html += '<td style="white-space:nowrap;">'
+            + '<a href="#" data-explain-idx="' + ri + '" style="color:#ffaa00;font-size:0.72rem;margin-right:0.5rem;text-decoration:none;" title="Explain why this event was classified this way">Explain</a>'
             + '<a href="/dashboard/correlation?event_id=' + eid + '" style="color:var(--neural-primary);font-size:0.72rem;margin-right:0.5rem;text-decoration:none;" title="Correlate">Correlate</a>'
             + '<a href="/dashboard/threat-feed?event_id=' + eid + '" style="color:#00ff88;font-size:0.72rem;text-decoration:none;" title="Threat Feed">Analyze</a>'
             + '</td>';
         html += '</tr>';
+        if (row.expected_reason) {
+            html += '<tr><td class="hunt-expected-td" colspan="' + (cols.length + 1) + '"><b>Expected:</b> ' + escapeHtml(row.expected_reason) + '</td></tr>';
+        }
+        html += '<tr id="hunt-explain-' + ri + '" style="display:none;"><td class="hunt-explain-td" colspan="' + (cols.length + 1) + '"><div class="hunt-explain-box"></div></td></tr>';
     }
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+/* ── Inline event explanation ── */
+function toggleExplain(idx) {
+    var tr = document.getElementById('hunt-explain-' + idx);
+    if (!tr) return;
+    if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
+    tr.style.display = 'table-row';
+    var box = tr.querySelector('.hunt-explain-box');
+    if (box.getAttribute('data-loaded')) return;
+    box.innerHTML = '<span style="color:var(--text-muted);">Explaining&hellip;</span>';
+    var row = lastResults[idx] || {};
+    var source = tableToSource(document.getElementById('hunt-table').value);
+    fetch('/dashboard/api/explain/event/' + (row.id || 0) + '?source=' + encodeURIComponent(source))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.status !== 'success' || !d.explanation) throw new Error(d.message || 'No explanation available');
+            box.innerHTML = renderExplanation(d.explanation, d.used_table);
+            box.setAttribute('data-loaded', '1');
+        })
+        .catch(function(err) {
+            box.innerHTML = '<span style="color:#ff3366;">Could not explain this event: ' + escapeHtml(err.message) + '</span>';
+        });
+}
+
+function renderExplanation(x, usedTable) {
+    var vColor = { malicious: '#ff3366', suspicious: '#ffaa00', legitimate: '#00ff88' };
+    var html = '<div style="font-weight:700;text-transform:uppercase;color:' + (vColor[x.verdict] || 'var(--neural-primary)') + ';">'
+        + escapeHtml(x.verdict || 'unknown')
+        + (typeof x.confidence === 'number' ? ' <span style="color:var(--text-muted);font-weight:400;text-transform:none;">&middot; confidence ' + Math.round(x.confidence * 100) + '%</span>' : '')
+        + (x.recommendation ? ' <span style="color:var(--text-muted);font-weight:400;text-transform:none;">&middot; recommended: ' + escapeHtml(x.recommendation) + '</span>' : '')
+        + (usedTable ? ' <span style="color:var(--text-muted);font-weight:400;text-transform:none;">&middot; ' + escapeHtml(usedTable) + '</span>' : '')
+        + '</div>';
+    var factors = x.factors || [];
+    for (var i = 0; i < factors.length; i++) {
+        html += '<div class="xr"><b>' + escapeHtml(factors[i].name || '') + '</b>' + (factors[i].detail ? ' — ' + escapeHtml(factors[i].detail) : '') + '</div>';
+    }
+    var md = x.mitre_techniques_detail || [];
+    for (var j = 0; j < md.length; j++) {
+        html += '<div class="xr"><b style="color:var(--neural-primary);font-family:monospace;">' + escapeHtml(md[j].id || '') + '</b> &middot; ' + escapeHtml(md[j].tactic || '') + ' — ' + escapeHtml(md[j].description || '') + '</div>';
+    }
+    if (!factors.length && !md.length && x.mitre_context) {
+        html += '<div class="xr">' + escapeHtml(x.mitre_context) + '</div>';
+    }
+    return html;
 }
 
 function renderTimeline(rows, table) {
@@ -452,6 +571,7 @@ function renderTimeline(rows, table) {
             + '<div class="tl-body">'
             + '<div class="tl-title">' + escapeHtml(title) + '</div>'
             + '<div class="tl-desc">' + escapeHtml(desc) + '</div>'
+            + (row.expected_reason ? '<div class="tl-desc" style="font-style:italic;color:var(--text-muted);"><span style="color:#00ff88;font-style:normal;font-weight:600;">Expected:</span> ' + escapeHtml(row.expected_reason) + '</div>' : '')
             + '</div></div>';
     }
     container.innerHTML = html;
@@ -509,6 +629,8 @@ function showEventDetail(row) {
         var display;
         if (v === null || v === undefined) {
             display = '<span style="color:var(--text-muted);">null</span>';
+        } else if (k === 'mitre_techniques' && v) {
+            display = fmtMitreField(v);
         } else if (typeof v === 'string' && (v.charAt(0) === '{' || v.charAt(0) === '[')) {
             try {
                 display = '<pre style="margin:0;font-size:0.8rem;color:#00aaff;white-space:pre-wrap;">' + JSON.stringify(JSON.parse(v), null, 2) + '</pre>';
@@ -639,6 +761,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     /* Event delegation for example chips in empty state */
     document.getElementById('hunt-results').addEventListener('click', function(e) {
+        var explain = e.target.closest('[data-explain-idx]');
+        if (explain) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleExplain(parseInt(explain.getAttribute('data-explain-idx'), 10));
+            return;
+        }
         var chip = e.target.closest('[data-example-query]');
         if (chip) {
             document.getElementById('hunt-query').value = chip.getAttribute('data-example-query');

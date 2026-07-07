@@ -19,6 +19,7 @@ from ..api.rate_limiter import require_rate_limit
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
 from .route_helpers import (
+    _get_explanation_module,
     _get_store,
     _normalize_agent_id,
     _parse_indicators,
@@ -508,6 +509,58 @@ def soma_set_mode():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# ── MITRE Vocabulary ──────────────────────────────────────────────────
+
+# MITRE tactic slug → display name (mirrors explanation.EventExplainer)
+_TACTIC_DISPLAY = {
+    "initial-access": "Initial Access",
+    "execution": "Execution",
+    "persistence": "Persistence",
+    "privilege-escalation": "Privilege Escalation",
+    "defense-evasion": "Defense Evasion",
+    "credential-access": "Credential Access",
+    "discovery": "Discovery",
+    "lateral-movement": "Lateral Movement",
+    "collection": "Collection",
+    "exfiltration": "Exfiltration",
+    "command-and-control": "Command & Control",
+    "impact": "Impact",
+}
+
+_mitre_vocab_cache = None
+
+
+@dashboard_bp.route("/api/mitre/techniques", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def mitre_techniques():
+    """Human-readable MITRE ATT&CK vocabulary for the dashboard UI.
+
+    Returns {"T1059": {"name": ..., "tactic": ..., "description": ...}, ...}
+    built from the intel explanation vocabulary, so bare technique IDs in
+    event rows can be rendered with names. Cached in-process — the
+    vocabulary is static for the lifetime of the deploy.
+    """
+    global _mitre_vocab_cache
+    if _mitre_vocab_cache is None:
+        mod = _get_explanation_module()
+        context = getattr(mod, "_TECHNIQUE_CONTEXT", None) if mod else None
+        if not context:
+            # Don't cache the failure — the module may become importable later
+            return jsonify({})
+        vocab = {}
+        for tid, (tactic_slug, description) in sorted(context.items()):
+            vocab[tid] = {
+                "name": (
+                    description[:1].upper() + description[1:] if description else tid
+                ),
+                "tactic": _TACTIC_DISPLAY.get(tactic_slug, tactic_slug),
+                "description": description,
+            }
+        _mitre_vocab_cache = vocab
+    return jsonify(_mitre_vocab_cache)
+
+
 # ── Explain Routes ────────────────────────────────────────────────────
 
 
@@ -524,35 +577,51 @@ def explain_event(event_id):
 
     source_table = request.args.get("source", "security")
 
-    # Map source to table names
+    # Map source to table names.  ONLY the requested table is queried:
+    # row ids are per-table, so the old cross-table fallback could match
+    # an unrelated row with the same id and explain the WRONG event.
     _TABLE_MAP = {
         "security": "security_events",
         "fim": "fim_events",
         "persistence": "persistence_events",
         "flow": "flow_events",
         "process": "process_events",
+        "dns": "dns_events",
+        "audit": "audit_events",
+        "peripheral": "peripheral_events",
+        "observation": "observation_events",
     }
+    used_table = _TABLE_MAP.get(source_table)
+    if used_table is None:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"Unknown source '{source_table}'",
+                }
+            ),
+            400,
+        )
 
     try:
-        # Try specified table first, then fall back through all tables
-        tables_to_try = [_TABLE_MAP.get(source_table, "security_events")]
-        tables_to_try += [t for t in _TABLE_MAP.values() if t != tables_to_try[0]]
-
-        row = None
-        used_table = None
-        for tbl in tables_to_try:
-            try:
-                row = store.db.execute(
-                    f"SELECT * FROM {tbl} WHERE id = ?", (event_id,)
-                ).fetchone()
-                if row:
-                    used_table = tbl
-                    break
-            except Exception:
-                continue
+        try:
+            row = store.db.execute(
+                f"SELECT * FROM {used_table} WHERE id = ?", (event_id,)
+            ).fetchone()
+        except Exception:
+            row = None  # Table missing in this store — treat as not found
 
         if not row:
-            return jsonify({"status": "error", "message": "Event not found"}), 404
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Event not found",
+                        "used_table": used_table,
+                    }
+                ),
+                404,
+            )
 
         columns = [
             desc[0]
@@ -587,11 +656,24 @@ def explain_event(event_id):
                 "note": "No indicator data recorded for this event"
             }
 
-        from amoskys.intel.explanation import EventExplainer
+        explanation_mod = _get_explanation_module()
+        if explanation_mod is None:
+            return (
+                jsonify(
+                    {"status": "error", "message": "Explanation engine unavailable"}
+                ),
+                500,
+            )
 
-        explainer = EventExplainer()
+        explainer = explanation_mod.EventExplainer()
         explanation = explainer.explain_event(event_dict)
-        return jsonify({"status": "success", "explanation": explanation})
+        return jsonify(
+            {
+                "status": "success",
+                "explanation": explanation,
+                "used_table": used_table,
+            }
+        )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

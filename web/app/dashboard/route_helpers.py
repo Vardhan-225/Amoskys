@@ -186,6 +186,89 @@ def _parse_json_list(raw):
     return value if isinstance(value, list) else []
 
 
+# ── Human-Readable Enrichment ────────────────────────────────────────────────
+
+_EXPLANATION_MODULE = None
+
+
+def _get_explanation_module():
+    """amoskys.intel.explanation module (MITRE vocabulary + explainers).
+
+    Falls back to loading the file directly when the intel package
+    __init__ can't import (optional ML deps like numpy may be missing in
+    slim web deployments) — explanation.py itself is dependency-free.
+    Cached in-process; returns None when unavailable.
+    """
+    global _EXPLANATION_MODULE
+    if _EXPLANATION_MODULE is not None:
+        return _EXPLANATION_MODULE
+    try:
+        import importlib
+
+        _EXPLANATION_MODULE = importlib.import_module("amoskys.intel.explanation")
+        return _EXPLANATION_MODULE
+    except Exception:
+        pass
+    try:
+        import importlib.util
+        from pathlib import Path
+
+        path = (
+            Path(__file__).resolve().parents[3]
+            / "src"
+            / "amoskys"
+            / "intel"
+            / "explanation.py"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "_amoskys_intel_explanation", path
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _EXPLANATION_MODULE = mod
+    except Exception:
+        _EXPLANATION_MODULE = None
+    return _EXPLANATION_MODULE
+
+
+def _expected_reason(ev):
+    """Human reason if this row looks like expected owner/system activity.
+
+    Delegates to insight_service.classify_expected (imported locally to
+    avoid import cycles) and passes the result through _redact like other
+    user-facing fields before it ships to the browser.
+    """
+    try:
+        from .insight_service import _redact, classify_expected
+
+        return _redact(classify_expected(ev))
+    except Exception:
+        return None
+
+
+def _technique_names(mitre_list):
+    """Map MITRE technique IDs to human-readable names.
+
+    Uses the intel explanation vocabulary; unknown IDs are omitted so the
+    UI can fall back to the bare T-ID.
+    """
+    if not mitre_list:
+        return {}
+    mod = _get_explanation_module()
+    vocab = getattr(mod, "_TECHNIQUE_CONTEXT", None) if mod else None
+    if not vocab:
+        return {}
+    names = {}
+    for tid in mitre_list:
+        ctx = vocab.get(tid)
+        if ctx is None and "." in tid:
+            # Fall back to parent technique (T1059.004 → T1059)
+            ctx = vocab.get(tid.split(".")[0])
+        if ctx:
+            names[tid] = ctx[1]
+    return names
+
+
 # ── Query Builders ───────────────────────────────────────────────────────────
 
 
@@ -263,6 +346,8 @@ def _query_table_security(
                 "final_classification": ev.get("final_classification", ""),
                 "mitre_techniques": mitre_list,
                 "mitre_technique": ", ".join(mitre_list),
+                "technique_names": _technique_names(mitre_list),
+                "expected_reason": _expected_reason(ev),
                 "indicators": indicators,
                 "source_table": "security",
                 "_sort_ts": ev.get("timestamp_ns", 0),
@@ -328,6 +413,10 @@ def _query_table_process(
                 ),
                 "mitre_techniques": [],
                 "mitre_technique": "",
+                "technique_names": {},
+                "expected_reason": _expected_reason(
+                    {"event_category": "process_event", "description": desc}
+                ),
                 "indicators": {
                     "pid": ev.get("pid"),
                     "ppid": ev.get("ppid"),
@@ -397,6 +486,13 @@ def _query_table_flow(
                 ),
                 "mitre_techniques": [],
                 "mitre_technique": "",
+                "technique_names": {},
+                "expected_reason": _expected_reason(
+                    {
+                        "event_category": f"network_flow_{protocol.lower()}",
+                        "description": desc,
+                    }
+                ),
                 "indicators": {
                     "src_ip": ev.get("src_ip"),
                     "dst_ip": dst,
@@ -470,6 +566,14 @@ def _query_table_dns(
                 ),
                 "mitre_techniques": mitre_list,
                 "mitre_technique": ", ".join(mitre_list),
+                "technique_names": _technique_names(mitre_list),
+                "expected_reason": _expected_reason(
+                    {
+                        "event_category": ev.get("event_type", "dns_query")
+                        or "dns_query",
+                        "description": desc,
+                    }
+                ),
                 "indicators": {
                     "domain": domain,
                     "query_type": qtype,
@@ -539,6 +643,13 @@ def _query_table_persistence(
                 "final_classification": "suspicious" if risk >= 0.5 else "benign",
                 "mitre_techniques": mitre_list,
                 "mitre_technique": ", ".join(mitre_list),
+                "technique_names": _technique_names(mitre_list),
+                "expected_reason": _expected_reason(
+                    {
+                        "event_category": mechanism or "persistence_event",
+                        "description": desc,
+                    }
+                ),
                 "indicators": {
                     "mechanism": mechanism,
                     "path": path,
@@ -605,6 +716,10 @@ def _query_table_fim(
                 "final_classification": "suspicious" if risk >= 0.5 else "benign",
                 "mitre_techniques": mitre_list,
                 "mitre_technique": ", ".join(mitre_list),
+                "technique_names": _technique_names(mitre_list),
+                "expected_reason": _expected_reason(
+                    {"event_category": "file_modification", "description": desc}
+                ),
                 "indicators": {
                     "path": path,
                     "change_type": change,

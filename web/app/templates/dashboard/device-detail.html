@@ -170,6 +170,7 @@
 .dd-mitre-tag { padding:3px 9px; background:rgba(0,217,255,0.05); border:1px solid var(--bd); border-radius:5px;
     font-size:0.74em; color:var(--cyan); font-family:'SF Mono',monospace; }
 .dd-mitre-tag b { color:var(--mut); margin-left:4px; font-weight:400; }
+.dd-mitre-nm { color:var(--sub); font-family:-apple-system,BlinkMacSystemFont,sans-serif; font-style:normal; margin-left:4px; }
 
 /* ── Detection (advanced) ── */
 .dd-stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; }
@@ -204,6 +205,27 @@
     }
     var D = null;
 
+    // MITRE vocabulary (id → {name, tactic, description}) — fetched once
+    var MITRE = null;
+    var _mitreP = null;
+    function loadMitre() {
+        if (_mitreP) return _mitreP;
+        _mitreP = fetch('/dashboard/api/mitre/techniques')
+            .then(function(r) { return r.json(); })
+            .then(function(v) { MITRE = (v && v.techniques) ? v.techniques : (v || {}); return MITRE; })
+            .catch(function() { MITRE = {}; return MITRE; });
+        return _mitreP;
+    }
+    function mitreInfo(tid) {
+        if (!MITRE || !tid) return null;
+        return MITRE[tid] || (tid.indexOf('.') > 0 ? MITRE[tid.split('.')[0]] : null) || null;
+    }
+    function mitreTitle(tid) {
+        var i = mitreInfo(tid);
+        return i ? (i.name + ' · ' + i.tactic) : '';
+    }
+    function truncate(s, n) { s = s || ''; return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
     // Expand/collapse events (delegated; survives re-render)
     root.addEventListener('click', function(ev) {
         var head = ev.target.closest('.dd-ev-head');
@@ -230,6 +252,7 @@
 
     async function load() {
         try {
+            if (!MITRE) { try { await loadMitre(); } catch (e) { /* names degrade to bare IDs */ } }
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
             if (!data.device) {
@@ -534,7 +557,10 @@
         var rm = riskMeta(risk);
         var mitre = parseMitre(e.mitre_techniques);
         var t = (e.timestamp_dt || '').replace('T', ' ').slice(11, 19);
-        var mtags = mitre.slice(0, 3).map(function(m) { return '<span class="dd-ev-mitre">' + esc(m) + '</span>'; }).join(' ');
+        var mtags = mitre.slice(0, 3).map(function(m) {
+            var nm = mitreTitle(m);
+            return '<span class="dd-ev-mitre" title="' + esc(nm || m) + '">' + esc(m) + (nm ? '<span class="dd-mitre-nm">' + esc(truncate(mitreInfo(m).name, 26)) + '</span>' : '') + '</span>';
+        }).join(' ');
 
         var kvs = '';
         kvs += kv('Process', e.process_name);
@@ -575,7 +601,10 @@
         m = m || [];
         if (!m.length) return '<div class="dd-empty">No MITRE hits</div>';
         return '<div class="dd-mitre-grid">' + m.map(function(x) {
-            return '<span class="dd-mitre-tag">' + esc(x.technique) + '<b>' + x.count + '</b></span>';
+            var info = mitreInfo(x.technique);
+            var label = info ? '<span class="dd-mitre-nm">' + esc(truncate(info.name, 34)) + '</span>' : '';
+            var title = info ? (info.name + ' · ' + info.tactic) : x.technique;
+            return '<span class="dd-mitre-tag" title="' + esc(title) + '">' + esc(x.technique) + label + '<b>' + x.count + '</b></span>';
         }).join('') + '</div>';
     }
 
@@ -584,7 +613,9 @@
         if (!m.length) return '<div class="dd-empty">No MITRE hits</div>';
         var max = m[0].count || 1;
         return m.map(function(x) {
-            return '<div class="dd-bar"><span class="dd-bar-l mono" style="color:var(--cyan);">' + esc(x.technique) + '</span>'
+            var info = mitreInfo(x.technique);
+            return '<div class="dd-bar"><span class="dd-bar-l mono" style="color:var(--cyan);min-width:74px;max-width:90px;" title="' + esc(mitreTitle(x.technique)) + '">' + esc(x.technique) + '</span>'
+                + (info ? '<span class="dd-bar-l" style="min-width:0;max-width:220px;flex-shrink:0;">' + esc(truncate(info.name, 38)) + '</span>' : '')
                 + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (x.count / max) * 100) + '%;background:linear-gradient(90deg,#00d9ff33,#00d9ff);"></span></span>'
                 + '<span class="dd-bar-c">' + x.count + '</span></div>';
         }).join('');

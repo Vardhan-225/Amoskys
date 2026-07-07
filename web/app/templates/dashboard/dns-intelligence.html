@@ -652,7 +652,7 @@ function renderDGA(data) {
                     <span class="dga-bar-value" style="color:${color};">${score.toFixed(2)}</span>
                 </div>
             </td>
-            <td style="font-size:0.8rem;">${row.process || '—'}</td>
+            <td style="font-size:0.8rem;">${row.process_name || '—'}</td>
             <td style="font-family:monospace;font-size:0.75rem;white-space:nowrap;">${shortTs(row.timestamp)}</td>
         `;
         body.appendChild(tr);
@@ -793,7 +793,7 @@ function renderDomainPage() {
             tr.innerHTML = `
                 <td title="${row.domain || ''}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 30)}</td>
                 <td style="font-weight:600;color:var(--neural-primary);">${formatNumber(row.count || 0)}</td>
-                <td style="font-size:0.8rem;">${row.process || '—'}</td>
+                <td style="font-size:0.8rem;">${row.process_name || '—'}</td>
                 <td>
                     <div class="dga-bar-wrapper">
                         <div class="dga-bar-track" style="min-width:40px;">
