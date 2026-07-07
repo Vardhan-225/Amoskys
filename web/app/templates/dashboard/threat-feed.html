@@ -11,6 +11,7 @@
             <h2 class="tf-page-title">Live Threat Feed</h2>
             <span class="tf-badge-live" id="feed-status">LIVE</span>
             <span class="tf-count" id="feed-count">0 events</span>
+            <span id="feed-stale-note" style="display:none;font-size:0.75rem;color:#ffd28a;background:rgba(255,170,0,0.1);border:1px solid rgba(255,170,0,0.35);border-radius:6px;padding:0.2rem 0.55rem;">No events in the selected window &mdash; showing the most recent stored events instead</span>
         </div>
         <div class="tf-header-right">
             <select class="tf-select" id="per-page-select" title="Events per page">
@@ -719,10 +720,23 @@ class ThreatFeedController {
             this.fpRate = d.fp_rate;
             this.avgConfidence = d.avg_confidence;
 
-            document.getElementById('feed-status').textContent = 'LIVE';
-            document.getElementById('feed-status').style.color = '#ff3366';
-            document.getElementById('feed-status').style.borderColor = 'rgba(255,51,102,0.3)';
-            document.getElementById('feed-status').style.background = 'rgba(255,51,102,0.15)';
+            const staleNote = document.getElementById('feed-stale-note');
+            const statusEl = document.getElementById('feed-status');
+            if (d.data_stale) {
+                // The requested window was empty; the API fell back to older
+                // stored events — badge them as historical, not LIVE.
+                statusEl.textContent = 'HISTORICAL';
+                statusEl.style.color = '#ffaa00';
+                statusEl.style.borderColor = 'rgba(255,170,0,0.3)';
+                statusEl.style.background = 'rgba(255,170,0,0.15)';
+                staleNote.style.display = 'inline-block';
+            } else {
+                statusEl.textContent = 'LIVE';
+                statusEl.style.color = '#ff3366';
+                statusEl.style.borderColor = 'rgba(255,51,102,0.3)';
+                statusEl.style.background = 'rgba(255,51,102,0.15)';
+                staleNote.style.display = 'none';
+            }
 
             // Skip full DOM re-render while user has a detail panel open
             if (this.selectedIdx >= 0) {
@@ -960,16 +974,23 @@ class ThreatFeedController {
             return;
         }
         if (action === 'legit') {
+            var applied = false;
             try {
-                await fetch('/api/reliability/feedback', {
+                var fr = await fetch('/api/reliability/feedback', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ agent_id: t.agent_name || 'unknown', action: 'dismiss', event_id: t.id })
                 });
+                var fd = await fr.json();
+                applied = !!fd.applied;
             } catch(e) {}
             var row = document.querySelector('tr[data-row-idx="' + idx + '"]');
             if (row) row.classList.add('triaged');
-            this.toast('Marked as legitimate (FP)', 'success');
+            if (applied) {
+                this.toast('Marked as legitimate (FP) — label stored for training', 'success');
+            } else {
+                this.toast('Noted in this view only — feedback loop not active on this tier', 'info');
+            }
             return;
         }
         if (action === 'incident') {

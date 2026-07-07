@@ -151,28 +151,38 @@ def get_fusion_weights():
 
 
 def _write_event_label(event_id, classification, label_source="manual"):
-    """Write analyst label back to telemetry.db for GBC training."""
+    """Write analyst label back to telemetry.db for GBC training.
+
+    Returns True only if the label actually landed — callers use this to
+    tell the analyst the truth about whether their feedback did anything.
+    """
     if not event_id:
-        return
+        return False
     try:
         from ..dashboard.telemetry_bridge import get_telemetry_store
 
         store = get_telemetry_store()
         if store:
-            store.db.execute(
+            cur = store.db.execute(
                 "UPDATE security_events SET label_source=?, final_classification=? "
                 "WHERE id=?",
                 (label_source, classification, event_id),
             )
             store.db.commit()
+            if cur.rowcount == 0:
+                logger.warning("Label writeback matched no event id=%s", event_id)
+                return False
             logger.info(
                 "Label writeback: event=%s classification=%s source=%s",
                 event_id,
                 classification,
                 label_source,
             )
+            return True
+        return False
     except Exception:
         logger.warning("Label writeback failed for event %s", event_id, exc_info=True)
+        return False
 
 
 @reliability_bp.route("/feedback", methods=["POST"])
@@ -201,18 +211,41 @@ def submit_feedback():
     # Schema 1: Frontend feedback (agent_id + action)
     agent_id = data.get("agent_id")
     action = data.get("action")
+    # A NoOp tracker accepts updates and forgets them — report that honestly
+    # so the UI never claims the system "learned" when nothing was stored.
+    tracker_active = tracker.__class__.__name__ != "NoOpReliabilityTracker"
     if agent_id and action:
         if action == "confirm":
             tracker.update(agent_id, ground_truth_match=True)
-            _write_event_label(event_id, "malicious")
+            label_written = _write_event_label(event_id, "malicious")
+            applied = tracker_active or label_written
             return jsonify(
-                {"status": "ok", "message": f"Agent {agent_id} confirmed (TP)."}
+                {
+                    "status": "ok",
+                    "applied": applied,
+                    "label_written": label_written,
+                    "message": (
+                        f"Agent {agent_id} confirmed (TP)."
+                        if applied
+                        else "Recorded in UI only — the feedback loop is not active on this tier."
+                    ),
+                }
             )
         elif action in ("dismiss", "confirm_benign"):
             tracker.update(agent_id, ground_truth_match=False)
-            _write_event_label(event_id, "legitimate")
+            label_written = _write_event_label(event_id, "legitimate")
+            applied = tracker_active or label_written
             return jsonify(
-                {"status": "ok", "message": f"Agent {agent_id} dismissed (FP)."}
+                {
+                    "status": "ok",
+                    "applied": applied,
+                    "label_written": label_written,
+                    "message": (
+                        f"Agent {agent_id} dismissed (FP)."
+                        if applied
+                        else "Recorded in UI only — the feedback loop is not active on this tier."
+                    ),
+                }
             )
         elif action == "quarantine":
             state = tracker.get_state(agent_id)

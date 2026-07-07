@@ -4,6 +4,14 @@
 
 {% block content %}
 <div class="corr-page" style="padding: 2rem;">
+    <!-- Freshness banner — shown when correlation data is historical -->
+    <div id="fusion-stale-banner" style="display:none;align-items:center;gap:0.75rem;margin-bottom:1rem;padding:0.75rem 1rem;border:1px solid rgba(255,170,0,0.4);border-radius:10px;background:rgba(255,170,0,0.08);">
+        <span style="font-size:1.1rem;">&#9888;</span>
+        <div style="font-size:0.85rem;color:#ffd28a;">
+            <strong>Historical correlation data</strong> — the fusion engine last ran <span id="fusion-stale-when">--</span>.
+            Nothing below is live. Current verdicts are on the <a href="/dashboard/" style="color:#00d9ff;">Overview</a> and <a href="/dashboard/incidents-view" style="color:#00d9ff;">Incidents</a> pages.
+        </div>
+    </div>
     <div class="neural-card">
         <div class="card-header">
             <h2 class="card-title">SOMA Correlation Engine</h2>
@@ -199,14 +207,26 @@ async function loadAll() {
     await Promise.all([loadRisk(), loadIncidents()]);
 }
 
+function staleWhen(d) {
+    if (!d.data_as_of) return 'never (no correlation data)';
+    const dt = new Date(d.data_as_of);
+    const days = Math.floor((Date.now() - dt.getTime()) / 86400000);
+    return dt.toLocaleString() + ' (' + (days < 1 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' ago') + ')';
+}
+
+function showStaleBanner(d) {
+    document.getElementById('fusion-stale-banner').style.display = 'flex';
+    document.getElementById('fusion-stale-when').textContent = staleWhen(d);
+}
+
 async function loadRisk() {
     try {
         const r = await fetch('/dashboard/api/fusion/risk');
         const d = await r.json();
         if (d.risk) {
-            renderRisk(d.risk);
+            renderRisk(d.risk, d.stale);
         } else if (d.risks && d.risks.length > 0) {
-            renderRisk(d.risks[0]);
+            renderRisk(d.risks[0], d.stale);
         } else {
             document.getElementById('risk-score').textContent = '0';
             document.getElementById('risk-level').textContent = 'no data';
@@ -221,7 +241,27 @@ async function loadRisk() {
     }
 }
 
-function renderRisk(risk) {
+function renderRisk(risk, stale) {
+    if (risk.updated_at) {
+        // Full date, not just time — an old timestamp must not read as "today".
+        document.getElementById('risk-updated').textContent = 'Updated: ' + new Date(risk.updated_at).toLocaleString();
+    }
+
+    if (stale) {
+        // Historical data: refuse to present it as a current score.
+        document.getElementById('risk-score').textContent = '--';
+        document.getElementById('risk-score').style.color = '#666';
+        document.getElementById('risk-level').textContent = 'not current';
+        document.getElementById('risk-arc').setAttribute('stroke', '#444');
+        document.getElementById('risk-arc').setAttribute('stroke-dasharray', '0 314');
+        document.getElementById('risk-tags').innerHTML =
+            `<span class="risk-tag" style="opacity:0.7;">last score ${risk.score || 0} · ${(risk.level || '')} (historical)</span>`;
+        document.getElementById('engine-status').textContent = 'Stale';
+        document.getElementById('engine-status').style.color = '#ffaa00';
+        document.getElementById('engine-status').style.background = 'rgba(255,170,0,0.1)';
+        return;
+    }
+
     const score = risk.score || 0;
     const level = risk.level || 'LOW';
     const tags = risk.reason_tags || [];
@@ -240,10 +280,6 @@ function renderRisk(risk) {
     const tagsEl = document.getElementById('risk-tags');
     tagsEl.innerHTML = tags.slice(0,6).map(t => `<span class="risk-tag">${t}</span>`).join('');
 
-    if (risk.updated_at) {
-        document.getElementById('risk-updated').textContent = 'Updated: ' + new Date(risk.updated_at).toLocaleTimeString();
-    }
-
     document.getElementById('engine-status').textContent = 'Active';
     document.getElementById('engine-status').style.color = '#00ff88';
     document.getElementById('engine-status').style.background = 'rgba(0,255,136,0.1)';
@@ -254,6 +290,7 @@ async function loadIncidents() {
         const r = await fetch('/dashboard/api/fusion/incidents?limit=200');
         const d = await r.json();
         allIncidents = d.incidents || [];
+        if (d.stale) showStaleBanner(d);
         renderStats();
         renderRulesChart();
         renderTactics();

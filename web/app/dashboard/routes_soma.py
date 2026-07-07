@@ -58,6 +58,44 @@ def _get_fusion_engine():
         return None
 
 
+# Correlation data older than this is presented as historical, not current.
+_FUSION_STALE_SECONDS = int(os.getenv("AMOSKYS_FUSION_STALE_SECONDS", str(24 * 3600)))
+
+
+def _fusion_freshness(engine):
+    """When the fusion engine last wrote, and whether that's too old to show as live.
+
+    Reads MAX(updated_at)/MAX(created_at) across the engine's tables (naive ISO
+    strings, treated as UTC — hours of tz skew don't matter against a 24h bar).
+    """
+    from datetime import datetime, timezone
+
+    latest = None
+    for query in (
+        "SELECT MAX(updated_at) FROM device_risk",
+        "SELECT MAX(created_at) FROM incidents",
+    ):
+        try:
+            raw = engine.db.execute(query).fetchone()[0]
+            if not raw:
+                continue
+            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if latest is None or ts > latest:
+                latest = ts
+        except Exception:
+            continue
+    if latest is None:
+        return {"data_as_of": None, "age_seconds": None, "stale": True}
+    age = (datetime.now(timezone.utc) - latest).total_seconds()
+    return {
+        "data_as_of": latest.isoformat(),
+        "age_seconds": int(age),
+        "stale": age > _FUSION_STALE_SECONDS,
+    }
+
+
 _classification_cache = {"data": None, "ts": 0}
 
 
@@ -146,10 +184,11 @@ def fusion_device_risk():
         )
 
     device_id = request.args.get("device_id")
+    freshness = _fusion_freshness(engine)
     try:
         if device_id:
             risk = engine.get_device_risk(device_id)
-            return jsonify({"status": "success", "risk": risk})
+            return jsonify({"status": "success", "risk": risk, **freshness})
         else:
             risks = []
             for row in engine.db.execute(
@@ -166,7 +205,7 @@ def fusion_device_risk():
                         "updated_at": row[6],
                     }
                 )
-            return jsonify({"status": "success", "risks": risks})
+            return jsonify({"status": "success", "risks": risks, **freshness})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -205,6 +244,7 @@ def fusion_incidents():
                 "status": "success",
                 "incidents": incidents,
                 "total": len(incidents),
+                **_fusion_freshness(engine),
             }
         )
     except Exception as e:

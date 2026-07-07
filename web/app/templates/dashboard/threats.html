@@ -5,6 +5,15 @@
 {% block content %}
 <div class="threats-page" style="padding:1.5rem 2rem;">
 
+    <!-- Freshness banner — shown when correlation data is historical -->
+    <div id="fusion-stale-banner" style="display:none;align-items:center;gap:0.75rem;margin-bottom:1rem;padding:0.75rem 1rem;border:1px solid rgba(255,170,0,0.4);border-radius:10px;background:rgba(255,170,0,0.08);">
+        <span style="font-size:1.1rem;">&#9888;</span>
+        <div style="font-size:0.85rem;color:#ffd28a;">
+            <strong>Historical correlation data</strong> — the fusion engine last ran <span id="fusion-stale-when">--</span>.
+            Nothing below is live. Current verdicts are on the <a href="/dashboard/" style="color:#00d9ff;">Overview</a> and <a href="/dashboard/incidents-view" style="color:#00d9ff;">Incidents</a> pages.
+        </div>
+    </div>
+
     <!-- ── Hero Stats Row ─────────────────────────────────────── -->
     <div class="hero-grid">
         <!-- Device Risk Gauge — larger -->
@@ -68,7 +77,7 @@
                 <div class="funnel-row funnel-row-3">
                     <a class="funnel-bar clickable" href="/dashboard/correlation" style="background:rgba(255,102,51,0.12);border:1px solid rgba(255,102,51,0.25);">
                         <span class="funnel-val" id="funnel-threats" style="color:#ff6633;">--</span>
-                        <span class="funnel-label">Correlated</span>
+                        <span class="funnel-label">High risk</span>
                     </a>
                 </div>
                 <div class="funnel-row funnel-row-4">
@@ -484,17 +493,41 @@ a.clickable { text-decoration:none; }
         await Promise.all([loadRisk(), loadIncidents(), loadFunnel()]);
     }
 
+    function staleWhen(d) {
+        if (!d.data_as_of) return 'never (no correlation data)';
+        const dt = new Date(d.data_as_of);
+        const days = Math.floor((Date.now() - dt.getTime()) / 86400000);
+        return dt.toLocaleString() + ' (' + (days < 1 ? 'today' : days + ' day' + (days === 1 ? '' : 's') + ' ago') + ')';
+    }
+
+    function showStaleBanner(d) {
+        document.getElementById('fusion-stale-banner').style.display = 'flex';
+        document.getElementById('fusion-stale-when').textContent = staleWhen(d);
+    }
+
     async function loadRisk() {
         try {
             const r = await fetch('/dashboard/api/fusion/risk');
             const d = await r.json();
             const risk = d.risk || (d.risks && d.risks[0]);
             if (!risk) return;
-            renderRisk(risk);
+            renderRisk(risk, d.stale);
         } catch(e) {}
     }
 
-    function renderRisk(risk) {
+    function renderRisk(risk, stale) {
+        if (stale) {
+            // Historical data: refuse to present it as a current score.
+            document.getElementById('risk-score').textContent = '--';
+            document.getElementById('risk-score').style.color = '#666';
+            document.getElementById('risk-level').textContent = 'not current';
+            document.getElementById('risk-level').style.color = 'var(--text-muted)';
+            document.getElementById('risk-arc').setAttribute('stroke', '#444');
+            document.getElementById('risk-arc').setAttribute('stroke-dasharray', '0 314');
+            document.getElementById('risk-tags').innerHTML =
+                '<span class="risk-tag" style="opacity:0.7;">last score ' + esc(String(risk.score || 0)) + ' · ' + esc(risk.level || '') + ' (historical)</span>';
+            return;
+        }
         const score = risk.score || 0;
         const level = risk.level || 'LOW';
         const tags = risk.reason_tags || [];
@@ -514,19 +547,16 @@ a.clickable { text-decoration:none; }
 
     async function loadFunnel() {
         try {
-            const r = await fetch('/dashboard/api/nexus/verdict-funnel?hours=8760');
+            // 24h window — matches what the fleet cache actually holds; the
+            // old hours=8760 asked a 6h cache for a year and implied it got one.
+            const r = await fetch('/dashboard/api/nexus/verdict-funnel?hours=24');
             const d = await r.json();
             document.getElementById('funnel-events').textContent = (d.total_events||0).toLocaleString();
             document.getElementById('funnel-suspicious').textContent = (d.security_events||0).toLocaleString();
-            document.getElementById('funnel-threats').textContent = (d.flows||0).toLocaleString();
+            document.getElementById('funnel-threats').textContent = (d.threats||0).toLocaleString();
             document.getElementById('funnel-incidents').textContent = (d.incidents||0).toLocaleString();
-            document.getElementById('funnel-agents').textContent = (d.active_agents||0) + ' active agents';
+            document.getElementById('funnel-agents').textContent = (d.active_agents||0) + ' active agents · last 24h';
         } catch(e) {}
-    }
-
-    // Called after incidents are loaded to sync the funnel incident count
-    function syncFunnelIncidents() {
-        document.getElementById('funnel-incidents').textContent = allIncidents.length.toLocaleString();
     }
 
     async function loadIncidents() {
@@ -534,13 +564,13 @@ a.clickable { text-decoration:none; }
             const r = await fetch('/dashboard/api/fusion/incidents?limit=200');
             const d = await r.json();
             allIncidents = d.incidents || [];
+            if (d.stale) showStaleBanner(d);
             renderSeverityCounts();
             renderTactics();
             renderKillChain();
             renderTechHeatmap();
             renderIncidents();
             renderAgentWeights();
-            syncFunnelIncidents();
         } catch(e) {
             document.getElementById('incidents-body').innerHTML =
                 '<tr><td colspan="7" class="empty-msg">Fusion engine initializing. Detection data will appear once correlation completes.</td></tr>';
@@ -935,7 +965,7 @@ a.clickable { text-decoration:none; }
         content.innerHTML = `
             <div class="detail-narrative">${esc(inc.summary||'No summary available.')}</div>
             <div class="detail-grid" style="margin-top:1rem;">
-                <div class="detail-kv"><div class="label">Device</div><div class="value">${esc(inc.device_id||'--')}</div></div>
+                <div class="detail-kv"><div class="label">Device</div><div class="value">${inc.device_id ? `<a href="/dashboard/device/${encodeURIComponent(inc.device_id)}" style="color:#00d9ff;">${esc(inc.device_id)}</a>` : '--'}</div></div>
                 <div class="detail-kv"><div class="label">Confidence</div><div class="value" style="color:${(inc.weighted_confidence||1)>=0.8?'#00ff88':'#ffaa00'};">${((inc.weighted_confidence||1)*100).toFixed(0)}%</div></div>
                 <div class="detail-kv"><div class="label">Duration</div><div class="value">${durationStr}</div></div>
                 <div class="detail-kv"><div class="label">Events</div><div class="value">${eventCount}</div></div>

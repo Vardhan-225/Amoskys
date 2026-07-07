@@ -718,6 +718,13 @@
                     const d = await r.json();
                     if (d.status === 'success') {
                         const dot = document.getElementById('system-status');
+                        if (d.fleet_mode) {
+                            // No host metrics on this tier — green only if the
+                            // event pipeline actually has data, not by default.
+                            dot.className = 'hdr-status-dot ' + ((d.event_count || 0) > 0 ? 'hdr-dot-online' : 'hdr-dot-warning');
+                            dot.title = (d.event_count || 0) > 0 ? 'Event pipeline active' : 'No events in store';
+                            return;
+                        }
                         const cpu = d.metrics.cpu.percent, mem = d.metrics.memory.percent;
                         if (cpu > 85 || mem > 90) dot.className = 'hdr-status-dot hdr-dot-critical';
                         else if (cpu > 70 || mem > 75) dot.className = 'hdr-status-dot hdr-dot-warning';

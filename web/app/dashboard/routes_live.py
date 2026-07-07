@@ -180,20 +180,20 @@ def live_metrics():
                             "percent": 0,
                             "count": 0,
                             "cores": 0,
-                            "status": "healthy",
+                            "status": "unavailable",
                         },
                         "memory": {
                             "percent": 0,
                             "used_gb": 0,
                             "total_gb": 0,
                             "available_gb": 0,
-                            "status": "healthy",
+                            "status": "unavailable",
                         },
                         "disk": {
                             "percent": 0,
                             "used_gb": 0,
                             "total_gb": 0,
-                            "status": "healthy",
+                            "status": "unavailable",
                         },
                         "network": {"bytes_sent_gb": 0, "bytes_recv_gb": 0},
                         "amoskys": {

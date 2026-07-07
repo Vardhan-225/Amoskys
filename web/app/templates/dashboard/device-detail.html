@@ -232,7 +232,18 @@
         try {
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
-            if (!data.device) { root.innerHTML = '<div class="dd-empty" style="padding:50px;color:#ff5555;">Device not found</div>'; return; }
+            if (!data.device) {
+                if (data.unreachable) {
+                    // Backend down ≠ device gone — don't scare the user.
+                    root.innerHTML = '<div class="dd-empty" style="padding:50px;color:#ffd28a;">'
+                        + esc(data.error || 'Fleet backend unreachable.')
+                        + '<br><span style="color:#6b7a99;font-size:0.85em;">The device may still be protected and shipping telemetry. Retrying automatically.</span></div>';
+                } else {
+                    root.innerHTML = '<div class="dd-empty" style="padding:50px;color:#ff5555;">'
+                        + esc(data.error || 'Device not found') + '</div>';
+                }
+                return;
+            }
             D = data;
             var ctxEl = document.getElementById('hdr-device-ctx');
             if (ctxEl) ctxEl.textContent = data.device.hostname || deviceId;

@@ -113,6 +113,29 @@ def _ops_session() -> http_client.Session:
     return session
 
 
+def _ops_get_ex(path: str, params: dict | None = None) -> tuple[dict | None, bool]:
+    """Like _ops_get, but also reports whether ops answered at all.
+
+    Returns (data, reachable) — callers that surface state to users need to
+    distinguish "ops said no such thing" from "couldn't reach ops".
+    """
+    try:
+        resp = _ops_session().get(
+            f"{OPS_SERVER_URL}{path}",
+            params=params,
+            timeout=OPS_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            return resp.json(), True
+        logger.warning("Ops server %s returned %d", path, resp.status_code)
+        return None, True
+    except http_client.ConnectionError:
+        logger.debug("Ops server unreachable: %s", OPS_SERVER_URL)
+    except Exception as e:
+        logger.warning("Ops server error: %s", e)
+    return None, False
+
+
 def _ops_get(path: str, params: dict | None = None) -> dict | None:
     """Fetch data from the ops server API."""
     try:
@@ -208,11 +231,21 @@ def cc_device_detail(device_id):
 @require_login
 def cc_device_telemetry(device_id):
     """Full Cortex-style telemetry — proxied from ops."""
-    data = _ops_get(f"/api/v1/devices/{device_id}/telemetry")
+    data, reachable = _ops_get_ex(f"/api/v1/devices/{device_id}/telemetry")
     if data:
         return jsonify(data)
 
-    return jsonify({"error": "Device not found or ops server unreachable"}), 404
+    if not reachable:
+        return (
+            jsonify(
+                {
+                    "error": "Fleet backend unreachable — telemetry can't be loaded right now.",
+                    "unreachable": True,
+                }
+            ),
+            503,
+        )
+    return jsonify({"error": "Device not found on the ops backend."}), 404
 
 
 @dashboard_bp.route("/api/command-center/device/<device_id>/export")
@@ -433,7 +466,12 @@ def cc_fleet_status():
         logger.error("Command Center status failed: %s", e)
         if db:
             db.close()
-        return jsonify({"available": False, "message": str(e)})
+        return jsonify(
+            {
+                "available": False,
+                "message": "Fleet backend is unreachable right now. Your agents may still be shipping — retrying automatically.",
+            }
+        )
 
 
 @dashboard_bp.route("/api/command-center/device/<device_id>/events")

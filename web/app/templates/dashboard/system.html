@@ -8,12 +8,21 @@
     <div class="neural-card">
         <div class="card-header">
             <h2 class="card-title">📊 System Health Monitor</h2>
-            <div class="card-badge badge-success">All Systems Operational</div>
+            <div class="card-badge" id="system-health-badge" style="background:rgba(107,122,153,0.15);color:var(--text-muted);">Checking&hellip;</div>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            Real-time monitoring of AMOSKYS platform performance, resource utilization, 
+            Real-time monitoring of AMOSKYS platform performance, resource utilization,
             and infrastructure health across all components.
         </p>
+    </div>
+
+    <!-- Fleet-mode notice: host metrics are not collected from devices on this tier -->
+    <div id="fleet-metrics-banner" style="display:none;align-items:center;gap:0.75rem;margin:1rem 0;padding:0.75rem 1rem;border:1px solid rgba(0,217,255,0.35);border-radius:10px;background:rgba(0,217,255,0.06);">
+        <span style="font-size:1.1rem;">&#8505;</span>
+        <div style="font-size:0.85rem;color:#9fd8e8;">
+            <strong>Fleet mode</strong> — per-device CPU/memory/disk aren't collected on this tier, so those panels are unavailable (not zero).
+            The event pipeline is live: <span id="fleet-event-count">--</span> security events in store.
+        </div>
     </div>
 
     <!-- System Overview Metrics -->
@@ -648,29 +657,76 @@ class SystemDashboard {
             
             if (data.status === 'success') {
                 const metrics = data.metrics;
-                
+
+                const badge = document.getElementById('system-health-badge');
+
+                if (data.fleet_mode) {
+                    // Host metrics aren't collected on the fleet tier — say so
+                    // instead of rendering fake 0% gauges with green statuses.
+                    if ((data.event_count || 0) > 0) {
+                        badge.textContent = 'Event Pipeline Active';
+                        badge.style.background = 'rgba(0,255,136,0.12)';
+                        badge.style.color = '#00ff88';
+                    } else {
+                        badge.textContent = 'No Events In Store';
+                        badge.style.background = 'rgba(255,170,0,0.12)';
+                        badge.style.color = '#ffaa00';
+                    }
+                    const banner = document.getElementById('fleet-metrics-banner');
+                    banner.style.display = 'flex';
+                    document.getElementById('fleet-event-count').textContent =
+                        (data.event_count || 0).toLocaleString();
+                    ['cpu-utilization', 'memory-usage', 'disk-usage'].forEach(id => {
+                        document.getElementById(id).textContent = '--';
+                    });
+                    document.getElementById('cpu-cores').textContent = 'Not collected on fleet tier';
+                    document.getElementById('memory-details').textContent = 'Not collected on fleet tier';
+                    document.getElementById('disk-details').textContent = 'Not collected on fleet tier';
+                    ['cpu-status', 'memory-status', 'disk-status'].forEach(id => {
+                        document.getElementById(id).textContent = 'Status: unavailable';
+                    });
+                    return;
+                }
+
+                // Local mode: badge reflects the worst live metric status
+                const worst = [metrics.cpu, metrics.memory, metrics.disk]
+                    .map(m => m.status || 'healthy');
+                if (worst.includes('critical')) {
+                    badge.textContent = 'Attention Needed';
+                    badge.style.background = 'rgba(255,51,102,0.12)';
+                    badge.style.color = '#ff3366';
+                } else if (worst.includes('warning')) {
+                    badge.textContent = 'Under Pressure';
+                    badge.style.background = 'rgba(255,170,0,0.12)';
+                    badge.style.color = '#ffaa00';
+                } else {
+                    badge.textContent = 'All Systems Operational';
+                    badge.style.background = 'rgba(0,255,136,0.12)';
+                    badge.style.color = '#00ff88';
+                }
+
                 // Update main metrics
-                document.getElementById('cpu-utilization').textContent = metrics.cpu.percent + '%';
-                document.getElementById('memory-usage').textContent = metrics.memory.percent + '%';
-                document.getElementById('disk-usage').textContent = metrics.disk.percent + '%';
-                
+                document.getElementById('cpu-utilization').textContent = metrics.cpu.percent.toFixed(1) + '%';
+                document.getElementById('memory-usage').textContent = metrics.memory.percent.toFixed(1) + '%';
+                document.getElementById('disk-usage').textContent = metrics.disk.percent.toFixed(1) + '%';
+
                 // Update additional details
                 document.getElementById('cpu-cores').textContent = metrics.cpu.cores + ' Cores';
-                document.getElementById('memory-details').textContent = 
+                document.getElementById('memory-details').textContent =
                     `${metrics.memory.used_gb.toFixed(1)} GB / ${metrics.memory.total_gb.toFixed(1)} GB`;
-                document.getElementById('disk-details').textContent = 
+                document.getElementById('disk-details').textContent =
                     `${metrics.disk.used_gb.toFixed(1)} GB / ${metrics.disk.total_gb.toFixed(1)} GB`;
-                
+
                 // Update status indicators
                 document.getElementById('cpu-status').textContent = `Status: ${metrics.cpu.status || 'healthy'}`;
                 document.getElementById('memory-status').textContent = `Status: ${metrics.memory.status || 'healthy'}`;
                 document.getElementById('disk-status').textContent = `Status: ${metrics.disk.status || 'healthy'}`;
-                
+
                 // Update gauges
                 this.updateGauge('cpu', metrics.cpu.percent);
                 this.updateGauge('memory', metrics.memory.percent);
                 this.updateGauge('disk', metrics.disk.percent);
-                
+
                 // Store for timeline
                 this.updatePerformanceData(metrics);
             }
@@ -920,7 +976,18 @@ class SystemDashboard {
                 const metrics = data.metrics;
                 const recommendations = [];
                 const insights = [];
-                
+
+                if (data.fleet_mode) {
+                    recommendations.push({
+                        title: '&#8505;&#65039; Host metrics unavailable',
+                        description: 'This tier receives security telemetry from your devices, not their CPU/memory/disk stats. Health recommendations need local mode.',
+                        severity: 'info'
+                    });
+                    insights.push({ label: 'Security Events in Store', value: (data.event_count || 0).toLocaleString() });
+                    this.renderRecommendations(recommendations, insights);
+                    return;
+                }
+
                 // Generate recommendations based on metrics
                 if (metrics.cpu.percent > 70) {
                     recommendations.push({
@@ -955,20 +1022,23 @@ class SystemDashboard {
                     });
                 }
                 
-                // Generate insights
+                // Generate insights (amoskys.* is what the API actually returns —
+                // metrics.process never existed and threw here, leaving the panel
+                // stuck on "Analyzing system health...")
                 insights.push({
-                    label: 'Processes Monitored',
-                    value: metrics.process.threads
+                    label: 'AMOSKYS Threads',
+                    value: (metrics.amoskys && metrics.amoskys.threads)
+                        || (metrics.process && metrics.process.threads) || '--'
                 });
-                
+
                 insights.push({
                     label: 'Available Memory',
                     value: (metrics.memory.total_gb - metrics.memory.used_gb).toFixed(2) + ' GB'
                 });
-                
+
                 insights.push({
                     label: 'Network Activity',
-                    value: (metrics.network.bytes_sent / (1024**3)).toFixed(2) + ' GB sent'
+                    value: (metrics.network.bytes_sent_mb != null ? (metrics.network.bytes_sent_mb / 1024).toFixed(2) : '--') + ' GB sent'
                 });
                 
                 this.renderRecommendations(recommendations, insights);

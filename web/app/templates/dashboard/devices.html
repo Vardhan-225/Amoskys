@@ -17,6 +17,11 @@
         <p>Install the AMOSKYS agent to start protecting your devices.</p>
         <a href="/dashboard/deploy" class="dv-cta">Install on your Mac</a>
     </div>
+    <div id="dv-unreachable" class="dv-empty" style="display:none;">
+        <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="64" height="64" style="opacity:0.2;margin-bottom:16px;">
+        <h2>Fleet backend unreachable</h2>
+        <p id="dv-unreachable-msg">Your devices may still be protected and shipping telemetry &mdash; this page just can't reach the backend. Retrying automatically.</p>
+    </div>
 </div>
 
 <style>
@@ -131,20 +136,34 @@
     var fleetData = null;
     load(); setInterval(load, 15000);
 
+    function showState(state, msg) {
+        document.getElementById('dv-list').style.display = state === 'list' ? 'block' : 'none';
+        document.getElementById('dv-empty').style.display = state === 'empty' ? 'block' : 'none';
+        document.getElementById('dv-unreachable').style.display = state === 'unreachable' ? 'block' : 'none';
+        if (state === 'unreachable') {
+            document.getElementById('dv-subtitle').textContent = 'Status unavailable';
+            if (msg) document.getElementById('dv-unreachable-msg').textContent = msg;
+        } else if (state === 'empty') {
+            document.getElementById('dv-subtitle').textContent = 'No devices connected';
+        }
+    }
+
     async function load() {
         try {
             var r = await fetch('/dashboard/api/command-center/status');
             fleetData = await r.json();
-            if (!fleetData.available || !fleetData.devices || !fleetData.devices.length) {
-                document.getElementById('dv-list').style.display = 'none';
-                document.getElementById('dv-empty').style.display = 'block';
-                document.getElementById('dv-subtitle').textContent = 'No devices connected';
+            if (!fleetData.available) {
+                showState('unreachable', fleetData.message);
                 return;
             }
+            if (!fleetData.devices || !fleetData.devices.length) {
+                showState('empty');
+                return;
+            }
+            showState('list');
             renderDevices(fleetData);
         } catch(e) {
-            document.getElementById('dv-list').style.display = 'none';
-            document.getElementById('dv-empty').style.display = 'block';
+            showState('unreachable');
         }
     }
 
