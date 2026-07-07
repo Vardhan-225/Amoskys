@@ -37,7 +37,8 @@
 <body class="amoskys">
 <nav class="amk-nav">
   <div class="amk-brand"><span class="dot"></span>AMOSKYS</div>
-  <a class="amk-link" href="/dashboard/">Command</a>
+  <a class="amk-link" href="/dashboard/">Overview</a>
+  <a class="amk-link" href="/dashboard/command">Command</a>
   <a class="amk-link on" href="/dashboard/incidents-view">Incidents</a>
   <a class="amk-link" href="/dashboard/device-view">Device</a>
   <div class="amk-grow"></div>
@@ -62,7 +63,7 @@
   <div class="fly-b" id="flybody"></div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 let INCIDENTS=[], FILTER='all', selV={};
 const $=s=>document.querySelector(s);
 const SEV={calm:'✓',amber:'!',red:'▲'};
