@@ -595,6 +595,7 @@ class QueryMixin:
         offset: int = 0,
         min_risk: Optional[float] = None,
         category: Optional[str] = None,
+        device_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Full-text search across event tables for threat hunting."""
         allowed_tables = {
@@ -684,6 +685,10 @@ class QueryMixin:
             where_clauses.append("event_category = ?")
             params.append(category)
 
+        if device_id:
+            where_clauses.append("device_id = ?")
+            params.append(device_id)
+
         where_sql = " AND ".join(where_clauses)
 
         try:
@@ -745,44 +750,46 @@ class QueryMixin:
             return {}
 
     def get_cross_domain_timeline(
-        self, hours: int = 24, limit: int = 200
+        self, hours: int = 24, limit: int = 200, device_id: Optional[str] = None
     ) -> List[Dict]:
         """Unified timeline across ALL domain tables."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
-        query = """
+        dev = " AND device_id = ?3" if device_id else ""
+        query = f"""
             SELECT timestamp_ns, timestamp_dt, 'process' as domain, 'process' as event_type,
                    COALESCE(exe, '') as summary, COALESCE(anomaly_score, 0) as risk_score
-            FROM process_events WHERE timestamp_ns > ?1
+            FROM process_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'network' as domain, 'flow' as event_type,
                    COALESCE(dst_ip || ':' || CAST(dst_port AS TEXT), '') as summary,
                    COALESCE(threat_score, 0) as risk_score
-            FROM flow_events WHERE timestamp_ns > ?1
+            FROM flow_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'dns' as domain, COALESCE(event_type, 'query'),
                    COALESCE(domain, ''), COALESCE(risk_score, 0)
-            FROM dns_events WHERE timestamp_ns > ?1
+            FROM dns_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'auth' as domain, COALESCE(event_type, 'audit'),
                    COALESCE(exe, ''), COALESCE(risk_score, 0)
-            FROM audit_events WHERE timestamp_ns > ?1
+            FROM audit_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'files' as domain, COALESCE(change_type, 'change'),
                    COALESCE(path, ''), COALESCE(risk_score, 0)
-            FROM fim_events WHERE timestamp_ns > ?1
+            FROM fim_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'persistence' as domain, COALESCE(mechanism, 'unknown'),
                    COALESCE(path, ''), COALESCE(risk_score, 0)
-            FROM persistence_events WHERE timestamp_ns > ?1
+            FROM persistence_events WHERE timestamp_ns > ?1{dev}
             UNION ALL
             SELECT timestamp_ns, timestamp_dt, 'security' as domain, COALESCE(event_category, 'detection'),
                    COALESCE(description, ''), COALESCE(risk_score, 0)
-            FROM security_events WHERE timestamp_ns > ?1
+            FROM security_events WHERE timestamp_ns > ?1{dev}
             ORDER BY timestamp_ns DESC LIMIT ?2
         """
         with self._lock:
             try:
-                rows = self.db.execute(query, (cutoff_ns, limit)).fetchall()
+                params = (cutoff_ns, limit, device_id) if device_id else (cutoff_ns, limit)
+                rows = self.db.execute(query, params).fetchall()
                 return [
                     {
                         "timestamp_ns": r[0],

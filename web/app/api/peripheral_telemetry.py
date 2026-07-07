@@ -37,6 +37,7 @@ def safe_int(value, default=0, min_val=None, max_val=None):
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_events():
     """Get recent peripheral events."""
+    device_id = request.args.get("device_id") or None
     limit = safe_int(
         request.args.get("limit", 100), default=100, min_val=1, max_val=500
     )
@@ -45,7 +46,7 @@ def get_recent_events():
         return jsonify({"events": [], "message": "No data available yet"}), 200
 
     try:
-        events = service.recent_peripheral_events(limit=limit)
+        events = service.recent_peripheral_events(limit=limit, device_id=device_id)
         return jsonify(
             {
                 "events": events,
@@ -62,12 +63,13 @@ def get_recent_events():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_connected_devices():
     """Get currently connected peripheral devices."""
+    device_id = request.args.get("device_id") or None
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        devices = service.connected_peripherals()
+        devices = service.connected_peripherals(device_id=device_id)
         return jsonify(
             {
                 "devices": devices,
@@ -84,12 +86,13 @@ def get_connected_devices():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_peripheral_stats():
     """Get aggregated peripheral statistics."""
+    device_id = request.args.get("device_id") or None
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"error": "Database not available"}), 500
 
     try:
-        payload = service.peripheral_stats()
+        payload = service.peripheral_stats(device_id=device_id)
         payload["timestamp"] = datetime.now().isoformat()
         return jsonify(payload)
     except Exception as exc:
@@ -101,13 +104,14 @@ def get_peripheral_stats():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_connection_timeline():
     """Get timeline of device connections/disconnections."""
+    device_id = request.args.get("device_id") or None
     hours = safe_int(request.args.get("hours", 24), default=24, min_val=1, max_val=168)
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"events": [], "message": "No data available"}), 200
 
     try:
-        events = service.peripheral_timeline(hours=hours)
+        events = service.peripheral_timeline(hours=hours, device_id=device_id)
         return jsonify(
             {
                 "events": events,
@@ -125,13 +129,14 @@ def get_connection_timeline():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_high_risk_devices():
     """Get high-risk peripheral devices (risk_score > 0.5)."""
+    device_id = request.args.get("device_id") or None
     limit = safe_int(request.args.get("limit", 50), default=50, min_val=1, max_val=200)
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        devices = service.high_risk_peripherals(limit=limit)
+        devices = service.high_risk_peripherals(limit=limit, device_id=device_id)
         return jsonify(
             {
                 "devices": devices,
@@ -148,13 +153,14 @@ def get_high_risk_devices():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_unauthorized_devices():
     """Get unauthorized peripheral devices."""
+    device_id = request.args.get("device_id") or None
     limit = safe_int(request.args.get("limit", 50), default=50, min_val=1, max_val=200)
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        devices = service.unauthorized_peripherals(limit=limit)
+        devices = service.unauthorized_peripherals(limit=limit, device_id=device_id)
         return jsonify(
             {
                 "devices": devices,

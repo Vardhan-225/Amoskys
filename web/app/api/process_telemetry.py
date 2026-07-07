@@ -35,6 +35,7 @@ def safe_int(value, default=0, min_val=None, max_val=None):
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_processes():
     """Get recent process events from canonical store."""
+    device_id = request.args.get("device_id") or None
     limit = safe_int(
         request.args.get("limit", 100), default=100, min_val=1, max_val=500
     )
@@ -43,7 +44,7 @@ def get_recent_processes():
         return jsonify({"processes": [], "message": "No data available yet"}), 200
 
     try:
-        processes = service.recent_processes(limit=limit)
+        processes = service.recent_processes(limit=limit, device_id=device_id)
         return jsonify(
             {
                 "processes": processes,
@@ -60,12 +61,13 @@ def get_recent_processes():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_process_stats():
     """Get aggregated process statistics."""
+    device_id = request.args.get("device_id") or None
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"error": "Database not available"}), 500
 
     try:
-        payload = service.process_stats()
+        payload = service.process_stats(device_id=device_id)
         payload["timestamp"] = datetime.now().isoformat()
         return jsonify(payload)
     except Exception as exc:
@@ -77,13 +79,14 @@ def get_process_stats():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_top_executables():
     """Get most frequently seen executables."""
+    device_id = request.args.get("device_id") or None
     limit = safe_int(request.args.get("limit", 20), default=20, min_val=1, max_val=100)
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"executables": [], "message": "No data available"}), 200
 
     try:
-        result = service.process_top_executables(limit=limit)
+        result = service.process_top_executables(limit=limit, device_id=device_id)
         executables = result.get("executables", [])
         return jsonify(
             {

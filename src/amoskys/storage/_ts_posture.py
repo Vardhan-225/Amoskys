@@ -6,7 +6,7 @@ import logging
 import math
 import sqlite3
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("TelemetryStore")
 
@@ -32,14 +32,22 @@ class PostureMixin:
             return "elevated"
         return "clear"
 
-    def _query_domain_posture(self, table: str, risk_col: str, cutoff_ns: int) -> Dict:
+    def _query_domain_posture(
+        self,
+        table: str,
+        risk_col: str,
+        cutoff_ns: int,
+        device_id: Optional[str] = None,
+    ) -> Dict:
         """Query a single domain table for posture stats. Caller holds self._lock."""
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         try:
             row = self.db.execute(
                 f"SELECT COUNT(*), MAX(timestamp_ns), COALESCE(MAX({risk_col}), 0), "
                 f"COALESCE(AVG({risk_col}), 0) "
-                f"FROM {table} WHERE timestamp_ns > ?",
-                (cutoff_ns,),
+                f"FROM {table} WHERE timestamp_ns > ?{dev_sql}",
+                (cutoff_ns, *dev_params),
             ).fetchone()
             count = row[0] or 0
             domain_max = row[2] or 0.0
@@ -59,43 +67,49 @@ class PostureMixin:
                 "status": "inactive",
             }
 
-    def get_device_posture(self, hours: int = 24) -> Dict[str, Any]:
+    def get_device_posture(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Cross-domain device health summary."""
-        cache_key = f"device_posture:{hours}"
+        cache_key = f"device_posture:{hours}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?2" if device_id else ""
+        q_params: tuple = (cutoff_ns, device_id) if device_id else (cutoff_ns,)
 
         # Domain table volumes (observation counts from raw collector data)
-        volume_query = """
+        volume_query = f"""
             SELECT 'process' as label, COUNT(*), MAX(timestamp_ns)
-            FROM process_events WHERE timestamp_ns > ?1
+            FROM process_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'network', COUNT(*), MAX(timestamp_ns)
-            FROM flow_events WHERE timestamp_ns > ?1
+            FROM flow_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'dns', COUNT(*), MAX(timestamp_ns)
-            FROM dns_events WHERE timestamp_ns > ?1
+            FROM dns_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'auth', COUNT(*), MAX(timestamp_ns)
-            FROM audit_events WHERE timestamp_ns > ?1
+            FROM audit_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'files', COUNT(*), MAX(timestamp_ns)
-            FROM fim_events WHERE timestamp_ns > ?1
+            FROM fim_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'persistence', COUNT(*), MAX(timestamp_ns)
-            FROM persistence_events WHERE timestamp_ns > ?1
+            FROM persistence_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'peripherals', COUNT(*), MAX(timestamp_ns)
-            FROM peripheral_events WHERE timestamp_ns > ?1
+            FROM peripheral_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT 'observations', COUNT(*), MAX(timestamp_ns)
-            FROM observation_events WHERE timestamp_ns > ?1
+            FROM observation_events WHERE timestamp_ns > ?1{dev_sql}
             UNION ALL
             SELECT '_security_count', COUNT(*), 0
-            FROM security_events WHERE timestamp_ns > ?1
+            FROM security_events WHERE timestamp_ns > ?1{dev_sql}
         """
 
         # Risk scores from security_events (probes detect threats, not observations).
@@ -118,12 +132,12 @@ class PostureMixin:
             "macos_internet_activity": "observations",
             "macos_discovery": "observations",
         }
-        risk_query = """
+        risk_query = f"""
             SELECT collection_agent,
                    COALESCE(MAX(risk_score), 0),
                    COALESCE(AVG(risk_score), 0)
             FROM security_events
-            WHERE timestamp_ns > ?1
+            WHERE timestamp_ns > ?1{dev_sql}
             GROUP BY collection_agent
         """
         result: Dict[str, Any] = {
@@ -138,7 +152,7 @@ class PostureMixin:
         with self._read_pool.connection() as rdb:
             try:
                 # 1. Get risk per agent, map to domains in Python
-                risk_rows = rdb.execute(risk_query, (cutoff_ns,)).fetchall()
+                risk_rows = rdb.execute(risk_query, q_params).fetchall()
                 for r in risk_rows:
                     agent = r[0] or ""
                     domain = _AGENT_TO_DOMAIN.get(agent, "observations")
@@ -153,7 +167,7 @@ class PostureMixin:
                     }
 
                 # 2. Get volume counts from domain tables
-                rows = rdb.execute(volume_query, (cutoff_ns,)).fetchall()
+                rows = rdb.execute(volume_query, q_params).fetchall()
                 for r in rows:
                     label, count, latest = r[0], r[1] or 0, r[2] or 0
                     if label == "_security_count":
@@ -212,15 +226,21 @@ class PostureMixin:
             return ("DANGER", 0.3)
         return ("SAFE", -0.3)
 
-    def compute_nerve_posture(self, hours: int = 24) -> Dict[str, Any]:
+    def compute_nerve_posture(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Compute posture score using the Nerve Signal Model."""
-        cache_key = f"nerve_posture:{hours}"
+        cache_key = f"nerve_posture:{hours}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         now_s = time.time()
         cutoff_ns = int((now_s - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
 
         # Fast SQL-aggregate posture: compute danger/safe sums in SQL
         # instead of fetching all rows and looping in Python.
@@ -233,7 +253,7 @@ class PostureMixin:
             # Aggregate security events by risk bucket (avoids per-row Python loop)
             try:
                 agg = rdb.execute(
-                    """SELECT
+                    f"""SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN risk_score >= 0.5 THEN 1 ELSE 0 END) as danger_count,
                         SUM(CASE WHEN risk_score >= 0.5 THEN risk_score ELSE 0 END) as danger_risk_sum,
@@ -241,8 +261,8 @@ class PostureMixin:
                         SUM(CASE WHEN threat_intel_match = 1 THEN 1 ELSE 0 END) as ti_count,
                         AVG(risk_score) as avg_risk,
                         MAX(risk_score) as max_risk
-                    FROM security_events WHERE timestamp_ns > ?""",
-                    (cutoff_ns,),
+                    FROM security_events WHERE timestamp_ns > ?{dev_sql}""",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 if agg and agg[0]:
                     signal_counts["DANGER"] = agg[1] or 0
@@ -266,8 +286,8 @@ class PostureMixin:
                 try:
                     row = rdb.execute(
                         f"SELECT COUNT(*), SUM({risk_col}) "
-                        f"FROM {table} WHERE timestamp_ns > ? AND {risk_col} > 0",
-                        (cutoff_ns,),
+                        f"FROM {table} WHERE timestamp_ns > ? AND {risk_col} > 0{dev_sql}",
+                        (cutoff_ns, *dev_params),
                     ).fetchone()
                     if row and row[0]:
                         danger_sum += 0.6 * (row[1] or 0.0)
@@ -295,7 +315,7 @@ class PostureMixin:
                 threat_level = level
                 break
 
-        domain_posture = self.get_device_posture(hours)
+        domain_posture = self.get_device_posture(hours, device_id=device_id)
 
         result = {
             "posture_score": posture_score,

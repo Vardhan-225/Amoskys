@@ -377,10 +377,12 @@ class DashboardQueryService:
 
     # ── Process API ─────────────────────────────────────────────────────
 
-    def recent_processes(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def recent_processes(
+        self, limit: int = 100, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
-        rows = self.store.get_recent_processes(limit=limit)
+        rows = self.store.get_recent_processes(limit=limit, device_id=device_id)
         for proc in rows:
             proc["exe_basename"] = (
                 proc.get("exe", "").split("/")[-1] if proc.get("exe") else "unknown"
@@ -417,18 +419,24 @@ class DashboardQueryService:
                 proc["age_seconds"] = round(_time.time() - float(ct))
         return rows
 
-    def process_stats(self) -> Dict[str, Any]:
+    def process_stats(self, device_id: Optional[str] = None) -> Dict[str, Any]:
         if not self.available:
             return {}
+        dev_where = " WHERE device_id = ?" if device_id else ""
+        dev_and = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             total_events = conn.execute(
-                "SELECT COUNT(*) AS count FROM process_events"
+                "SELECT COUNT(*) AS count FROM process_events" + dev_where, dev_p
             ).fetchone()["count"]
             unique_pids = conn.execute(
-                "SELECT COUNT(DISTINCT pid) AS count FROM process_events"
+                "SELECT COUNT(DISTINCT pid) AS count FROM process_events" + dev_where,
+                dev_p,
             ).fetchone()["count"]
             unique_exes = conn.execute(
-                "SELECT COUNT(DISTINCT exe) AS count FROM process_events WHERE exe IS NOT NULL"
+                "SELECT COUNT(DISTINCT exe) AS count FROM process_events "
+                "WHERE exe IS NOT NULL" + dev_and,
+                dev_p,
             ).fetchone()["count"]
 
             # Derive user_type from username (the column that's actually populated)
@@ -442,9 +450,10 @@ class DashboardQueryService:
                         ELSE 'user'
                     END AS user_type,
                     COUNT(*) AS count
-                FROM process_events
+                FROM process_events{dw}
                 GROUP BY user_type
-                """
+                """.format(dw=dev_where),
+                dev_p,
             ).fetchall()
             # Derive process_category from exe path
             class_rows = conn.execute(
@@ -461,25 +470,28 @@ class DashboardQueryService:
                         ELSE 'other'
                     END AS process_category,
                     COUNT(*) AS count
-                FROM process_events
+                FROM process_events{dw}
                 GROUP BY process_category
-                """
+                """.format(dw=dev_where),
+                dev_p,
             ).fetchall()
             top_rows = conn.execute(
                 """
                 SELECT exe, COUNT(*) AS count
                 FROM process_events
-                WHERE exe IS NOT NULL
+                WHERE exe IS NOT NULL{da}
                 GROUP BY exe
                 ORDER BY count DESC
                 LIMIT 10
-                """
+                """.format(da=dev_and),
+                dev_p,
             ).fetchall()
             time_range = conn.execute(
                 """
                 SELECT MIN(timestamp_dt) AS start, MAX(timestamp_dt) AS end
-                FROM process_events
-                """
+                FROM process_events{dw}
+                """.format(dw=dev_where),
+                dev_p,
             ).fetchone()
 
         return {
@@ -500,23 +512,29 @@ class DashboardQueryService:
             },
         }
 
-    def process_top_executables(self, limit: int = 20) -> Dict[str, Any]:
+    def process_top_executables(
+        self, limit: int = 20, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         if not self.available:
             return {"executables": [], "total_events": 0}
+        dev_and = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             rows = conn.execute(
                 """
                 SELECT exe, COUNT(*) AS count
                 FROM process_events
-                WHERE exe IS NOT NULL
+                WHERE exe IS NOT NULL{da}
                 GROUP BY exe
                 ORDER BY count DESC
                 LIMIT ?
-                """,
-                (limit,),
+                """.format(da=dev_and),
+                dev_p + (limit,),
             ).fetchall()
             total = conn.execute(
                 "SELECT COUNT(*) AS total FROM process_events WHERE exe IS NOT NULL"
+                + dev_and,
+                dev_p,
             ).fetchone()["total"]
         return {
             "executables": [
@@ -660,24 +678,33 @@ class DashboardQueryService:
 
     # ── Peripheral API ──────────────────────────────────────────────────
 
-    def recent_peripheral_events(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def recent_peripheral_events(
+        self, limit: int = 100, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
+        dev_where = "WHERE device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             rows = conn.execute(
                 """
                 SELECT *
                 FROM peripheral_events
+                {dw}
                 ORDER BY timestamp_ns DESC
                 LIMIT ?
-                """,
-                (limit,),
+                """.format(dw=dev_where),
+                dev_p + (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def connected_peripherals(self) -> List[Dict[str, Any]]:
+    def connected_peripherals(
+        self, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
+        dev_where = "WHERE device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             rows = conn.execute(
                 """
@@ -694,10 +721,12 @@ class DashboardQueryService:
                     MAX(timestamp_ns) AS last_seen_ns,
                     timestamp_dt AS last_seen_dt
                 FROM peripheral_events
+                {dw}
                 GROUP BY peripheral_device_id
                 HAVING connection_status = 'CONNECTED'
                 ORDER BY last_seen_ns DESC
-                """
+                """.format(dw=dev_where),
+                dev_p,
             ).fetchall()
         now = datetime.now(timezone.utc)
         devices: List[Dict[str, Any]] = []
@@ -713,57 +742,68 @@ class DashboardQueryService:
             devices.append(record)
         return devices
 
-    def peripheral_stats(self) -> Dict[str, Any]:
+    def peripheral_stats(self, device_id: Optional[str] = None) -> Dict[str, Any]:
         if not self.available:
             return {}
+        dev_where = " WHERE device_id = ?" if device_id else ""
+        dev_and = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             total_events = conn.execute(
-                "SELECT COUNT(*) AS count FROM peripheral_events"
+                "SELECT COUNT(*) AS count FROM peripheral_events" + dev_where, dev_p
             ).fetchone()["count"]
             unique_devices = conn.execute(
-                "SELECT COUNT(DISTINCT peripheral_device_id) AS count FROM peripheral_events"
+                "SELECT COUNT(DISTINCT peripheral_device_id) AS count "
+                "FROM peripheral_events" + dev_where,
+                dev_p,
             ).fetchone()["count"]
             type_rows = conn.execute(
                 """
                 SELECT device_type, COUNT(*) AS count
                 FROM peripheral_events
-                WHERE device_type IS NOT NULL
+                WHERE device_type IS NOT NULL{da}
                 GROUP BY device_type
-                """
+                """.format(da=dev_and),
+                dev_p,
             ).fetchall()
             status_rows = conn.execute(
                 """
                 SELECT connection_status, COUNT(*) AS count
                 FROM peripheral_events
-                WHERE connection_status IS NOT NULL
+                WHERE connection_status IS NOT NULL{da}
                 GROUP BY connection_status
-                """
+                """.format(da=dev_and),
+                dev_p,
             ).fetchall()
             unauthorized_count = conn.execute(
                 """
                 SELECT COUNT(DISTINCT peripheral_device_id) AS count
                 FROM peripheral_events
-                WHERE is_authorized = 0
-                """
+                WHERE is_authorized = 0{da}
+                """.format(da=dev_and),
+                dev_p,
             ).fetchone()["count"]
             high_risk_count = conn.execute(
                 """
                 SELECT COUNT(DISTINCT peripheral_device_id) AS count
                 FROM peripheral_events
-                WHERE risk_score > 0.7
-                """
+                WHERE risk_score > 0.7{da}
+                """.format(da=dev_and),
+                dev_p,
             ).fetchone()["count"]
             one_hour_ago = int((time.time() - 3600) * 1e9)
             recent_connections = conn.execute(
                 """
                 SELECT COUNT(*) AS count
                 FROM peripheral_events
-                WHERE timestamp_ns > ? AND connection_status = 'CONNECTED'
-                """,
-                (one_hour_ago,),
+                WHERE timestamp_ns > ? AND connection_status = 'CONNECTED'{da}
+                """.format(da=dev_and),
+                (one_hour_ago,) + dev_p,
             ).fetchone()["count"]
             time_range = conn.execute(
-                "SELECT MIN(timestamp_dt) AS start, MAX(timestamp_dt) AS end FROM peripheral_events"
+                "SELECT MIN(timestamp_dt) AS start, MAX(timestamp_dt) AS end "
+                "FROM peripheral_events" + dev_where,
+                dev_p,
             ).fetchone()
 
         return {
@@ -784,20 +824,24 @@ class DashboardQueryService:
             },
         }
 
-    def peripheral_timeline(self, hours: int = 24) -> List[Dict[str, Any]]:
+    def peripheral_timeline(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
         cutoff_time = _cutoff_ns(hours)
+        dev_and = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             rows = conn.execute(
                 """
                 SELECT timestamp_ns, timestamp_dt, device_name, device_type,
                        connection_status, previous_status, is_authorized, risk_score
                 FROM peripheral_events
-                WHERE timestamp_ns > ?
+                WHERE timestamp_ns > ?{da}
                 ORDER BY timestamp_ns DESC
-                """,
-                (cutoff_time,),
+                """.format(da=dev_and),
+                (cutoff_time,) + dev_p,
             ).fetchall()
         now = datetime.now(timezone.utc)
         timeline: List[Dict[str, Any]] = []
@@ -813,18 +857,24 @@ class DashboardQueryService:
             timeline.append(event)
         return timeline
 
-    def high_risk_peripherals(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def high_risk_peripherals(
+        self, limit: int = 50, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         return self._query_peripheral_aggregate(
             where_clause="risk_score > 0.5",
             limit=limit,
             include_authorized=True,
+            device_id=device_id,
         )
 
-    def unauthorized_peripherals(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def unauthorized_peripherals(
+        self, limit: int = 50, device_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         return self._query_peripheral_aggregate(
             where_clause="is_authorized = 0",
             limit=limit,
             include_authorized=False,
+            device_id=device_id,
         )
 
     def _query_peripheral_aggregate(
@@ -833,10 +883,13 @@ class DashboardQueryService:
         where_clause: str,
         limit: int,
         include_authorized: bool,
+        device_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
         authorized_col = ", is_authorized" if include_authorized else ""
+        dev_and = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
         with self._read_conn() as conn:
             rows = conn.execute(
                 f"""
@@ -852,12 +905,12 @@ class DashboardQueryService:
                     COUNT(*) AS event_count,
                     MAX(timestamp_dt) AS last_seen
                 FROM peripheral_events
-                WHERE {where_clause}
+                WHERE {where_clause}{dev_and}
                 GROUP BY peripheral_device_id
                 ORDER BY max_risk_score DESC
                 LIMIT ?
                 """,
-                (limit,),
+                dev_p + (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
 

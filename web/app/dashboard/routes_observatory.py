@@ -186,7 +186,8 @@ def posture_summary():
     if not store:
         return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.compute_nerve_posture(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.compute_nerve_posture(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/posture/timeline")
@@ -199,7 +200,10 @@ def posture_timeline():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 200, type=int)
-    return jsonify(store.get_cross_domain_timeline(hours, min(limit, 500)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.get_cross_domain_timeline(hours, min(limit, 500), device_id=device_id)
+    )
 
 
 # ── Signals (Directive 3) ──
@@ -345,7 +349,8 @@ def dns_stats():
     if not store:
         return jsonify({"total_queries": 0})
     hours = request.args.get("hours", 24, type=int)
-    stats = store.get_dns_stats(hours)
+    device_id = request.args.get("device_id") or None
+    stats = store.get_dns_stats(hours, device_id=device_id)
     # JS expects 'response_codes' (not 'by_response_code') and 'nxdomain_count'
     rc = stats.pop("by_response_code", {})
     stats["response_codes"] = rc
@@ -363,7 +368,8 @@ def dns_top_domains():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
-    return jsonify(store.get_dns_top_domains(hours, min(limit, 100)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_dns_top_domains(hours, min(limit, 100), device_id=device_id))
 
 
 @dashboard_bp.route("/api/dns/dga")
@@ -377,7 +383,10 @@ def dns_dga():
     hours = request.args.get("hours", 24, type=int)
     min_score = request.args.get("min_score", 0.5, type=float)
     limit = request.args.get("limit", 50, type=int)
-    return jsonify(store.get_dns_dga_suspects(hours, min_score, min(limit, 200)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.get_dns_dga_suspects(hours, min_score, min(limit, 200), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/dns/beaconing")
@@ -390,7 +399,8 @@ def dns_beaconing():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 50, type=int)
-    return jsonify(store.get_dns_beaconing(hours, min(limit, 200)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_dns_beaconing(hours, min(limit, 200), device_id=device_id))
 
 
 @dashboard_bp.route("/api/dns/timeline")
@@ -402,7 +412,8 @@ def dns_timeline():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_dns_timeline(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_dns_timeline(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/dns/recent")
@@ -417,8 +428,11 @@ def dns_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
+    device_id = request.args.get("device_id") or None
     return jsonify(
-        store.search_events(search, "dns_events", hours, min(limit, 500), offset)
+        store.search_events(
+            search, "dns_events", hours, min(limit, 500), offset, device_id=device_id
+        )
     )
 
 
@@ -434,7 +448,8 @@ def network_flow_stats():
     if not store:
         return jsonify({"total_flows": 0})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_flow_stats(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_flow_stats(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/network/geo")
@@ -446,7 +461,8 @@ def network_geo():
     if not store:
         return jsonify({"countries": [], "cities": []})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_flow_geo_stats(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_flow_geo_stats(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/network/asn")
@@ -458,7 +474,8 @@ def network_asn():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_flow_asn_breakdown(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_flow_asn_breakdown(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/network/device-location")
@@ -472,6 +489,8 @@ def network_device_location():
     """
     import os as _os
 
+    device_id = request.args.get("device_id") or None
+
     # Fleet mode: get public IP from ops server, then GeoIP it locally
     if _os.environ.get("AMOSKYS_OPS_SERVER"):
         try:
@@ -479,7 +498,12 @@ def network_device_location():
 
             data = _ops_get("/api/v1/devices")
             if data and data.get("devices"):
-                public_ip = data["devices"][0].get("public_ip")
+                devices = data["devices"]
+                if device_id:
+                    devices = [
+                        d for d in devices if d.get("device_id") == device_id
+                    ]
+                public_ip = devices[0].get("public_ip") if devices else None
                 if public_ip:
                     geo = _geoip_lookup(public_ip)
                     if geo:
@@ -491,12 +515,15 @@ def network_device_location():
     store = _get_store()
     if store:
         try:
+            dev_sql = " AND device_id = ?" if device_id else ""
+            dev_params: tuple = (device_id,) if device_id else ()
             row = store.db.execute(
-                """SELECT geo_src_latitude, geo_src_longitude, geo_src_city,
+                f"""SELECT geo_src_latitude, geo_src_longitude, geo_src_city,
                           geo_src_country, asn_src_org, src_ip
                    FROM flow_events
-                   WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
-                   ORDER BY timestamp_ns DESC LIMIT 1"""
+                   WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''{dev_sql}
+                   ORDER BY timestamp_ns DESC LIMIT 1""",
+                dev_params,
             ).fetchone()
             if row and row[0]:
                 return jsonify(
@@ -566,22 +593,26 @@ def network_geo_points():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 500, type=int)
-    points = store.get_flow_geo_points(hours, min(limit, 1000))
+    device_id = request.args.get("device_id") or None
+    points = store.get_flow_geo_points(hours, min(limit, 1000), device_id=device_id)
 
     # Also grab flows that have country but no lat/lon — use centroid
     try:
         import time
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = "AND device_id = ? " if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         rows = store.db.execute(
             "SELECT geo_dst_country, COUNT(*) as cnt, "
             "SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as total_bytes, "
             "asn_dst_org, MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat "
             "FROM flow_events WHERE timestamp_ns > ? "
+            f"{dev_sql}"
             "AND (geo_dst_latitude IS NULL OR geo_dst_latitude = 0) "
             "AND geo_dst_country IS NOT NULL AND geo_dst_country != '' "
             "GROUP BY geo_dst_country ORDER BY cnt DESC LIMIT 50",
-            (cutoff_ns,),
+            (cutoff_ns, *dev_params),
         ).fetchall()
         for r in rows:
             centroid = _COUNTRY_CENTROIDS.get(r[0])
@@ -667,7 +698,10 @@ def network_top_destinations():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
-    return jsonify(store.get_flow_top_destinations(hours, min(limit, 100)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.get_flow_top_destinations(hours, min(limit, 100), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/network/by-process")
@@ -680,7 +714,8 @@ def network_by_process():
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
-    return jsonify(store.get_flow_by_process(hours, min(limit, 100)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_flow_by_process(hours, min(limit, 100), device_id=device_id))
 
 
 @dashboard_bp.route("/api/network/flows")
@@ -695,8 +730,11 @@ def network_flows():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
+    device_id = request.args.get("device_id") or None
     return jsonify(
-        store.search_events(search, "flow_events", hours, min(limit, 500), offset)
+        store.search_events(
+            search, "flow_events", hours, min(limit, 500), offset, device_id=device_id
+        )
     )
 
 
@@ -712,7 +750,8 @@ def fim_stats():
     if not store:
         return jsonify({"total_changes": 0})
     hours = request.args.get("hours", 24, type=int)
-    stats = store.get_fim_stats(hours)
+    device_id = request.args.get("device_id") or None
+    stats = store.get_fim_stats(hours, device_id=device_id)
     # JS expects 'total' (not 'total_changes')
     stats["total"] = stats.get("total_changes", 0)
     return jsonify(stats)
@@ -729,7 +768,10 @@ def fim_critical():
     hours = request.args.get("hours", 24, type=int)
     min_risk = request.args.get("min_risk", 0.3, type=float)
     limit = request.args.get("limit", 100, type=int)
-    return jsonify(store.get_fim_critical_changes(hours, min_risk, min(limit, 500)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.get_fim_critical_changes(hours, min_risk, min(limit, 500), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/fim/directories")
@@ -741,7 +783,8 @@ def fim_directories():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_fim_directory_summary(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_fim_directory_summary(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/fim/timeline")
@@ -753,7 +796,8 @@ def fim_timeline():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_fim_timeline(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_fim_timeline(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/fim/recent")
@@ -768,8 +812,11 @@ def fim_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
+    device_id = request.args.get("device_id") or None
     return jsonify(
-        store.search_events(search, "fim_events", hours, min(limit, 500), offset)
+        store.search_events(
+            search, "fim_events", hours, min(limit, 500), offset, device_id=device_id
+        )
     )
 
 
@@ -785,7 +832,8 @@ def persistence_stats():
     if not store:
         return jsonify({"total_entries": 0})
     hours = request.args.get("hours", 24, type=int)
-    stats = store.get_persistence_stats(hours)
+    device_id = request.args.get("device_id") or None
+    stats = store.get_persistence_stats(hours, device_id=device_id)
     # JS expects 'mechanism_counts' (not 'by_mechanism'),
     # 'change_type_counts' (not 'by_change_type'), and 'total_changes'
     stats["mechanism_counts"] = stats.pop("by_mechanism", {})
@@ -804,7 +852,10 @@ def persistence_inventory():
         return jsonify([])
     mechanism = request.args.get("mechanism")
     limit = request.args.get("limit", 200, type=int)
-    entries = store.get_persistence_inventory(mechanism, min(limit, 500))
+    device_id = request.args.get("device_id") or None
+    entries = store.get_persistence_inventory(
+        mechanism, min(limit, 500), device_id=device_id
+    )
     # JS expects {inventory: [...]} or {entries: [...]}, not a flat list
     return jsonify({"inventory": entries})
 
@@ -818,7 +869,8 @@ def persistence_changes():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    raw = store.get_persistence_changes(hours)
+    device_id = request.args.get("device_id") or None
+    raw = store.get_persistence_changes(hours, device_id=device_id)
     # JS expects {buckets: [{label, mechanisms: {mech: count}}, ...]}
     # Store returns flat [{hour, mechanism, count}, ...]
     buckets_map = OrderedDict()
@@ -842,7 +894,8 @@ def audit_stats():
     if not store:
         return jsonify({"total_events": 0})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_audit_stats(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_audit_stats(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/audit/high-risk")
@@ -856,7 +909,10 @@ def audit_high_risk():
     hours = request.args.get("hours", 24, type=int)
     min_risk = request.args.get("min_risk", 0.5, type=float)
     limit = request.args.get("limit", 100, type=int)
-    return jsonify(store.get_audit_high_risk(hours, min_risk, min(limit, 500)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.get_audit_high_risk(hours, min_risk, min(limit, 500), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/audit/recent")
@@ -871,8 +927,11 @@ def audit_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
+    device_id = request.args.get("device_id") or None
     return jsonify(
-        store.search_events(search, "audit_events", hours, min(limit, 500), offset)
+        store.search_events(
+            search, "audit_events", hours, min(limit, 500), offset, device_id=device_id
+        )
     )
 
 
@@ -888,7 +947,8 @@ def observation_stats():
     if not store:
         return jsonify({"total": 0, "by_domain": {}})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_observation_domain_stats(hours))
+    device_id = request.args.get("device_id") or None
+    return jsonify(store.get_observation_domain_stats(hours, device_id=device_id))
 
 
 @dashboard_bp.route("/api/observations/<domain>")
@@ -902,8 +962,11 @@ def observation_by_domain(domain):
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
+    device_id = request.args.get("device_id") or None
     return jsonify(
-        store.get_observations_by_domain(domain, hours, min(limit, 500), offset)
+        store.get_observations_by_domain(
+            domain, hours, min(limit, 500), offset, device_id=device_id
+        )
     )
 
 
@@ -919,4 +982,7 @@ def observation_search():
     domain = request.args.get("domain")
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 100, type=int)
-    return jsonify(store.search_observations(query, domain, hours, min(limit, 500)))
+    device_id = request.args.get("device_id") or None
+    return jsonify(
+        store.search_observations(query, domain, hours, min(limit, 500), device_id=device_id)
+    )

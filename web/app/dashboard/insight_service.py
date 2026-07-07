@@ -144,6 +144,9 @@ def _error_stub(kind: str, message: str, headline: str, sub: str) -> dict:
     }
 
 
+_HOME_LAT = float(os.getenv("AMOSKYS_HOME_LAT", "37.3382"))
+_HOME_LON = float(os.getenv("AMOSKYS_HOME_LON", "-121.8863"))
+
 _CACHE: dict = {"at": 0.0, "model": None, "path": None}
 _TTL_SECONDS = 45.0
 
@@ -478,16 +481,21 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
 
 
 # ── Globe: real geolocated flows -> arcs ─────────────────────────────────────
-def build_globe(db: sqlite3.Connection):
+def build_globe(db: sqlite3.Connection, device_id: str | None = None):
+    dev_and = " AND device_id = ?" if device_id else ""
+    dev_p: tuple = (device_id,) if device_id else ()
     rows = db.execute(
         """SELECT geo_dst_latitude lat, geo_dst_longitude lon, geo_dst_city city,
                   geo_dst_country country, asn_dst_org org,
                   COUNT(*) flows, SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) bytes,
                   GROUP_CONCAT(DISTINCT process_name) procs
            FROM flow_events
-           WHERE geo_dst_latitude IS NOT NULL AND geo_dst_longitude IS NOT NULL
+           WHERE geo_dst_latitude IS NOT NULL AND geo_dst_longitude IS NOT NULL"""
+        + dev_and
+        + """
            GROUP BY geo_dst_latitude, geo_dst_longitude, asn_dst_org
-           ORDER BY flows DESC"""
+           ORDER BY flows DESC""",
+        dev_p,
     ).fetchall()
     dests, by_key = [], {}
     for r in rows:
@@ -542,6 +550,19 @@ def build_activity_timeline(db: sqlite3.Connection) -> list[dict]:
     return [{"hour": r["hr"], "count": r["n"]} for r in reversed(rows)]
 
 
+def _device_name(db: sqlite3.Connection, device_id: str) -> str:
+    """Resolve a display name for a device — never invent one."""
+    try:
+        row = db.execute(
+            "SELECT hostname FROM devices WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        pass
+    return (device_id or "unknown")[:16]
+
+
 def build_model(db_path: str) -> dict:
     db = _connect(db_path)
     try:
@@ -562,14 +583,14 @@ def build_model(db_path: str) -> dict:
             "generated_at": db.execute("SELECT MAX(timestamp_dt) FROM security_events").fetchone()[0],
             "device": {
                 "id": device.get("device_id", "unknown"),
-                "name": "Akash's MacBook",
-                "lat": 37.3382, "lon": -121.8863,  # San Jose (home region)
+                "name": _device_name(db, device.get("device_id", "")),
+                "lat": _HOME_LAT, "lon": _HOME_LON,  # owner home region (env-config)
                 "events": device.get("n", 0),
                 "latest": device.get("latest"),
             },
             "verdict": verdict,
             "incidents": incidents,
-            "globe": {"device": {"lat": 37.3382, "lon": -121.8863}, "destinations": dests},
+            "globe": {"device": {"lat": _HOME_LAT, "lon": _HOME_LON}, "destinations": dests},
             "domains": domains,
             "timeline": timeline,
             "classes": dict(classes),
@@ -603,7 +624,9 @@ def build_device_model(db_path: str, device_id: str | None = None) -> dict:
             device_id = row[0] if row else "unknown"
 
         events = load_events(db)
-        events = [e for e in events if e.get("device_id") == device_id] or events
+        # STRICT device scoping — the old `or events` fallback silently showed
+        # the whole fleet's events under this device's name when it had none.
+        events = [e for e in events if e.get("device_id") == device_id]
         verdict = compute_verdict(events)
 
         # Exposure (posture) — honest: derived from the hygiene signals we DO see.
@@ -698,14 +721,15 @@ def build_device_model(db_path: str, device_id: str | None = None) -> dict:
                             and e.get("final_classification") in ("suspicious", "malicious"))},
         ]
 
-        dests, by_key = build_globe(db)
+        dests, by_key = build_globe(db, device_id=device_id)
         incidents = build_incidents(events, by_key)
         latest = db.execute(
             "SELECT MAX(timestamp_dt) FROM security_events WHERE device_id=?", (device_id,)
         ).fetchone()[0]
         return {
             "generated_at": latest,
-            "device": {"id": device_id, "name": "Akash's MacBook", "events": len(events), "latest": latest},
+            "device": {"id": device_id, "name": _device_name(db, device_id),
+                       "events": len(events), "latest": latest},
             "verdict": verdict,
             "exposure": exposure,
             "lanes": lanes,

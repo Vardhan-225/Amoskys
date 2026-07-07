@@ -16,27 +16,31 @@ class DomainQueryMixin:
 
     # ── DNS Intelligence ──
 
-    def get_dns_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_dns_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """DNS query analytics."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 row = self.db.execute(
-                    """SELECT COUNT(*), COUNT(DISTINCT domain),
+                    f"""SELECT COUNT(*), COUNT(DISTINCT domain),
                        SUM(CASE WHEN dga_score > 0.7 THEN 1 ELSE 0 END),
                        SUM(CASE WHEN is_beaconing = 1 THEN 1 ELSE 0 END)
-                    FROM dns_events WHERE timestamp_ns > ?""",
-                    (cutoff_ns,),
+                    FROM dns_events WHERE timestamp_ns > ?{dev_sql}""",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 qt_rows = self.db.execute(
-                    "SELECT query_type, COUNT(*) FROM dns_events WHERE timestamp_ns > ? "
+                    f"SELECT query_type, COUNT(*) FROM dns_events WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY query_type ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 rc_rows = self.db.execute(
-                    "SELECT response_code, COUNT(*) FROM dns_events WHERE timestamp_ns > ? "
+                    f"SELECT response_code, COUNT(*) FROM dns_events WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY response_code ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 return {
                     "total_queries": row[0] or 0,
@@ -55,17 +59,21 @@ class DomainQueryMixin:
                     "beaconing_domains": 0,
                 }
 
-    def get_dns_top_domains(self, hours: int = 24, limit: int = 20) -> List[Dict]:
+    def get_dns_top_domains(
+        self, hours: int = 24, limit: int = 20, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Top queried domains."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT domain, COUNT(*) as cnt, query_type, process_name,
+                    f"""SELECT domain, COUNT(*) as cnt, query_type, process_name,
                        MAX(dga_score) as max_dga, MAX(CASE WHEN is_beaconing THEN 1 ELSE 0 END) as beacon
-                    FROM dns_events WHERE timestamp_ns > ? AND domain IS NOT NULL
+                    FROM dns_events WHERE timestamp_ns > ? AND domain IS NOT NULL{dev_sql}
                     GROUP BY domain ORDER BY cnt DESC LIMIT ?""",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -83,17 +91,23 @@ class DomainQueryMixin:
                 return []
 
     def get_dns_dga_suspects(
-        self, hours: int = 24, min_score: float = 0.5, limit: int = 50
+        self,
+        hours: int = 24,
+        min_score: float = 0.5,
+        limit: int = 50,
+        device_id: Optional[str] = None,
     ) -> List[Dict]:
         """Domains with high DGA scores."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT domain, dga_score, process_name, source_ip, timestamp_dt, query_type
-                    FROM dns_events WHERE timestamp_ns > ? AND dga_score >= ?
+                    f"""SELECT domain, dga_score, process_name, source_ip, timestamp_dt, query_type
+                    FROM dns_events WHERE timestamp_ns > ? AND dga_score >= ?{dev_sql}
                     ORDER BY dga_score DESC LIMIT ?""",
-                    (cutoff_ns, min_score, limit),
+                    (cutoff_ns, min_score, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -110,16 +124,20 @@ class DomainQueryMixin:
                 logger.error("DNS DGA query failed: %s", e)
                 return []
 
-    def get_dns_beaconing(self, hours: int = 24, limit: int = 50) -> List[Dict]:
+    def get_dns_beaconing(
+        self, hours: int = 24, limit: int = 50, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Domains exhibiting beaconing behavior."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT domain, beacon_interval_seconds, COUNT(*) as cnt, process_name
-                    FROM dns_events WHERE timestamp_ns > ? AND is_beaconing = 1
+                    f"""SELECT domain, beacon_interval_seconds, COUNT(*) as cnt, process_name
+                    FROM dns_events WHERE timestamp_ns > ? AND is_beaconing = 1{dev_sql}
                     GROUP BY domain ORDER BY cnt DESC LIMIT ?""",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -134,17 +152,21 @@ class DomainQueryMixin:
                 logger.error("DNS beaconing query failed: %s", e)
                 return []
 
-    def get_dns_timeline(self, hours: int = 24) -> List[Dict]:
+    def get_dns_timeline(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """DNS query counts bucketed by time."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT SUBSTR(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt,
+                    f"""SELECT SUBSTR(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt,
                        SUM(CASE WHEN dga_score > 0.5 THEN 1 ELSE 0 END) as suspicious
-                    FROM dns_events WHERE timestamp_ns > ?
+                    FROM dns_events WHERE timestamp_ns > ?{dev_sql}
                     GROUP BY hour ORDER BY hour""",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 return [
                     {"hour": r[0], "count": r[1], "suspicious": r[2] or 0} for r in rows
@@ -155,29 +177,33 @@ class DomainQueryMixin:
 
     # ── Network Intelligence ──
 
-    def get_flow_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_flow_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Network flow summary."""
-        cache_key = f"flow_stats:{hours}"
+        cache_key = f"flow_stats:{hours}" + (f":dev:{device_id}" if device_id else "")
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 row = rdb.execute(
-                    """SELECT COUNT(*), COUNT(DISTINCT dst_ip),
+                    f"""SELECT COUNT(*), COUNT(DISTINCT dst_ip),
                        SUM(COALESCE(bytes_tx, 0)), SUM(COALESCE(bytes_rx, 0)),
                        COUNT(DISTINCT geo_dst_country),
                        SUM(CASE WHEN threat_intel_match = 1 THEN 1 ELSE 0 END),
                        SUM(CASE WHEN is_suspicious = 1 THEN 1 ELSE 0 END)
-                    FROM flow_events WHERE timestamp_ns > ?""",
-                    (cutoff_ns,),
+                    FROM flow_events WHERE timestamp_ns > ?{dev_sql}""",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 proto_rows = rdb.execute(
-                    "SELECT protocol, COUNT(*) FROM flow_events WHERE timestamp_ns > ? "
+                    f"SELECT protocol, COUNT(*) FROM flow_events WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY protocol ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = {
                     "total_flows": row[0] or 0,
@@ -195,28 +221,32 @@ class DomainQueryMixin:
                 logger.error("Flow stats failed: %s", e)
                 return {"total_flows": 0}
 
-    def get_flow_geo_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_flow_geo_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """GeoIP destination aggregation."""
-        cache_key = f"flow_geo:{hours}"
+        cache_key = f"flow_geo:{hours}" + (f":dev:{device_id}" if device_id else "")
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 countries = rdb.execute(
                     "SELECT geo_dst_country, COUNT(*) as cnt, SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as total_bytes "
                     "FROM flow_events INDEXED BY idx_flow_geo_country_covering "
-                    "WHERE timestamp_ns > ? AND geo_dst_country IS NOT NULL AND geo_dst_country != '' "
+                    f"WHERE timestamp_ns > ? AND geo_dst_country IS NOT NULL AND geo_dst_country != ''{dev_sql} "
                     "GROUP BY geo_dst_country ORDER BY cnt DESC LIMIT 20",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 cities = rdb.execute(
                     "SELECT geo_dst_country, geo_dst_city, COUNT(*) as cnt "
                     "FROM flow_events INDEXED BY idx_flow_geo_city_covering "
-                    "WHERE timestamp_ns > ? AND geo_dst_city IS NOT NULL AND geo_dst_city != '' "
+                    f"WHERE timestamp_ns > ? AND geo_dst_city IS NOT NULL AND geo_dst_city != ''{dev_sql} "
                     "GROUP BY geo_dst_country, geo_dst_city ORDER BY cnt DESC LIMIT 20",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = {
                     "countries": [
@@ -233,22 +263,26 @@ class DomainQueryMixin:
                 logger.error("Flow geo stats failed: %s", e)
                 return {"countries": [], "cities": []}
 
-    def get_flow_asn_breakdown(self, hours: int = 24) -> List[Dict]:
+    def get_flow_asn_breakdown(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Top destination ASN organizations."""
-        cache_key = f"flow_asn:{hours}"
+        cache_key = f"flow_asn:{hours}" + (f":dev:{device_id}" if device_id else "")
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(
                     "SELECT asn_dst_org, asn_dst_network_type, COUNT(*) as cnt, "
                     "SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as total_bytes "
                     "FROM flow_events INDEXED BY idx_flow_asn_covering "
-                    "WHERE timestamp_ns > ? AND asn_dst_org IS NOT NULL AND asn_dst_org != '' "
+                    f"WHERE timestamp_ns > ? AND asn_dst_org IS NOT NULL AND asn_dst_org != ''{dev_sql} "
                     "GROUP BY asn_dst_org ORDER BY cnt DESC LIMIT 20",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = [
                     {
@@ -265,13 +299,19 @@ class DomainQueryMixin:
                 logger.error("Flow ASN breakdown failed: %s", e)
                 return []
 
-    def get_flow_geo_points(self, hours: int = 24, limit: int = 500) -> List[Dict]:
+    def get_flow_geo_points(
+        self, hours: int = 24, limit: int = 500, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Lat/lon points for world map visualization."""
-        cache_key = f"flow_geopts:{hours}:{limit}"
+        cache_key = f"flow_geopts:{hours}:{limit}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(
@@ -280,10 +320,10 @@ class DomainQueryMixin:
                     "asn_dst_org, MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat "
                     "FROM flow_events INDEXED BY idx_flow_geopoints_covering "
                     "WHERE timestamp_ns > ? "
-                    "AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0 "
+                    f"AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0{dev_sql} "
                     "GROUP BY geo_dst_latitude, geo_dst_longitude "
                     "ORDER BY cnt DESC LIMIT ?",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 result = [
                     {
@@ -304,13 +344,19 @@ class DomainQueryMixin:
                 logger.error("Flow geo points failed: %s", e)
                 return []
 
-    def get_flow_top_destinations(self, hours: int = 24, limit: int = 20) -> List[Dict]:
+    def get_flow_top_destinations(
+        self, hours: int = 24, limit: int = 20, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Top destination IPs with enrichment."""
-        cache_key = f"flow_topdst:{hours}:{limit}"
+        cache_key = f"flow_topdst:{hours}:{limit}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(
@@ -319,9 +365,9 @@ class DomainQueryMixin:
                     "COUNT(*) as cnt, SUM(COALESCE(bytes_tx,0)) as tx, SUM(COALESCE(bytes_rx,0)) as rx, "
                     "MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat "
                     "FROM flow_events INDEXED BY idx_flow_topdst_covering "
-                    "WHERE timestamp_ns > ? "
+                    f"WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY dst_ip ORDER BY cnt DESC LIMIT ?",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 result = [
                     {
@@ -345,13 +391,19 @@ class DomainQueryMixin:
                 logger.error("Flow top destinations failed: %s", e)
                 return []
 
-    def get_flow_by_process(self, hours: int = 24, limit: int = 20) -> List[Dict]:
+    def get_flow_by_process(
+        self, hours: int = 24, limit: int = 20, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Network usage grouped by process."""
-        cache_key = f"flow_byproc:{hours}:{limit}"
+        cache_key = f"flow_byproc:{hours}:{limit}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(
@@ -359,9 +411,9 @@ class DomainQueryMixin:
                     "SUM(COALESCE(bytes_tx,0)) as tx, SUM(COALESCE(bytes_rx,0)) as rx, "
                     "COUNT(DISTINCT dst_ip) as unique_dsts "
                     "FROM flow_events INDEXED BY idx_flow_byprocess_covering "
-                    "WHERE timestamp_ns > ? AND process_name IS NOT NULL AND process_name != '' "
+                    f"WHERE timestamp_ns > ? AND process_name IS NOT NULL AND process_name != ''{dev_sql} "
                     "GROUP BY process_name ORDER BY cnt DESC LIMIT ?",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 result = [
                     {
@@ -381,29 +433,33 @@ class DomainQueryMixin:
 
     # ── File Integrity ──
 
-    def get_fim_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_fim_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """File integrity monitoring summary."""
-        cache_key = f"fim_stats:{hours}"
+        cache_key = f"fim_stats:{hours}" + (f":dev:{device_id}" if device_id else "")
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 row = rdb.execute(
-                    """SELECT COUNT(*),
+                    f"""SELECT COUNT(*),
                        SUM(CASE WHEN change_type='created' THEN 1 ELSE 0 END),
                        SUM(CASE WHEN change_type='modified' THEN 1 ELSE 0 END),
                        SUM(CASE WHEN change_type='deleted' THEN 1 ELSE 0 END),
                        SUM(CASE WHEN risk_score > 0.3 THEN 1 ELSE 0 END)
-                    FROM fim_events WHERE timestamp_ns > ?""",
-                    (cutoff_ns,),
+                    FROM fim_events WHERE timestamp_ns > ?{dev_sql}""",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 ext_rows = rdb.execute(
-                    "SELECT file_extension, COUNT(*) FROM fim_events WHERE timestamp_ns > ? "
+                    f"SELECT file_extension, COUNT(*) FROM fim_events WHERE timestamp_ns > ?{dev_sql} "
                     "AND file_extension IS NOT NULL GROUP BY file_extension ORDER BY COUNT(*) DESC LIMIT 15",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = {
                     "total_changes": row[0] or 0,
@@ -420,18 +476,24 @@ class DomainQueryMixin:
                 return {"total_changes": 0}
 
     def get_fim_critical_changes(
-        self, hours: int = 24, min_risk: float = 0.3, limit: int = 100
+        self,
+        hours: int = 24,
+        min_risk: float = 0.3,
+        limit: int = 100,
+        device_id: Optional[str] = None,
     ) -> List[Dict]:
         """High-risk file changes."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT path, change_type, old_hash, new_hash, risk_score,
+                    f"""SELECT path, change_type, old_hash, new_hash, risk_score,
                        patterns_matched, file_extension, timestamp_dt, event_type
-                    FROM fim_events WHERE timestamp_ns > ? AND risk_score >= ?
+                    FROM fim_events WHERE timestamp_ns > ? AND risk_score >= ?{dev_sql}
                     ORDER BY risk_score DESC LIMIT ?""",
-                    (cutoff_ns, min_risk, limit),
+                    (cutoff_ns, min_risk, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -451,21 +513,25 @@ class DomainQueryMixin:
                 logger.error("FIM critical changes failed: %s", e)
                 return []
 
-    def get_fim_directory_summary(self, hours: int = 24, limit: int = 50) -> List[Dict]:
+    def get_fim_directory_summary(
+        self, hours: int = 24, limit: int = 50, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """File changes grouped by parent directory."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT
+                    f"""SELECT
                        CASE WHEN INSTR(path, '/') > 0
                             THEN SUBSTR(path, 1, LENGTH(path) - LENGTH(REPLACE(RTRIM(path, REPLACE(path, '/', '')), '', '')))
                             ELSE '/' END as dir,
                        COUNT(*) as cnt, ROUND(AVG(COALESCE(risk_score, 0)), 3) as avg_risk,
                        SUM(CASE WHEN risk_score > 0.3 THEN 1 ELSE 0 END) as risky
-                    FROM fim_events WHERE timestamp_ns > ?
+                    FROM fim_events WHERE timestamp_ns > ?{dev_sql}
                     GROUP BY dir ORDER BY cnt DESC LIMIT ?""",
-                    (cutoff_ns, limit),
+                    (cutoff_ns, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -480,20 +546,24 @@ class DomainQueryMixin:
                 logger.error("FIM directory summary failed: %s", e)
                 return []
 
-    def get_fim_timeline(self, hours: int = 24) -> List[Dict]:
+    def get_fim_timeline(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Hourly FIM event counts by change type."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT SUBSTR(timestamp_dt, 1, 13) as hour,
+                    f"""SELECT SUBSTR(timestamp_dt, 1, 13) as hour,
                        SUM(CASE WHEN change_type='created' THEN 1 ELSE 0 END) as created,
                        SUM(CASE WHEN change_type='modified' THEN 1 ELSE 0 END) as modified,
                        SUM(CASE WHEN change_type='deleted' THEN 1 ELSE 0 END) as deleted,
                        COUNT(*) as total
-                    FROM fim_events WHERE timestamp_ns > ?
+                    FROM fim_events WHERE timestamp_ns > ?{dev_sql}
                     GROUP BY hour ORDER BY hour""",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 return [
                     {
@@ -511,34 +581,40 @@ class DomainQueryMixin:
 
     # ── Persistence Landscape ──
 
-    def get_persistence_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_persistence_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Persistence mechanism summary."""
-        cache_key = f"persistence_stats:{hours}"
+        cache_key = f"persistence_stats:{hours}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 row = rdb.execute(
                     "SELECT COUNT(*), SUM(CASE WHEN risk_score > 0.3 THEN 1 ELSE 0 END) "
-                    "FROM persistence_events WHERE timestamp_ns > ?",
-                    (cutoff_ns,),
+                    f"FROM persistence_events WHERE timestamp_ns > ?{dev_sql}",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 mech_rows = rdb.execute(
                     "SELECT mechanism, COUNT(*) FROM persistence_events "
                     "INDEXED BY idx_persistence_mechanism_covering "
-                    "WHERE timestamp_ns > ? "
+                    f"WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY mechanism ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 ct_rows = rdb.execute(
                     "SELECT change_type, COUNT(*) FROM persistence_events "
                     "INDEXED BY idx_persistence_changetype_covering "
-                    "WHERE timestamp_ns > ? "
+                    f"WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY change_type ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = {
                     "total_entries": row[0] or 0,
@@ -553,26 +629,32 @@ class DomainQueryMixin:
                 return {"total_entries": 0}
 
     def get_persistence_inventory(
-        self, mechanism: Optional[str] = None, limit: int = 200
+        self,
+        mechanism: Optional[str] = None,
+        limit: int = 200,
+        device_id: Optional[str] = None,
     ) -> List[Dict]:
         """Persistence entries, optionally filtered by mechanism."""
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_where = " WHERE device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 if mechanism:
                     rows = self.db.execute(
-                        """SELECT mechanism, entry_id, path, command, user, change_type,
+                        f"""SELECT mechanism, entry_id, path, command, user, change_type,
                            risk_score, timestamp_dt, event_type
-                        FROM persistence_events WHERE mechanism = ?
+                        FROM persistence_events WHERE mechanism = ?{dev_sql}
                         ORDER BY timestamp_ns DESC LIMIT ?""",
-                        (mechanism, limit),
+                        (mechanism, *dev_params, limit),
                     ).fetchall()
                 else:
                     rows = self.db.execute(
-                        """SELECT mechanism, entry_id, path, command, user, change_type,
+                        f"""SELECT mechanism, entry_id, path, command, user, change_type,
                            risk_score, timestamp_dt, event_type
-                        FROM persistence_events
+                        FROM persistence_events{dev_where}
                         ORDER BY timestamp_ns DESC LIMIT ?""",
-                        (limit,),
+                        (*dev_params, limit),
                     ).fetchall()
                 return [
                     {
@@ -592,17 +674,21 @@ class DomainQueryMixin:
                 logger.error("Persistence inventory failed: %s", e)
                 return []
 
-    def get_persistence_changes(self, hours: int = 24) -> List[Dict]:
+    def get_persistence_changes(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> List[Dict]:
         """Recent persistence modifications."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT SUBSTR(timestamp_dt, 1, 13) as hour, mechanism,
+                    f"""SELECT SUBSTR(timestamp_dt, 1, 13) as hour, mechanism,
                        COUNT(*) as cnt
-                    FROM persistence_events WHERE timestamp_ns > ?
+                    FROM persistence_events WHERE timestamp_ns > ?{dev_sql}
                     GROUP BY hour, mechanism ORDER BY hour""",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 return [{"hour": r[0], "mechanism": r[1], "count": r[2]} for r in rows]
             except sqlite3.Error as e:
@@ -611,20 +697,24 @@ class DomainQueryMixin:
 
     # ── Auth / Audit ──
 
-    def get_audit_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_audit_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Kernel audit / auth event summary."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 row = self.db.execute(
                     "SELECT COUNT(*), SUM(CASE WHEN risk_score > 0.5 THEN 1 ELSE 0 END) "
-                    "FROM audit_events WHERE timestamp_ns > ?",
-                    (cutoff_ns,),
+                    f"FROM audit_events WHERE timestamp_ns > ?{dev_sql}",
+                    (cutoff_ns, *dev_params),
                 ).fetchone()
                 type_rows = self.db.execute(
-                    "SELECT event_type, COUNT(*) FROM audit_events WHERE timestamp_ns > ? "
+                    f"SELECT event_type, COUNT(*) FROM audit_events WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY event_type ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 return {
                     "total_events": row[0] or 0,
@@ -636,18 +726,24 @@ class DomainQueryMixin:
                 return {"total_events": 0}
 
     def get_audit_high_risk(
-        self, hours: int = 24, min_risk: float = 0.5, limit: int = 100
+        self,
+        hours: int = 24,
+        min_risk: float = 0.5,
+        limit: int = 100,
+        device_id: Optional[str] = None,
     ) -> List[Dict]:
         """High-risk audit events."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 rows = self.db.execute(
-                    """SELECT event_type, exe, comm, cmdline, pid, uid, risk_score,
+                    f"""SELECT event_type, exe, comm, cmdline, pid, uid, risk_score,
                        reason, mitre_techniques, timestamp_dt
-                    FROM audit_events WHERE timestamp_ns > ? AND risk_score >= ?
+                    FROM audit_events WHERE timestamp_ns > ? AND risk_score >= ?{dev_sql}
                     ORDER BY risk_score DESC LIMIT ?""",
-                    (cutoff_ns, min_risk, limit),
+                    (cutoff_ns, min_risk, *dev_params, limit),
                 ).fetchall()
                 return [
                     {
@@ -670,22 +766,28 @@ class DomainQueryMixin:
 
     # ── Observation Domains (P3) ──
 
-    def get_observation_domain_stats(self, hours: int = 24) -> Dict[str, Any]:
+    def get_observation_domain_stats(
+        self, hours: int = 24, device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Per-domain counts for observation_events."""
-        cache_key = f"observation_domain_stats:{hours}"
+        cache_key = f"observation_domain_stats:{hours}" + (
+            f":dev:{device_id}" if device_id else ""
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(
                     "SELECT domain, COUNT(*) FROM observation_events "
                     "INDEXED BY idx_observation_domain_ts_covering "
-                    "WHERE timestamp_ns > ? "
+                    f"WHERE timestamp_ns > ?{dev_sql} "
                     "GROUP BY domain ORDER BY COUNT(*) DESC",
-                    (cutoff_ns,),
+                    (cutoff_ns, *dev_params),
                 ).fetchall()
                 total = sum(r[1] for r in rows)
                 result = {
@@ -699,22 +801,29 @@ class DomainQueryMixin:
                 return {"total": 0, "by_domain": {}}
 
     def get_observations_by_domain(
-        self, domain: str, hours: int = 24, limit: int = 100, offset: int = 0
+        self,
+        domain: str,
+        hours: int = 24,
+        limit: int = 100,
+        offset: int = 0,
+        device_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Paginated observations for a specific domain."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_params: tuple = (device_id,) if device_id else ()
         with self._lock:
             try:
                 total = self.db.execute(
-                    "SELECT COUNT(*) FROM observation_events WHERE domain = ? AND timestamp_ns > ?",
-                    (domain, cutoff_ns),
+                    f"SELECT COUNT(*) FROM observation_events WHERE domain = ? AND timestamp_ns > ?{dev_sql}",
+                    (domain, cutoff_ns, *dev_params),
                 ).fetchone()[0]
                 rows = self.db.execute(
-                    """SELECT timestamp_dt, domain, event_type, attributes, risk_score,
+                    f"""SELECT timestamp_dt, domain, event_type, attributes, risk_score,
                        collection_agent
-                    FROM observation_events WHERE domain = ? AND timestamp_ns > ?
+                    FROM observation_events WHERE domain = ? AND timestamp_ns > ?{dev_sql}
                     ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?""",
-                    (domain, cutoff_ns, limit, offset),
+                    (domain, cutoff_ns, *dev_params, limit, offset),
                 ).fetchall()
                 results = []
                 for r in rows:
@@ -749,6 +858,7 @@ class DomainQueryMixin:
         domain: Optional[str] = None,
         hours: int = 24,
         limit: int = 100,
+        device_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search across observation_events attributes."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
@@ -760,6 +870,9 @@ class DomainQueryMixin:
         if query:
             where.append("attributes LIKE ?")
             params.append(f"%{query}%")
+        if device_id:
+            where.append("device_id = ?")
+            params.append(device_id)
         where_sql = " AND ".join(where)
         with self._lock:
             try:

@@ -401,6 +401,10 @@
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
+// Device scoping: append the page's device context to data-API calls
+const DEV_Q = (window.AMOSKYS_DEVICE_ID && window.AMOSKYS_DEVICE_ID !== 'None')
+    ? (u) => u + (u.indexOf('?') >= 0 ? '&' : '?') + 'device_id=' + encodeURIComponent(window.AMOSKYS_DEVICE_ID)
+    : (u) => u;
 class PeripheralDashboard {
     constructor() {
         this.updateInterval = 5000; // 5 seconds
@@ -495,7 +499,7 @@ class PeripheralDashboard {
 
     async updateStatistics() {
         try {
-            const response = await fetch('/api/peripheral-telemetry/stats');
+            const response = await fetch(DEV_Q('/api/peripheral-telemetry/stats'));
             const data = await response.json();
 
             // Update metrics
@@ -576,7 +580,7 @@ class PeripheralDashboard {
         try {
             document.getElementById('connected-devices-loading').style.display = 'inline-block';
 
-            const response = await fetch('/api/peripheral-telemetry/connected');
+            const response = await fetch(DEV_Q('/api/peripheral-telemetry/connected'));
             const data = await response.json();
 
             const container = document.getElementById('connected-devices-list');
@@ -585,7 +589,7 @@ class PeripheralDashboard {
             document.getElementById('connected-count').textContent = data.devices.length;
 
             // Calculate disconnected count from stats
-            const statsResp = await fetch('/api/peripheral-telemetry/stats');
+            const statsResp = await fetch(DEV_Q('/api/peripheral-telemetry/stats'));
             const statsData = await statsResp.json();
             const disconnectedCount = statsData.unique_devices - data.devices.length;
             document.getElementById('disconnected-count').textContent = `Disconnected: ${disconnectedCount}`;
@@ -638,7 +642,7 @@ class PeripheralDashboard {
         try {
             document.getElementById('high-risk-loading').style.display = 'inline-block';
 
-            const response = await fetch('/api/peripheral-telemetry/high-risk');
+            const response = await fetch(DEV_Q('/api/peripheral-telemetry/high-risk'));
             const data = await response.json();
 
             const container = document.getElementById('high-risk-devices-list');
@@ -683,7 +687,7 @@ class PeripheralDashboard {
 
     async updateTimeline() {
         try {
-            const response = await fetch(`/api/peripheral-telemetry/timeline?hours=${this.timeWindow}`);
+            const response = await fetch(DEV_Q(`/api/peripheral-telemetry/timeline?hours=${this.timeWindow}`));
             const data = await response.json();
 
             const tbody = document.getElementById('timeline-body');

@@ -339,6 +339,11 @@
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
+// Device-scoped query helper — appends device_id when viewing a single device
+const DEV_Q = (window.AMOSKYS_DEVICE_ID && window.AMOSKYS_DEVICE_ID !== 'None')
+    ? ((u) => u + (u.indexOf('?') >= 0 ? '&' : '?') + 'device_id=' + encodeURIComponent(window.AMOSKYS_DEVICE_ID))
+    : ((u) => u);
+
 class ProcessDashboard {
     constructor() {
         this.updateInterval = 5000; // 5 seconds
@@ -424,7 +429,7 @@ class ProcessDashboard {
 
     async updateProcessStats() {
         try {
-            const response = await fetch('/api/process-telemetry/stats');
+            const response = await fetch(DEV_Q('/api/process-telemetry/stats'));
             const data = await response.json();
 
             // Update metrics
@@ -433,16 +438,19 @@ class ProcessDashboard {
             document.getElementById('unique-exes').textContent = `Executables: ${data.unique_executables}`;
 
             // Duration
-            if (data.collection_period) {
+            if (data.collection_period && data.collection_period.duration_hours != null) {
                 document.getElementById('collection-duration').textContent =
                     `Duration: ${data.collection_period.duration_hours} hours`;
+            } else {
+                document.getElementById('collection-duration').textContent =
+                    'No process telemetry from this device yet';
             }
 
-            // User type distribution
-            const userDist = data.user_type_distribution;
-            const totalProcs = userDist.root + userDist.system + userDist.user;
-            const rootPct = Math.round((userDist.root / totalProcs) * 100);
-            const userPct = Math.round((userDist.user / totalProcs) * 100);
+            // User type distribution (guard zero totals — no NaN%)
+            const userDist = data.user_type_distribution || {};
+            const totalProcs = (userDist.root || 0) + (userDist.system || 0) + (userDist.user || 0);
+            const rootPct = totalProcs ? Math.round(((userDist.root || 0) / totalProcs) * 100) : 0;
+            const userPct = totalProcs ? Math.round(((userDist.user || 0) / totalProcs) * 100) : 0;
 
             document.getElementById('root-ratio').textContent = `${rootPct}%`;
             document.getElementById('user-ratio').textContent = `User: ${userPct}%`;
@@ -475,7 +483,7 @@ class ProcessDashboard {
         try {
             document.getElementById('top-exes-loading').style.display = 'inline-block';
 
-            const response = await fetch('/api/process-telemetry/top-executables?limit=15');
+            const response = await fetch(DEV_Q('/api/process-telemetry/top-executables?limit=15'));
             const data = await response.json();
 
             const container = document.getElementById('top-executables-list');
@@ -513,7 +521,7 @@ class ProcessDashboard {
                 url = `/api/process-telemetry/search?user_type=${this.currentFilter}&limit=50`;
             }
 
-            const response = await fetch(url);
+            const response = await fetch(DEV_Q(url));
             const data = await response.json();
 
             const tbody = document.getElementById('process-stream-body');
@@ -554,7 +562,7 @@ class ProcessDashboard {
     async updatePipelineStatus() {
         try {
             // Check WAL
-            const statsResp = await fetch('/api/process-telemetry/stats');
+            const statsResp = await fetch(DEV_Q('/api/process-telemetry/stats'));
             const statsData = await statsResp.json();
 
             const walStep = document.getElementById('step-wal');
@@ -563,7 +571,7 @@ class ProcessDashboard {
 
             // Check Canonical Table
             try {
-                const canonicalResp = await fetch('/api/process-telemetry/canonical-summary');
+                const canonicalResp = await fetch(DEV_Q('/api/process-telemetry/canonical-summary'));
                 const canonicalData = await canonicalResp.json();
 
                 const canonicalStep = document.getElementById('step-canonical');
@@ -577,7 +585,7 @@ class ProcessDashboard {
 
             // Check ML Features
             try {
-                const featuresResp = await fetch('/api/process-telemetry/features-summary');
+                const featuresResp = await fetch(DEV_Q('/api/process-telemetry/features-summary'));
                 const featuresData = await featuresResp.json();
 
                 const featuresStep = document.getElementById('step-features');

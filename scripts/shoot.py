@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Screenshot AMOSKYS dashboard pages from the local preview server."""
+import os
 import sys
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8890"
-OUT = "/private/tmp/claude-501/-Users-athanneeru-Desktop/0840796b-3999-4596-8533-dd66c22a5833/scratchpad/shots"
+OUT = os.environ.get(
+    "SHOT_DIR",
+    "/private/tmp/claude-501/-Users-athanneeru-Desktop/bc389485-63ba-4d3e-a3cc-505af1bd8278/scratchpad/shots",
+)
 
 pages = sys.argv[1:] or ["/dashboard/"]
 
-import os
 os.makedirs(OUT, exist_ok=True)
 
 with sync_playwright() as p:
