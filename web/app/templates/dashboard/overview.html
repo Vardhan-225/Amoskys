@@ -521,7 +521,7 @@
 
         var p2 = fetch('/dashboard/api/overview/geo-points?hours=24&limit=300')
             .then(function(r) { return r.json(); })
-            .then(function(points) { geoPointsCache = points; })
+            .then(function(points) { if (Array.isArray(points)) geoPointsCache = points; })
             .catch(function() {});
 
         Promise.all([p1, p2]).then(function() {
@@ -539,16 +539,34 @@
         devs.forEach(function(d) { fleetLat += d.lat; fleetLon += d.lon; });
         fleetLat /= devs.length; fleetLon /= devs.length;
 
+        // Marker lookup by device_id + fleet-primary (first ONLINE device,
+        // so offline devices never source unattributed arcs)
+        var markerById = {};
+        var fleetPrimary = null;
+        devs.forEach(function(d) {
+            if (d.device_id) markerById[d.device_id] = d;
+            if (!fleetPrimary && d.status === 'online') fleetPrimary = d;
+        });
+        var fpLat = fleetPrimary ? fleetPrimary.lat : fleetLat;
+        var fpLon = fleetPrimary ? fleetPrimary.lon : fleetLon;
+
         // Device markers — each pinned at its real geo location
         devs.forEach(function(d) {
             var isSelected = !selectedDeviceId || selectedDeviceId === d.device_id;
-            var devColor = d.status === 'online' ? '#00ff88' : '#ff9933';
+            var isOnline = d.status === 'online';
+            var devColor = isOnline ? '#00ff88' : '#ff9933';
             var cr = d.critical_count || 0;
             if (cr > 10) devColor = '#ff3366';
             else if (cr > 0) devColor = '#f0ad4e';
 
-            pts.push({ lat: d.lat, lng: d.lon, color: isSelected ? devColor : '#333', alt: isSelected ? 0.03 : 0.01, radius: isSelected ? 0.8 : 0.3 });
-            if (isSelected) rings.push({ lat: d.lat, lng: d.lon, threat: cr > 0 });
+            // Offline devices render dimmed (muted color, no ring)
+            pts.push({
+                lat: d.lat, lng: d.lon,
+                color: !isSelected ? '#333' : (isOnline ? devColor : 'rgba(255,153,51,0.35)'),
+                alt: isSelected ? (isOnline ? 0.03 : 0.015) : 0.01,
+                radius: isSelected ? (isOnline ? 0.8 : 0.5) : 0.3,
+            });
+            if (isSelected && isOnline) rings.push({ lat: d.lat, lng: d.lon, threat: cr > 0 });
 
             var locParts = [];
             if (d.city) locParts.push(d.city);
@@ -563,28 +581,36 @@
                 loc: locStr,
                 status: d.status || 'offline',
                 evtStr: evtStr,
-                color: devColor,
+                color: isOnline ? devColor : '#6b7a99',
                 isSelected: isSelected,
             });
         });
 
-        // Flow arcs — from nearest device to each destination
+        // Flow arcs — each drawn from its OWN device's marker
         points.forEach(function(p) {
             if (!p.lat || !p.lon) return;
+            // Device filter: show only the selected device's arcs —
+            // never re-originate another device's flows
+            if (selectedDeviceId && p.device_id !== selectedDeviceId) return;
+
+            var src = p.device_id ? markerById[p.device_id] : null;
+            var srcLat, srcLon;
+            if (src) {
+                // The arc's own device — valid source even if offline
+                srcLat = src.lat; srcLon = src.lon;
+            } else if (!p.device_id) {
+                // Legacy point without device_id → fleet-primary marker
+                srcLat = fpLat; srcLon = fpLon;
+            } else {
+                // Known device but no marker resolved — skip rather than mis-attribute
+                return;
+            }
+
             var isThreat = !!p.threat;
             var bytes = p.bytes || 0;
             var volRatio = bytes / maxBytes;
             var sw = 0.3 + volRatio * 2.5;
             var speed = isThreat ? 900 : Math.round(3500 - volRatio * 2500);
-
-            // Find nearest device as the source of this arc
-            var srcLat = fleetLat, srcLon = fleetLon;
-            var minDist = Infinity;
-            devs.forEach(function(d) {
-                if (selectedDeviceId && d.device_id !== selectedDeviceId) return;
-                var dist = Math.pow(d.lat - p.lat, 2) + Math.pow(d.lon - p.lon, 2);
-                if (dist < minDist) { minDist = dist; srcLat = d.lat; srcLon = d.lon; }
-            });
 
             arcs.push({
                 startLat: srcLat, startLng: srcLon, endLat: p.lat, endLng: p.lon,

@@ -135,6 +135,9 @@ CREATE TABLE IF NOT EXISTS security_events (
     geo_src_longitude REAL,
     asn_src_number INTEGER,
     asn_src_network_type TEXT,
+    composite_score REAL,
+    risk_score_raw REAL,
+    last_scored TEXT,
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_se_device ON security_events(device_id);
@@ -161,6 +164,10 @@ CREATE TABLE IF NOT EXISTS process_events (
     status TEXT,
     cpu_percent REAL,
     memory_percent REAL,
+    num_threads INTEGER,
+    num_fds INTEGER,
+    user_type TEXT,
+    process_category TEXT,
     collection_agent TEXT,
     received_at REAL NOT NULL
 );
@@ -190,6 +197,8 @@ CREATE TABLE IF NOT EXISTS flow_events (
     geo_dst_country TEXT,
     geo_dst_city TEXT,
     asn_dst_org TEXT,
+    asn_dst_number INTEGER,
+    asn_dst_network_type TEXT,
     threat_intel_match BOOLEAN DEFAULT 0,
     collection_agent TEXT,
     received_at REAL NOT NULL
@@ -210,6 +219,12 @@ CREATE TABLE IF NOT EXISTS dns_events (
     record_type TEXT,
     response_code TEXT,
     risk_score REAL,
+    dga_score REAL,
+    is_beaconing BOOLEAN,
+    beacon_interval_seconds REAL,
+    event_type TEXT,
+    source_ip TEXT,
+    pid TEXT,
     process_name TEXT,
     collection_agent TEXT,
     received_at REAL NOT NULL
@@ -277,6 +292,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
     ppid TEXT,
     uid TEXT,
     username TEXT,
+    syscall TEXT,
+    exe TEXT,
+    comm TEXT,
+    cmdline TEXT,
+    reason TEXT,
     risk_score REAL,
     collection_agent TEXT,
     received_at REAL NOT NULL
@@ -312,6 +332,12 @@ CREATE TABLE IF NOT EXISTS peripheral_events (
     device_name TEXT,
     device_type TEXT,
     vendor_id TEXT,
+    manufacturer TEXT,
+    product_id TEXT,
+    serial_number TEXT,
+    connection_status TEXT,
+    is_authorized BOOLEAN,
+    mount_point TEXT,
     risk_score REAL,
     collection_agent TEXT,
     received_at REAL NOT NULL
@@ -358,23 +384,64 @@ def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH, timeout=10.0)
     db.executescript(FLEET_SCHEMA)
-    # Migrate: add columns if missing (existing DBs)
-    for col, ctype in [
-        ("geo_dst_latitude", "REAL"),
-        ("geo_dst_longitude", "REAL"),
-        ("geo_dst_city", "TEXT"),
-    ]:
-        try:
-            db.execute(f"ALTER TABLE flow_events ADD COLUMN {col} {ctype}")
-        except sqlite3.OperationalError:
-            pass
-    for col, ctype in [
-        ("public_ip", "TEXT"),
-    ]:
-        try:
-            db.execute(f"ALTER TABLE devices ADD COLUMN {col} {ctype}")
-        except sqlite3.OperationalError:
-            pass  # column already exists
+    # Migrate: add columns if missing (existing DBs).
+    # Idempotent — ALTER fails with OperationalError when the column
+    # already exists, which is silently ignored.
+    migrations = {
+        "devices": [
+            ("public_ip", "TEXT"),
+        ],
+        "security_events": [
+            ("composite_score", "REAL"),
+            ("risk_score_raw", "REAL"),
+            ("last_scored", "TEXT"),
+        ],
+        "process_events": [
+            ("name", "TEXT"),
+            ("parent_name", "TEXT"),
+            ("status", "TEXT"),
+            ("num_threads", "INTEGER"),
+            ("num_fds", "INTEGER"),
+            ("user_type", "TEXT"),
+            ("process_category", "TEXT"),
+        ],
+        "flow_events": [
+            ("geo_dst_latitude", "REAL"),
+            ("geo_dst_longitude", "REAL"),
+            ("geo_dst_city", "TEXT"),
+            ("asn_dst_number", "INTEGER"),
+            ("asn_dst_network_type", "TEXT"),
+        ],
+        "dns_events": [
+            ("dga_score", "REAL"),
+            ("is_beaconing", "BOOLEAN"),
+            ("beacon_interval_seconds", "REAL"),
+            ("event_type", "TEXT"),
+            ("source_ip", "TEXT"),
+            ("pid", "TEXT"),
+        ],
+        "audit_events": [
+            ("syscall", "TEXT"),
+            ("exe", "TEXT"),
+            ("comm", "TEXT"),
+            ("cmdline", "TEXT"),
+            ("reason", "TEXT"),
+        ],
+        "peripheral_events": [
+            ("manufacturer", "TEXT"),
+            ("product_id", "TEXT"),
+            ("serial_number", "TEXT"),
+            ("connection_status", "TEXT"),
+            ("is_authorized", "BOOLEAN"),
+            ("mount_point", "TEXT"),
+        ],
+    }
+    for m_table, m_cols in migrations.items():
+        for col, ctype in m_cols:
+            try:
+                db.execute(f"ALTER TABLE {m_table} ADD COLUMN {col} {ctype}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
     # Command queue table (MCP server → device agent)
     db.executescript(
         """
@@ -469,17 +536,18 @@ def register_device():
     db = get_db()
     now = time.time()
 
-    # Check if already registered — by device_id OR by hostname
-    # This prevents duplicate devices when the same Mac reinstalls
+    # Check if already registered — by device_id ONLY (hardware hash).
+    # hostname is a display label, not an identity: two different Macs can
+    # share a hostname (e.g. "Mac"), and matching on it would merge them
+    # and hand one device's api_key to the other. A hostname collision
+    # therefore creates a distinct row; the hostname is simply refreshed
+    # when the SAME device_id re-registers.
     existing = db.execute(
-        "SELECT device_id, api_key, org_id FROM devices WHERE device_id = ? OR hostname = ?",
-        (device_id, hostname),
+        "SELECT device_id, api_key, org_id FROM devices WHERE device_id = ?",
+        (device_id,),
     ).fetchone()
 
     if existing:
-        # Use the ORIGINAL device_id (not the new one) to prevent duplicates
-        original_device_id = existing["device_id"]
-
         # Heartbeat — update device info + capture public IP
         public_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if public_ip and "," in public_ip:
@@ -488,7 +556,7 @@ def register_device():
             """UPDATE devices SET
                 hostname = ?, os = ?, os_version = ?, arch = ?,
                 agent_version = ?, last_seen = ?, status = 'online',
-                device_id = ?, public_ip = ?
+                public_ip = ?
             WHERE device_id = ?""",
             (
                 hostname,
@@ -497,28 +565,11 @@ def register_device():
                 data.get("arch"),
                 data.get("agent_version"),
                 now,
-                device_id,  # Update to new device_id if it changed
                 public_ip,
-                original_device_id,
+                device_id,
             ),
         )
         db.commit()
-
-        # If device_id changed (reinstall), return the api_key so agent can use it
-        if original_device_id != device_id:
-            logger.info(
-                "Device re-registered: %s → %s (%s)",
-                original_device_id[:8],
-                device_id[:8],
-                hostname,
-            )
-            return jsonify(
-                {
-                    "status": "registered",
-                    "device_id": device_id,
-                    "api_key": existing["api_key"],
-                }
-            )
 
         # Always return api_key so agent can recover after wipe/reinstall
         logger.debug("Heartbeat: %s (%s)", device_id[:8], hostname)
@@ -844,6 +895,10 @@ ALLOWED_TABLES = {
         "status",
         "cpu_percent",
         "memory_percent",
+        "num_threads",
+        "num_fds",
+        "user_type",
+        "process_category",
         "collection_agent",
         "received_at",
     },
@@ -867,6 +922,8 @@ ALLOWED_TABLES = {
         "geo_dst_country",
         "geo_dst_city",
         "asn_dst_org",
+        "asn_dst_number",
+        "asn_dst_network_type",
         "threat_intel_match",
         "collection_agent",
         "received_at",
@@ -881,6 +938,12 @@ ALLOWED_TABLES = {
         "record_type",
         "response_code",
         "risk_score",
+        "dga_score",
+        "is_beaconing",
+        "beacon_interval_seconds",
+        "event_type",
+        "source_ip",
+        "pid",
         "process_name",
         "collection_agent",
         "received_at",
@@ -930,6 +993,11 @@ ALLOWED_TABLES = {
         "ppid",
         "uid",
         "username",
+        "syscall",
+        "exe",
+        "comm",
+        "cmdline",
+        "reason",
         "risk_score",
         "collection_agent",
         "received_at",
@@ -955,6 +1023,12 @@ ALLOWED_TABLES = {
         "device_name",
         "device_type",
         "vendor_id",
+        "manufacturer",
+        "product_id",
+        "serial_number",
+        "connection_status",
+        "is_authorized",
+        "mount_point",
         "risk_score",
         "collection_agent",
         "received_at",
@@ -1672,6 +1746,25 @@ def bulk_export():
             result[table] = [dict(r) for r in rows]
         except Exception:
             result[table] = []
+
+    # Device registry — sanitized column list only. NEVER export
+    # api_key or deploy_token_hash: this endpoint feeds the
+    # presentation server, which must not hold device credentials.
+    try:
+        query = (
+            "SELECT device_id, hostname, os, os_version, arch, "
+            "agent_version, status, last_seen, first_seen, org_id "
+            "FROM devices"
+        )
+        params = []
+        if device_id:
+            query += " WHERE device_id = ?"
+            params.append(device_id)
+        query += " ORDER BY last_seen DESC"
+        rows = db.execute(query, params).fetchall()
+        result["devices"] = [dict(r) for r in rows]
+    except Exception:
+        result["devices"] = []
 
     return jsonify(result)
 

@@ -212,6 +212,10 @@ def _sync_from_ops():
 
     # Initialize cache DB with TelemetryStore schema
     db = sqlite3.connect(str(_CACHE_DB_PATH), timeout=10)
+    # Row factory so migration helpers can read PRAGMA results by name;
+    # the rest of this module indexes rows positionally, which sqlite3.Row
+    # also supports.
+    db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
 
@@ -239,10 +243,36 @@ def _sync_from_ops():
         except Exception:
             pass  # column already exists
 
+    # The raw SCHEMA above is frozen at CREATE time, but the ops server's
+    # store carries every column added by _migrate_convergence_schema()
+    # (quality lineage, MITRE provenance, typed feature columns, ...).
+    # _upsert_rows() filters INSERTs to columns that exist in the cache,
+    # so without this step those fields are silently dropped. Run the
+    # store's own convergence migration against the cache connection —
+    # SchemaMixin only issues idempotent DDL on self.db (no threads,
+    # pools, or side services, unlike a writable TelemetryStore).
+    try:
+        from amoskys.storage._ts_schema import SchemaMixin
+
+        _migrator = SchemaMixin.__new__(SchemaMixin)
+        _migrator.db = db
+        _migrator._migrate_convergence_schema()
+    except Exception:
+        logger.warning(
+            "Fleet cache convergence migration failed — syncing with "
+            "existing cache schema",
+            exc_info=True,
+        )
+
     # Truncate and replace each table (prevents unbounded growth)
     total = 0
     for table_name, rows in bulk.items():
         if not rows:
+            continue
+        if table_name == "devices":
+            # Device inventory is upserted (not truncated) so devices that
+            # missed the current export window keep their metadata.
+            total += _upsert_devices(db, rows)
             continue
         try:
             db.execute(f"DELETE FROM {table_name}")
@@ -295,6 +325,7 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
     _COLUMN_MAP = {
         "event_timestamp_ns": "timestamp_ns",
         "raw_attributes_json": "attributes",
+        "record_type": "query_type",
     }
 
     # Apply column renames to all rows
@@ -336,9 +367,12 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
     }
 
     inserted = 0
+    dropped_keys: set = set()
     for row in rows:
         # Filter to columns that exist, skip 'id' (auto-increment)
         cols = [k for k in row.keys() if k in existing_cols and k != "id"]
+        # Track ops keys the cache schema can't hold so drift is visible
+        dropped_keys |= set(row) - existing_cols
         if not cols:
             continue
         vals = [row[k] for k in cols]
@@ -354,15 +388,102 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
         placeholders = ",".join(["?"] * len(cols))
         col_names = ",".join(cols)
         try:
-            db.execute(
+            cur = db.execute(
                 f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})",
                 vals,
             )
-            inserted += 1
+            # Honest accounting: OR IGNORE reports 0 rows for skipped
+            # duplicates/constraint failures; don't count those as synced.
+            inserted += max(cur.rowcount, 0)
         except Exception:
             pass
 
+    if dropped_keys:
+        logger.info(
+            "Fleet sync: %s dropped %d key(s) not in cache schema "
+            "(schema drift?): %s",
+            table,
+            len(dropped_keys),
+            sorted(dropped_keys)[:10],
+        )
+
     return inserted
+
+
+# Device inventory columns mirrored from the ops command-center export.
+_DEVICE_COLUMNS = (
+    "device_id",
+    "hostname",
+    "os",
+    "os_version",
+    "arch",
+    "agent_version",
+    "status",
+    "last_seen",
+    "first_seen",
+    "org_id",
+)
+
+
+def _upsert_devices(db: sqlite3.Connection, rows: list) -> int:
+    """Upsert device inventory rows from the ops bulk export.
+
+    The ops server is adding a 'devices' table to the bulk export; older
+    ops builds simply omit it (callers only reach here when it is present).
+    Unlike event tables, devices are keyed by device_id and updated in
+    place — no truncate — so inventory survives partial export windows.
+    """
+    if not rows:
+        return 0
+
+    try:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS devices (
+                device_id TEXT PRIMARY KEY,
+                hostname TEXT,
+                os TEXT,
+                os_version TEXT,
+                arch TEXT,
+                agent_version TEXT,
+                status TEXT,
+                last_seen REAL,
+                first_seen REAL,
+                org_id TEXT
+            )
+            """
+        )
+    except Exception:
+        logger.debug("Fleet sync: devices table create failed", exc_info=True)
+        return 0
+
+    upserted = 0
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("device_id"):
+            continue
+        cols = [c for c in _DEVICE_COLUMNS if c in row]
+        placeholders = ",".join(["?"] * len(cols))
+        assignments = ",".join(
+            f"{c}=excluded.{c}" for c in cols if c != "device_id"
+        )
+        conflict = (
+            f"DO UPDATE SET {assignments}" if assignments else "DO NOTHING"
+        )
+        try:
+            cur = db.execute(
+                f"INSERT INTO devices ({','.join(cols)}) "
+                f"VALUES ({placeholders}) "
+                f"ON CONFLICT(device_id) {conflict}",
+                [row[c] for c in cols],
+            )
+            upserted += max(cur.rowcount, 0)
+        except Exception:
+            logger.debug(
+                "Fleet sync: devices upsert failed for %s",
+                row.get("device_id"),
+                exc_info=True,
+            )
+    return upserted
 
 
 def _create_minimal_schema(db: sqlite3.Connection):

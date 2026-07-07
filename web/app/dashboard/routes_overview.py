@@ -184,7 +184,8 @@ def overview_geo_points():
                 pass
 
         rows = db.execute(
-            f"""SELECT geo_dst_latitude as lat, geo_dst_longitude as lon,
+            f"""SELECT device_id,
+                      geo_dst_latitude as lat, geo_dst_longitude as lon,
                       geo_dst_country as country, geo_dst_city as city,
                       asn_dst_org as asn_org,
                       SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as bytes,
@@ -193,20 +194,21 @@ def overview_geo_points():
                FROM flow_events
                WHERE timestamp_ns > ? AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0
                {dev_filter}
-               GROUP BY ROUND(geo_dst_latitude,1), ROUND(geo_dst_longitude,1)
+               GROUP BY device_id, ROUND(geo_dst_latitude,1), ROUND(geo_dst_longitude,1)
                ORDER BY count DESC LIMIT ?""",
             (cutoff_ns,) + dev_params + (min(limit, 500),),
         ).fetchall()
         points = [
             {
-                "lat": r[0],
-                "lon": r[1],
-                "country": r[2] or "",
-                "city": r[3] or "",
-                "asn_org": r[4] or "",
-                "bytes": r[5] or 0,
-                "count": r[6],
-                "threat": bool(r[7]),
+                "device_id": r[0] or "",
+                "lat": r[1],
+                "lon": r[2],
+                "country": r[3] or "",
+                "city": r[4] or "",
+                "asn_org": r[5] or "",
+                "bytes": r[6] or 0,
+                "count": r[7],
+                "threat": bool(r[8]),
             }
             for r in rows
         ]
@@ -254,14 +256,12 @@ def overview_device_locations():
         return jsonify([])
 
     # Resolve each device's public_ip to lat/lon
-    # Use ip-api.com batch endpoint (up to 100 IPs)
-    ips_to_resolve = []
-    device_map = {}
+    # Use ip-api.com batch endpoint (up to 100 IPs) — dedupe shared IPs
+    ips_to_resolve: list[str] = []
     for d in devices:
         ip = d.get("public_ip")
-        if ip:
+        if ip and ip not in ips_to_resolve:
             ips_to_resolve.append(ip)
-            device_map[ip] = d
 
     if not ips_to_resolve:
         return jsonify([])
@@ -284,30 +284,60 @@ def overview_device_locations():
         logger.debug("IP geo batch lookup failed: %s", e)
         return jsonify([])
 
-    # Merge device info with geo data
-    markers = []
-    for geo in geo_results:
-        ip = geo.get("query")
-        d = device_map.get(ip, {})
-        if geo.get("lat") and geo.get("lon"):
-            markers.append(
-                {
-                    "device_id": d.get("device_id", ""),
-                    "hostname": d.get("hostname", "Unknown"),
-                    "os": d.get("os", ""),
-                    "status": d.get("status", "offline"),
-                    "event_count": d.get("event_count", 0),
-                    "critical_count": d.get("critical_count", 0),
-                    "high_count": d.get("high_count", 0),
-                    "max_risk": d.get("max_risk", 0),
-                    "org_id": d.get("org_id", ""),
-                    "lat": geo["lat"],
-                    "lon": geo["lon"],
-                    "city": geo.get("city", ""),
-                    "region": geo.get("regionName", ""),
-                    "country": geo.get("country", ""),
-                }
+    # Geo results keyed by IP for per-device lookup
+    geo_by_ip = {
+        g.get("query"): g for g in geo_results if g.get("lat") and g.get("lon")
+    }
+
+    # One marker per device_id — devices sharing a public IP (NAT) get a
+    # small deterministic lat/lon offset so every marker exists instead
+    # of overwriting each other.  Jitter index is assigned from the
+    # sorted device_ids so it is stable across requests.
+    ip_groups: dict[str, list[str]] = {}
+    for d in devices:
+        ip = d.get("public_ip")
+        if ip in geo_by_ip:
+            ip_groups.setdefault(ip, []).append(
+                d.get("device_id") or d.get("hostname") or ""
             )
+    for ids in ip_groups.values():
+        ids.sort()
+
+    markers = []
+    for d in devices:
+        ip = d.get("public_ip")
+        geo = geo_by_ip.get(ip)
+        if not geo:
+            continue
+        key = d.get("device_id") or d.get("hostname") or ""
+        try:
+            idx = ip_groups[ip].index(key)
+        except ValueError:
+            idx = 0
+        if idx:
+            # Fan NAT-sharing devices out in ±0.15° steps
+            sign = 1 if idx % 2 else -1
+            step = 0.15 * ((idx + 1) // 2) * sign
+        else:
+            step = 0.0
+        markers.append(
+            {
+                "device_id": d.get("device_id", ""),
+                "hostname": d.get("hostname", "Unknown"),
+                "os": d.get("os", ""),
+                "status": d.get("status", "offline"),
+                "event_count": d.get("event_count", 0),
+                "critical_count": d.get("critical_count", 0),
+                "high_count": d.get("high_count", 0),
+                "max_risk": d.get("max_risk", 0),
+                "org_id": d.get("org_id", ""),
+                "lat": geo["lat"] + step,
+                "lon": geo["lon"] + step,
+                "city": geo.get("city", ""),
+                "region": geo.get("regionName", ""),
+                "country": geo.get("country", ""),
+            }
+        )
 
     return jsonify(markers)
 
