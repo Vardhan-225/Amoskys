@@ -220,9 +220,9 @@ def threat_hunting():
 @dashboard_bp.route("/incidents")
 @require_login
 def incident_management():
-    """Incident Management Dashboard"""
-    user = get_current_user()
-    return render_template("dashboard/incidents.html", user=user)
+    """Incidents — the old incidents.html read a table that is never synced on
+    the fleet tier (permanently empty), so land on the working v2 queue."""
+    return redirect("/dashboard/incidents-view")
 
 
 @dashboard_bp.route("/correlation")
@@ -384,11 +384,45 @@ def auth_observatory(device_id):
     )
 
 
+def _device_for_event(event_id: str):
+    """Resolve which device an event belongs to, so 'Investigate' links keep
+    their story context instead of dumping the user on the device list."""
+    try:
+        import sqlite3
+
+        from . import insight_service
+
+        path = insight_service.resolve_db_path()
+        if not path:
+            return None
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3)
+        try:
+            row = con.execute(
+                "SELECT device_id FROM security_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+        finally:
+            con.close()
+        return row[0] if row and row[0] else None
+    except Exception:
+        return None
+
+
 @dashboard_bp.route("/timeline-replay")
 @require_login
 def timeline_redirect():
-    """Timeline without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Timeline without device context — resolve the owning device and keep
+    the event/incident query params (previously both were dropped)."""
+    event_id = request.args.get("event_id")
+    dev = _device_for_event(event_id) if event_id else None
+    if not dev:
+        dev = _primary_device_id()
+    if not dev:
+        return redirect(_DEVICES_URL)
+    qs = request.query_string.decode()
+    return redirect(
+        f"/dashboard/device/{dev}/timeline-replay" + (f"?{qs}" if qs else "")
+    )
 
 
 @dashboard_bp.route("/device/<device_id>/timeline-replay")
