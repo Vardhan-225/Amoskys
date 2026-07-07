@@ -113,6 +113,19 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return db
 
 
+def _scope_sql(allowed_device_ids: list[str] | None, conj: str) -> tuple[str, tuple]:
+    """SQL fragment enforcing the org device allowlist (tenant isolation).
+
+    None  -> no restriction (admin);  []  -> match nothing (FAIL CLOSED);
+    [ids] -> device_id IN (...).  `conj` is " WHERE " or " AND "."""
+    if allowed_device_ids is None:
+        return "", ()
+    if not allowed_device_ids:
+        return f"{conj}device_id = ?", ("__none__",)
+    placeholders = ",".join("?" * len(allowed_device_ids))
+    return f"{conj}device_id IN ({placeholders})", tuple(allowed_device_ids)
+
+
 # ── DB resolution + cached model (app entry points) ──────────────────────────
 def resolve_db_path() -> str | None:
     """Find the fleet_cache.db regardless of tier (server / local dev)."""
@@ -147,25 +160,29 @@ def _error_stub(kind: str, message: str, headline: str, sub: str) -> dict:
 _HOME_LAT = float(os.getenv("AMOSKYS_HOME_LAT", "37.3382"))
 _HOME_LON = float(os.getenv("AMOSKYS_HOME_LON", "-121.8863"))
 
-_CACHE: dict = {"at": 0.0, "model": None, "path": None}
+# Model cache keyed by scope (org_id or 'admin') so one tenant's cached model
+# can never be served to another tenant.
+_CACHE: dict = {}
 _TTL_SECONDS = 45.0
 
 
-def get_model(force: bool = False) -> dict:
+def get_model(force: bool = False, allowed_device_ids: list[str] | None = None,
+              cache_key: str = "admin") -> dict:
     """Cached model for the API. Never raises: returns an honest error stub so
     the dashboard degrades gracefully instead of 500-ing."""
     import time
 
     now = time.time()
-    if not force and _CACHE["model"] is not None and (now - _CACHE["at"]) < _TTL_SECONDS:
-        return _CACHE["model"]
+    entry = _CACHE.get(cache_key)
+    if not force and entry is not None and (now - entry["at"]) < _TTL_SECONDS:
+        return entry["model"]
     path = resolve_db_path()
     if not path:
         return _error_stub("no_data", "Fleet telemetry store not found.",
                            "No data yet", "Waiting for the first telemetry to arrive.")
     try:
-        model = build_model(path)
-        _CACHE.update(at=now, model=model, path=path)
+        model = build_model(path, allowed_device_ids=allowed_device_ids)
+        _CACHE[cache_key] = {"at": now, "model": model, "path": path}
         return model
     except sqlite3.Error as exc:
         return _error_stub("db_error", str(exc), "Telemetry unavailable", str(exc))
@@ -252,14 +269,18 @@ def classify_expected(ev: dict) -> str | None:
     return None
 
 
-def load_events(db: sqlite3.Connection) -> list[dict]:
+def load_events(db: sqlite3.Connection, allowed_device_ids: list[str] | None = None) -> list[dict]:
+    scope, scope_p = _scope_sql(allowed_device_ids, " WHERE ")
     rows = db.execute(
         """SELECT timestamp_ns, timestamp_dt, device_id, event_category, event_action,
                   event_outcome, risk_score, confidence, mitre_techniques,
                   geometric_score, temporal_score, behavioral_score, final_classification,
                   description, requires_investigation, threat_intel_match,
                   geo_src_country, asn_src_org, event_id, tier
-           FROM security_events ORDER BY timestamp_ns DESC"""
+           FROM security_events"""
+        + scope
+        + " ORDER BY timestamp_ns DESC",
+        scope_p,
     ).fetchall()
     out = []
     for r in rows:
@@ -481,9 +502,11 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
 
 
 # ── Globe: real geolocated flows -> arcs ─────────────────────────────────────
-def build_globe(db: sqlite3.Connection, device_id: str | None = None):
+def build_globe(db: sqlite3.Connection, device_id: str | None = None,
+                allowed_device_ids: list[str] | None = None):
     dev_and = " AND device_id = ?" if device_id else ""
     dev_p: tuple = (device_id,) if device_id else ()
+    scope, scope_p = _scope_sql(allowed_device_ids, " AND ")
     rows = db.execute(
         """SELECT geo_dst_latitude lat, geo_dst_longitude lon, geo_dst_city city,
                   geo_dst_country country, asn_dst_org org,
@@ -492,10 +515,11 @@ def build_globe(db: sqlite3.Connection, device_id: str | None = None):
            FROM flow_events
            WHERE geo_dst_latitude IS NOT NULL AND geo_dst_longitude IS NOT NULL"""
         + dev_and
+        + scope
         + """
            GROUP BY geo_dst_latitude, geo_dst_longitude, asn_dst_org
            ORDER BY flows DESC""",
-        dev_p,
+        dev_p + scope_p,
     ).fetchall()
     dests, by_key = [], {}
     for r in rows:
@@ -518,22 +542,26 @@ def build_globe(db: sqlite3.Connection, device_id: str | None = None):
 
 
 # ── Per-domain rollups (the nervous-system strip) ────────────────────────────
-def build_domains(db: sqlite3.Connection, events: list[dict]) -> list[dict]:
-    def count(q):
+def build_domains(db: sqlite3.Connection, events: list[dict],
+                  allowed_device_ids: list[str] | None = None) -> list[dict]:
+    where, where_p = _scope_sql(allowed_device_ids, " WHERE ")
+    and_, and_p = _scope_sql(allowed_device_ids, " AND ")
+
+    def count(q, p=()):
         try:
-            return db.execute(q).fetchone()[0]
+            return db.execute(q, p).fetchone()[0]
         except sqlite3.Error:
             return 0
 
     suppressed = sum(1 for e in events if e["expected_reason"])
     flagged = sum(1 for e in events if not e["expected_reason"] and (e.get("final_classification") in ("suspicious", "malicious")))
     return [
-        {"key": "process", "label": "Processes", "count": count("SELECT COUNT(*) FROM process_events"),
-         "suspicious": count("SELECT COUNT(*) FROM process_events WHERE is_suspicious=1"), "icon": "cpu"},
-        {"key": "network", "label": "Network", "count": count("SELECT COUNT(*) FROM flow_events"),
-         "suspicious": count("SELECT COUNT(*) FROM flow_events WHERE is_suspicious=1"), "icon": "globe"},
-        {"key": "dns", "label": "DNS", "count": count("SELECT COUNT(*) FROM dns_events"),
-         "suspicious": count("SELECT COUNT(*) FROM dns_events WHERE is_beaconing=1"), "icon": "dns"},
+        {"key": "process", "label": "Processes", "count": count("SELECT COUNT(*) FROM process_events" + where, where_p),
+         "suspicious": count("SELECT COUNT(*) FROM process_events WHERE is_suspicious=1" + and_, and_p), "icon": "cpu"},
+        {"key": "network", "label": "Network", "count": count("SELECT COUNT(*) FROM flow_events" + where, where_p),
+         "suspicious": count("SELECT COUNT(*) FROM flow_events WHERE is_suspicious=1" + and_, and_p), "icon": "globe"},
+        {"key": "dns", "label": "DNS", "count": count("SELECT COUNT(*) FROM dns_events" + where, where_p),
+         "suspicious": count("SELECT COUNT(*) FROM dns_events WHERE is_beaconing=1" + and_, and_p), "icon": "dns"},
         {"key": "security", "label": "Correlations", "count": len(events),
          "suspicious": flagged, "icon": "shield"},
         {"key": "suppressed", "label": "Auto-cleared", "count": suppressed,
@@ -541,11 +569,16 @@ def build_domains(db: sqlite3.Connection, events: list[dict]) -> list[dict]:
     ]
 
 
-def build_activity_timeline(db: sqlite3.Connection) -> list[dict]:
+def build_activity_timeline(db: sqlite3.Connection,
+                            allowed_device_ids: list[str] | None = None) -> list[dict]:
     """Hourly event volume across domains for the sparkline/heartbeat."""
+    where, where_p = _scope_sql(allowed_device_ids, " WHERE ")
     rows = db.execute(
         """SELECT strftime('%Y-%m-%dT%H:00', timestamp_dt) hr, COUNT(*) n
-           FROM flow_events GROUP BY hr ORDER BY hr DESC LIMIT 48"""
+           FROM flow_events"""
+        + where
+        + " GROUP BY hr ORDER BY hr DESC LIMIT 48",
+        where_p,
     ).fetchall()
     return [{"hour": r["hr"], "count": r["n"]} for r in reversed(rows)]
 
@@ -563,24 +596,30 @@ def _device_name(db: sqlite3.Connection, device_id: str) -> str:
     return (device_id or "unknown")[:16]
 
 
-def build_model(db_path: str) -> dict:
+def build_model(db_path: str, allowed_device_ids: list[str] | None = None) -> dict:
     db = _connect(db_path)
     try:
-        events = load_events(db)
-        dests, by_key = build_globe(db)
+        scope, scope_p = _scope_sql(allowed_device_ids, " WHERE ")
+        events = load_events(db, allowed_device_ids=allowed_device_ids)
+        dests, by_key = build_globe(db, allowed_device_ids=allowed_device_ids)
         verdict = compute_verdict(events)
         incidents = build_incidents(events, by_key)
-        domains = build_domains(db, events)
-        timeline = build_activity_timeline(db)
+        domains = build_domains(db, events, allowed_device_ids=allowed_device_ids)
+        timeline = build_activity_timeline(db, allowed_device_ids=allowed_device_ids)
 
         device_row = db.execute(
-            "SELECT device_id, COUNT(*) n, MAX(timestamp_dt) latest FROM security_events GROUP BY device_id ORDER BY n DESC LIMIT 1"
+            "SELECT device_id, COUNT(*) n, MAX(timestamp_dt) latest FROM security_events"
+            + scope
+            + " GROUP BY device_id ORDER BY n DESC LIMIT 1",
+            scope_p,
         ).fetchone()
         device = dict(device_row) if device_row else {}
 
         classes = Counter(e.get("final_classification") for e in events)
         return {
-            "generated_at": db.execute("SELECT MAX(timestamp_dt) FROM security_events").fetchone()[0],
+            "generated_at": db.execute(
+                "SELECT MAX(timestamp_dt) FROM security_events" + scope, scope_p
+            ).fetchone()[0],
             "device": {
                 "id": device.get("device_id", "unknown"),
                 "name": _device_name(db, device.get("device_id", "")),
@@ -596,7 +635,9 @@ def build_model(db_path: str) -> dict:
             "classes": dict(classes),
             "totals": {
                 "security_events": len(events),
-                "flows": db.execute("SELECT COUNT(*) FROM flow_events").fetchone()[0],
+                "flows": db.execute(
+                    "SELECT COUNT(*) FROM flow_events" + scope, scope_p
+                ).fetchone()[0],
                 "destinations": len(dests),
             },
         }
@@ -611,17 +652,26 @@ def _exe_short(exe: str | None) -> str:
     return exe.rsplit("/", 1)[-1] if "/" in exe else exe
 
 
-def build_device_model(db_path: str, device_id: str | None = None) -> dict:
+def build_device_model(db_path: str, device_id: str | None = None,
+                       allowed_device_ids: list[str] | None = None) -> dict:
     """One device's whole nervous system: exposure vs active-risk, per-domain
     lanes, and a UNIFIED cross-domain event stream (process→network→dns→
     correlation) — the thing a single-domain tool cannot show."""
     db = _connect(db_path)
     try:
         if not device_id:
+            scope, scope_p = _scope_sql(allowed_device_ids, " WHERE ")
             row = db.execute(
-                "SELECT device_id FROM security_events GROUP BY device_id ORDER BY COUNT(*) DESC LIMIT 1"
+                "SELECT device_id FROM security_events"
+                + scope
+                + " GROUP BY device_id ORDER BY COUNT(*) DESC LIMIT 1",
+                scope_p,
             ).fetchone()
             device_id = row[0] if row else "unknown"
+        # Tenant isolation, defence in depth: a device outside the caller's
+        # allowlist yields an empty model even if the route check is bypassed.
+        if allowed_device_ids is not None and device_id not in allowed_device_ids:
+            device_id = "__none__"
 
         events = load_events(db)
         # STRICT device scoping — the old `or events` fallback silently showed
@@ -740,17 +790,20 @@ def build_device_model(db_path: str, device_id: str | None = None) -> dict:
         db.close()
 
 
-_DEV_CACHE: dict = {"at": 0.0, "model": None, "key": None}
+# Device-model cache keyed by (org_id or 'admin', device_id) — see _CACHE.
+_DEV_CACHE: dict = {}
 
 
-def get_device_model(device_id: str | None = None, force: bool = False) -> dict:
+def get_device_model(device_id: str | None = None, force: bool = False,
+                     allowed_device_ids: list[str] | None = None,
+                     cache_key: str = "admin") -> dict:
     """Cached device model; degrades gracefully like get_model()."""
     import time
     now = time.time()
-    key = device_id or "_default"
-    if (not force and _DEV_CACHE["model"] is not None
-            and _DEV_CACHE["key"] == key and (now - _DEV_CACHE["at"]) < _TTL_SECONDS):
-        return _DEV_CACHE["model"]
+    key = (cache_key, device_id or "_default")
+    entry = _DEV_CACHE.get(key)
+    if not force and entry is not None and (now - entry["at"]) < _TTL_SECONDS:
+        return entry["model"]
     path = resolve_db_path()
     if not path:
         return {"error": "no_data", "device": {"name": "—", "id": "—", "events": 0},
@@ -758,8 +811,9 @@ def get_device_model(device_id: str | None = None, force: bool = False) -> dict:
                 "exposure": {"band": "calm", "label": "—", "note": ""},
                 "lanes": [], "stream": [], "incidents": []}
     try:
-        model = build_device_model(path, device_id)
-        _DEV_CACHE.update(at=now, model=model, key=key)
+        model = build_device_model(path, device_id,
+                                   allowed_device_ids=allowed_device_ids)
+        _DEV_CACHE[key] = {"at": now, "model": model}
         return model
     except sqlite3.Error as exc:
         return {"error": "db_error", "message": str(exc),

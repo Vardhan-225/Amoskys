@@ -5,6 +5,10 @@ Serves the redesigned single-pane-of-glass view and its data API. The API
 returns the model computed by insight_service.get_model(), which reads the real
 fleet_cache telemetry, suppresses expected activity, correlates incidents and
 produces ONE truthful verdict (never a permanent CRITICAL/100).
+
+Tenant isolation: every data route resolves the caller's org → allowed
+device_ids (org_scope.get_allowed_device_ids) and scopes the model to that
+allowlist. Admins are unrestricted; an unresolvable org FAILS CLOSED.
 """
 from __future__ import annotations
 
@@ -12,11 +16,26 @@ from flask import jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
+from .org_scope import get_allowed_device_ids
 
 try:
     from . import insight_service
 except Exception:  # pragma: no cover - defensive import
     insight_service = None
+
+
+def _scope() -> tuple[list[str] | None, str]:
+    """(allowed_device_ids, cache_key) for the current user.
+
+    allowed None = unrestricted (admin). The cache key is (org_id or 'admin');
+    a non-admin without an org gets a distinct fail-closed key so they can
+    never be served the admin-cached model."""
+    user = get_current_user()
+    allowed, admin = get_allowed_device_ids(user)
+    if admin:
+        return None, "admin"
+    org_id = getattr(user, "org_id", None) if user else None
+    return allowed, (org_id or "__none__")
 
 
 @dashboard_bp.route("/command")
@@ -34,7 +53,9 @@ def api_insight():
     if insight_service is None:
         return jsonify({"error": "unavailable", "message": "insight service not loaded"}), 200
     force = request.args.get("force") == "1"
-    return jsonify(insight_service.get_model(force=force)), 200
+    allowed, cache_key = _scope()
+    return jsonify(insight_service.get_model(
+        force=force, allowed_device_ids=allowed, cache_key=cache_key)), 200
 
 
 @dashboard_bp.route("/incidents-view")
@@ -50,6 +71,11 @@ def incidents_view():
 def device_view():
     """Device drill-down — the cross-domain 'story' view (the moat)."""
     user = get_current_user()
+    device_id = request.args.get("id") or None
+    if device_id:
+        allowed, _ = _scope()
+        if allowed is not None and device_id not in allowed:
+            return jsonify({"error": "unknown device"}), 404
     return render_template("dashboard/device.html", user=user)
 
 
@@ -61,4 +87,9 @@ def api_device():
         return jsonify({"error": "unavailable", "message": "insight service not loaded"}), 200
     device_id = request.args.get("id") or None
     force = request.args.get("force") == "1"
-    return jsonify(insight_service.get_device_model(device_id=device_id, force=force)), 200
+    allowed, cache_key = _scope()
+    if device_id and allowed is not None and device_id not in allowed:
+        return jsonify({"error": "unknown device"}), 404
+    return jsonify(insight_service.get_device_model(
+        device_id=device_id, force=force,
+        allowed_device_ids=allowed, cache_key=cache_key)), 200
