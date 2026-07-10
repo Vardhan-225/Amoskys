@@ -768,9 +768,12 @@ class TelemetryShipper:
                 aliases.get(valid_cols[i], valid_cols[i]): row[i]
                 for i in range(len(valid_cols))
             }
-            # Ensure device_id is set
-            if not event.get("device_id"):
-                event["device_id"] = self.config.device_id
+            # Attribute every shipped event to THIS registered device. The
+            # shipper authenticates as config.device_id; a local event's
+            # device_id is a hostname artifact (e.g. "Akashs-MacBook-Air.local")
+            # that the server would fork into a DUPLICATE fleet device. Force
+            # the authenticated id so one physical machine = one fleet device.
+            event["device_id"] = self.config.device_id
             events.append(event)
             max_id = max(max_id, event["id"])
 
