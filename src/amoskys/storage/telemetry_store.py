@@ -88,7 +88,30 @@ class TelemetryStore(
         # which scanned the entire multi-GB store on EVERY startup and blocked
         # the analyzer for minutes. Opt back into the exhaustive check with
         # AMOSKYS_FULL_INTEGRITY_CHECK=1 when deep-verifying a suspect DB.
-        if Path(db_path).exists():
+        #
+        # Even quick_check reads the whole file, so it is skipped for stores
+        # above AMOSKYS_INTEGRITY_CHECK_MAX_BYTES (default 1.5GB) — on a bloated
+        # backlog DB the multi-minute scan blocks every restart, and WAL +
+        # synchronous=NORMAL already guard against torn writes. Force it anyway
+        # with AMOSKYS_FULL_INTEGRITY_CHECK=1.
+        _integrity_max = int(
+            os.environ.get("AMOSKYS_INTEGRITY_CHECK_MAX_BYTES", str(1_500_000_000))
+        )
+        _force_check = bool(os.environ.get("AMOSKYS_FULL_INTEGRITY_CHECK"))
+        _too_big = (
+            Path(db_path).exists()
+            and not _force_check
+            and Path(db_path).stat().st_size > _integrity_max
+        )
+        if _too_big:
+            logger.warning(
+                "Skipping boot integrity check: %s is %.1fGB (> %.1fGB limit); "
+                "set AMOSKYS_FULL_INTEGRITY_CHECK=1 to force.",
+                db_path,
+                Path(db_path).stat().st_size / 1e9,
+                _integrity_max / 1e9,
+            )
+        if Path(db_path).exists() and not _too_big:
             try:
                 _check_db = sqlite3.connect(db_path, timeout=5.0)
                 _check_pragma = (
