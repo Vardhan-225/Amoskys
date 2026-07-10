@@ -168,6 +168,15 @@ class UnifiedSOMA:
     BASELINE_THRESHOLD = 30  # unique_patterns >= 30 = "baseline established"
     MAX_SUPPRESSION = 0.85  # Never suppress more than 85%
 
+    # Graduation is periodic maintenance (retroactive re-classification), NOT a
+    # per-event operation. scoring.score_event constructs a UnifiedSOMA per event,
+    # so running the full-table graduation scan every time throttled the analyzer
+    # drain to ~0.16 events/s. Run it at most once per interval, process-wide.
+    _last_graduation: float = 0.0
+    _GRADUATION_INTERVAL_S: float = float(
+        os.environ.get("AMOSKYS_SOMA_GRADUATION_INTERVAL_S", "300")
+    )
+
     def __init__(self, memory_db: Optional[str] = None):
         self._db_path = memory_db or str(MEMORY_DB)
         self._conn: Optional[sqlite3.Connection] = None
@@ -205,7 +214,13 @@ class UnifiedSOMA:
         """
         )
         conn.commit()
-        self._graduate_existing()
+        # Throttle the expensive full-table graduation scan (see class docstring).
+        # First construction in a process always runs it (baseline at startup),
+        # then at most once per interval regardless of how many events are scored.
+        now = time.time()
+        if now - UnifiedSOMA._last_graduation >= UnifiedSOMA._GRADUATION_INTERVAL_S:
+            UnifiedSOMA._last_graduation = now
+            self._graduate_existing()
 
     def _graduate_existing(self):
         """Retroactively classify observations stuck at is_normal = -1."""
