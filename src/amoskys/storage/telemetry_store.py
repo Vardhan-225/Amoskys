@@ -94,8 +94,12 @@ class TelemetryStore(
         # backlog DB the multi-minute scan blocks every restart, and WAL +
         # synchronous=NORMAL already guard against torn writes. Force it anyway
         # with AMOSKYS_FULL_INTEGRITY_CHECK=1.
+        # Default 50MB: only cheap checks run automatically. Any real telemetry
+        # store is larger and would block the daemon restart on a full-file scan
+        # (even quick_check reads every page) — WAL + synchronous=NORMAL guard it.
+        # Raise the ceiling or set AMOSKYS_FULL_INTEGRITY_CHECK=1 to force.
         _integrity_max = int(
-            os.environ.get("AMOSKYS_INTEGRITY_CHECK_MAX_BYTES", str(1_500_000_000))
+            os.environ.get("AMOSKYS_INTEGRITY_CHECK_MAX_BYTES", str(50_000_000))
         )
         _force_check = bool(os.environ.get("AMOSKYS_FULL_INTEGRITY_CHECK"))
         _too_big = (
