@@ -12,12 +12,62 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("igris.tools")
+
+# ── Redaction (mirrors web/app/dashboard/insight_service._redact) ──
+# Never ship a secret-shaped value or a private path to the model/browser.
+_RE_TMP = re.compile(r"/private/(?:tmp|var)/\S+")
+_RE_SSHKEY = re.compile(r"(\.ssh/)[^\s'\"/]+")
+_RE_USERHOST = re.compile(
+    r"\b([a-z_][a-z0-9_-]*)@(?:\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9.-]+)"
+)
+_RE_HOME = re.compile(r"/Users/[^/\s'\"]+")
+_RE_TOKEN = re.compile(r"\b[A-Za-z0-9+/_\-]{32,}\b")
+
+# Fields that are identifiers, not free text — redacting them breaks linking.
+_REDACT_SKIP_FIELDS = {
+    "id",
+    "device_id",
+    "event_id",
+    "process_guid",
+    "signal_id",
+    "timestamp_dt",
+    "timestamp_ns",
+    "old_hash",
+    "new_hash",
+}
+
+# Event tables get_event_detail may read (mirrors storage search_events
+# allowed_tables and the hunt page's table set — read-only).
+ALLOWED_EVENT_TABLES = {
+    "security_events",
+    "process_events",
+    "flow_events",
+    "peripheral_events",
+    "dns_events",
+    "audit_events",
+    "persistence_events",
+    "fim_events",
+    "observation_events",
+}
+
+
+def redact_text(s: Optional[str]) -> Optional[str]:
+    """Strip private paths, key names, user@host and secret-shaped tokens."""
+    if not s or not isinstance(s, str):
+        return s
+    s = _RE_TMP.sub("/private/…", s)
+    s = _RE_HOME.sub("~", s)  # /Users/<user>/… -> ~/…
+    s = _RE_SSHKEY.sub(r"\1[key]", s)  # ~/.ssh/deploy_key -> ~/.ssh/[key]
+    s = _RE_USERHOST.sub(r"\1@[host]", s)  # ubuntu@1.2.3.4 -> ubuntu@[host]
+    s = _RE_TOKEN.sub("[token]", s)
+    return s
 
 
 def _parse_mitre_cell(raw) -> List[str]:
@@ -404,6 +454,34 @@ class IgrisToolkit:
                         "hours": {"type": "integer", "default": 1},
                         "limit": {"type": "integer", "default": 50},
                     },
+                },
+            },
+            {
+                "name": "get_event_detail",
+                "description": (
+                    "Fetch the full stored record for one event by its row id. "
+                    "Use after query_security_events / get_event_timeline / other "
+                    "event queries when you need every column of a specific event "
+                    "for forensic drill-down. Allowed tables: security_events, "
+                    "process_events, flow_events, peripheral_events, dns_events, "
+                    "audit_events, persistence_events, fim_events, "
+                    "observation_events. Read-only; sensitive paths/tokens are "
+                    "redacted."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "table": {
+                            "type": "string",
+                            "enum": sorted(ALLOWED_EVENT_TABLES),
+                            "description": "Event table the row lives in",
+                        },
+                        "event_id": {
+                            "type": "integer",
+                            "description": "Row id from a previous query",
+                        },
+                    },
+                    "required": ["table", "event_id"],
                 },
             },
             # ── Deep Inspection Tools ──
@@ -1257,6 +1335,35 @@ class IgrisToolkit:
                 row.get("mitre_techniques", "")
             )
         return rows
+
+    # ── 23. Event Detail ──
+
+    def _tool_get_event_detail(self, table: str, event_id: int) -> Dict:
+        """Fetch one row by id from an allowed event table (read-only, redacted)."""
+        if table not in ALLOWED_EVENT_TABLES:
+            return {
+                "error": f"Table '{table}' not allowed. "
+                f"Allowed: {', '.join(sorted(ALLOWED_EVENT_TABLES))}"
+            }
+        try:
+            event_id = int(event_id)
+        except (TypeError, ValueError):
+            return {"error": "event_id must be an integer"}
+
+        # Table name is validated against the allowlist above — safe to inline.
+        row = self._query_one(
+            self._telemetry_db,
+            f"SELECT * FROM {table} WHERE id = ?",  # nosec B608
+            (event_id,),
+        )
+        if row is None:
+            return {"error": f"No row with id {event_id} in {table}"}
+
+        redacted = {
+            k: (redact_text(v) if k not in _REDACT_SKIP_FIELDS else v)
+            for k, v in row.items()
+        }
+        return {"table": table, "event_id": event_id, "event": redacted}
 
     # ── 22. Event Timeline ──
 

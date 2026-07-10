@@ -610,6 +610,11 @@
 
         <!-- Right area -->
         <div class="hdr-right">
+            <!-- IGRIS voice — hidden until speech recognition support is confirmed by widget JS -->
+            <button class="hdr-mic-btn" id="igris-nav-mic" title="Ask IGRIS (voice)" aria-label="Ask IGRIS (voice)" style="display:none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+
             <!-- Active device indicator (set by JS on device detail pages) -->
             <span class="hdr-device-ctx" id="hdr-device-ctx"></span>
 
@@ -958,6 +963,9 @@
             </div>
             <div class="igris-header-actions">
                 <span style="font-size:10px;color:rgba(0,217,255,0.6);padding:2px 6px;">Claude API</span>
+                <button class="igris-hdr-btn" id="igrisSpeakBtn" title="Speak replies: off">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                </button>
                 <button class="igris-hdr-btn" id="igrisResetBtn" title="New conversation">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                 </button>
@@ -971,8 +979,12 @@
                 <div class="igris-msg-content">I'm IGRIS, your security analyst. Ask me about threats, incidents, agents, MITRE techniques, or anything in the AMOSKYS platform.</div>
             </div>
         </div>
+        <div class="igris-notice" id="igris-notice" style="display:none;" role="status"></div>
         <div class="igris-input-wrap">
             <input type="text" id="igris-input" class="igris-input" placeholder="Ask IGRIS..." autocomplete="off" />
+            <button id="igris-mic" class="igris-mic" title="Voice input" aria-label="Voice input" style="display:none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
             <button id="igris-send" class="igris-send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
@@ -1072,6 +1084,87 @@
 }
 .igris-send:hover { background: #33e5ff; }
 .igris-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Investigation trail (streamed tool steps) ── */
+.igris-trail {
+    align-self: flex-start; max-width: 90%;
+    background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.12);
+    border-radius: 10px; padding: 0.45rem 0.65rem; font-size: 0.72rem;
+}
+.igris-trail-head { display: flex; align-items: center; gap: 0.4rem; color: var(--neural-primary); font-weight: 600; }
+.igris-trail-spinner {
+    width: 10px; height: 10px; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid rgba(0,217,255,0.25); border-top-color: var(--neural-primary);
+    animation: igrisSpin 0.8s linear infinite;
+}
+@keyframes igrisSpin { to { transform: rotate(360deg); } }
+.igris-trail-caret { font-size: 0.55rem; opacity: 0.7; transition: transform 0.2s; }
+.igris-trail-steps { margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.igris-trail-step { display: flex; align-items: baseline; gap: 0.4rem; color: rgba(255,255,255,0.85); }
+.igris-trail-step::before { content: '▸'; color: var(--neural-primary); opacity: 0.7; font-size: 0.6rem; }
+.igris-trail-detail { color: var(--text-muted); font-size: 0.68rem; }
+.igris-trail.done .igris-trail-spinner { display: none; }
+.igris-trail.done .igris-trail-head { cursor: pointer; user-select: none; color: var(--text-muted); }
+.igris-trail.done .igris-trail-head:hover { color: var(--neural-primary); }
+.igris-trail.done .igris-trail-steps { display: none; }
+.igris-trail.done.open .igris-trail-steps { display: flex; }
+.igris-trail.done.open .igris-trail-caret { transform: rotate(90deg); }
+
+/* ── Evidence chips ── */
+.igris-chips { align-self: flex-start; max-width: 90%; display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: -0.25rem; }
+.igris-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.2rem 0.6rem; border-radius: 12px;
+    background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.25);
+    color: var(--neural-primary); font-size: 0.68rem; font-weight: 600;
+    font-family: inherit; cursor: default; line-height: 1.4;
+}
+.igris-chip-link { cursor: pointer; transition: all 0.15s; }
+.igris-chip-link:hover { background: rgba(0,217,255,0.18); border-color: rgba(0,217,255,0.45); }
+
+/* ── Voice input (widget mic) ── */
+.igris-mic {
+    width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.6); cursor: pointer; position: relative;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.igris-mic:hover { color: var(--neural-primary); border-color: rgba(0,217,255,0.35); }
+.igris-mic.listening, .hdr-mic-btn.listening {
+    color: var(--neural-danger); border-color: rgba(255,51,102,0.6);
+    animation: igrisMicPulse 1.2s ease-in-out infinite;
+}
+.igris-mic.listening::after, .hdr-mic-btn.listening::after {
+    content: ''; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--neural-danger);
+    animation: igrisMicDot 1.2s ease-in-out infinite;
+}
+@keyframes igrisMicPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,51,102,0.45); }
+    70% { box-shadow: 0 0 0 7px rgba(255,51,102,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,51,102,0); }
+}
+@keyframes igrisMicDot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+
+/* ── Voice mic in the top nav ── */
+.hdr-mic-btn {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(0,217,255,0.12); border: 1px solid rgba(0,217,255,0.25);
+    color: var(--neural-primary); cursor: pointer; position: relative;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.hdr-mic-btn:hover { background: rgba(0,217,255,0.2); border-color: rgba(0,217,255,0.4); }
+
+/* ── Inline notice (mic/permission errors) ── */
+.igris-notice {
+    margin: 0 0.75rem 0.4rem; padding: 0.4rem 0.6rem; border-radius: 8px;
+    background: rgba(255,51,102,0.08); border: 1px solid rgba(255,51,102,0.3);
+    color: #ff8aa6; font-size: 0.7rem; line-height: 1.4;
+}
+
+/* ── Speak-back toggle state ── */
+.igris-hdr-btn.on { background: rgba(0,217,255,0.18); color: var(--neural-primary); }
+
 @media (max-width: 500px) { .igris-panel { width: calc(100vw - 2rem); max-height: 80vh; border-radius: 14px 14px 0 0; } }
 </style>
 
@@ -1082,6 +1175,10 @@
     var input = document.getElementById('igris-input');
     var messages = document.getElementById('igris-messages');
     var sendBtn = document.getElementById('igris-send');
+    var micBtn = document.getElementById('igris-mic');
+    var navMicBtn = document.getElementById('igris-nav-mic');
+    var speakBtn = document.getElementById('igrisSpeakBtn');
+    var noticeEl = document.getElementById('igris-notice');
     var isOpen = false, isSending = false;
 
     function igrisToggle() {
@@ -1100,26 +1197,153 @@
     document.getElementById('igrisCloseBtn').addEventListener('click', igrisToggle);
     document.getElementById('igrisResetBtn').addEventListener('click', igrisReset);
 
+    function scrollBottom() { messages.scrollTop = messages.scrollHeight; }
+
     function addMsg(role, text) {
         var div = document.createElement('div');
         div.className = 'igris-msg igris-msg-' + role;
-        var html = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        var html = String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
             .replace(/`([^`]+)`/g,'<code>$1</code>')
             .replace(/\n/g,'<br>');
         div.innerHTML = '<div class="igris-msg-content">' + html + '</div>';
         messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
+        scrollBottom();
     }
 
     function showTyping() {
         var div = document.createElement('div');
         div.className = 'igris-msg igris-msg-bot'; div.id = 'igris-typing';
         div.innerHTML = '<div class="igris-typing"><span></span><span></span><span></span></div>';
-        messages.appendChild(div); messages.scrollTop = messages.scrollHeight;
+        messages.appendChild(div); scrollBottom();
     }
 
     function hideTyping() { var el = document.getElementById('igris-typing'); if (el) el.remove(); }
+
+    /* ── Inline notice (mic/permission errors — never alert()) ── */
+    var noticeTimer = null;
+    function showNotice(text) {
+        if (!noticeEl) return;
+        noticeEl.textContent = text;
+        noticeEl.style.display = 'block';
+        if (noticeTimer) clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(function() { noticeEl.style.display = 'none'; }, 6000);
+    }
+
+    /* ── Investigation trail (streamed tool steps) ── */
+    var trailEl = null, trailCount = 0;
+    function ensureTrail() {
+        if (trailEl) return trailEl;
+        hideTyping();
+        trailEl = document.createElement('div');
+        trailEl.className = 'igris-trail';
+        trailEl.innerHTML =
+            '<div class="igris-trail-head">' +
+                '<span class="igris-trail-spinner"></span>' +
+                '<span class="igris-trail-caret" style="display:none;">▸</span>' +
+                '<span class="igris-trail-title">Investigating…</span>' +
+            '</div>' +
+            '<div class="igris-trail-steps"></div>';
+        messages.appendChild(trailEl);
+        scrollBottom();
+        return trailEl;
+    }
+    function addTrailStep(step) {
+        var t = ensureTrail();
+        trailCount++;
+        var row = document.createElement('div');
+        row.className = 'igris-trail-step';
+        var label = document.createElement('span');
+        label.className = 'igris-trail-label';
+        label.textContent = step.label || step.tool || 'step';
+        row.appendChild(label);
+        if (step.detail) {
+            var det = document.createElement('span');
+            det.className = 'igris-trail-detail';
+            det.textContent = step.detail;
+            row.appendChild(det);
+        }
+        t.querySelector('.igris-trail-steps').appendChild(row);
+        scrollBottom();
+    }
+    function finishTrail(failed) {
+        if (!trailEl) return;
+        var t = trailEl, n = trailCount;
+        trailEl = null; trailCount = 0;
+        t.classList.add('done');
+        t.querySelector('.igris-trail-title').textContent =
+            (failed ? 'Investigation stopped · ' : 'Investigated: ') + n + ' step' + (n === 1 ? '' : 's');
+        t.querySelector('.igris-trail-caret').style.display = '';
+        t.querySelector('.igris-trail-head').addEventListener('click', function() { t.classList.toggle('open'); });
+    }
+
+    /* ── Evidence chips ── */
+    function addEvidence(evidence) {
+        if (!evidence || !evidence.length) return;
+        var wrap = document.createElement('div');
+        wrap.className = 'igris-chips';
+        evidence.forEach(function(ev) {
+            if (!ev) return;
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'igris-chip';
+            chip.textContent = ev.label || ev.tool || 'evidence';
+            if (ev.detail) chip.title = ev.detail;
+            if (ev.link) {
+                chip.classList.add('igris-chip-link');
+                chip.addEventListener('click', function() { window.location.href = ev.link; });
+            }
+            wrap.appendChild(chip);
+        });
+        messages.appendChild(wrap);
+        scrollBottom();
+    }
+
+    function addBotReply(text, evidence) {
+        addMsg('bot', text);
+        addEvidence(evidence);
+        speakReply(text);
+    }
+
+    /* ── NDJSON stream consumer ── */
+    async function consumeStream(resp) {
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = '', done = false, terminal = false;
+        function handleLine(line) {
+            line = line.trim();
+            if (!line || terminal) return;
+            var obj;
+            try { obj = JSON.parse(line); } catch (e) { return; }
+            if (obj.type === 'step') {
+                addTrailStep(obj);
+            } else if (obj.type === 'final') {
+                terminal = true;
+                hideTyping(); finishTrail(false);
+                addBotReply(obj.response || '', obj.evidence);
+            } else if (obj.type === 'error') {
+                terminal = true;
+                hideTyping(); finishTrail(true);
+                addMsg('bot', '**Error:** ' + (obj.message || 'Unknown'));
+            }
+        }
+        while (!done) {
+            var chunk = await reader.read();
+            done = chunk.done;
+            if (chunk.value) buf += decoder.decode(chunk.value, { stream: true });
+            var idx;
+            while ((idx = buf.indexOf('\n')) !== -1) {
+                handleLine(buf.slice(0, idx));
+                buf = buf.slice(idx + 1);
+            }
+        }
+        buf += decoder.decode();
+        if (buf.trim()) handleLine(buf);
+        if (!terminal) {
+            hideTyping(); finishTrail(true);
+            addMsg('bot', '**Error:** the response stream ended unexpectedly.');
+        }
+    }
 
     async function igrisSend() {
         var text = input.value.trim();
@@ -1129,12 +1353,131 @@
         try {
             var resp = await fetch('/dashboard/api/igris/chat', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ message: text }),
+                body: JSON.stringify({ message: text, stream: true }),
             });
-            var data = await resp.json(); hideTyping();
-            addMsg('bot', data.status === 'success' ? data.response : '**Error:** ' + (data.message || 'Unknown'));
-        } catch (err) { hideTyping(); addMsg('bot', '**Connection error:** ' + err.message); }
-        isSending = false; sendBtn.disabled = false; input.focus();
+            var ctype = (resp.headers.get('Content-Type') || '').toLowerCase();
+            if (ctype.indexOf('application/x-ndjson') !== -1 && resp.body && typeof resp.body.getReader === 'function') {
+                await consumeStream(resp);
+            } else {
+                /* Older backend / error responses: plain JSON (may still carry evidence[]) */
+                var data = await resp.json(); hideTyping();
+                if (data.status === 'success') addBotReply(data.response, data.evidence);
+                else addMsg('bot', '**Error:** ' + (data.message || 'Unknown'));
+            }
+        } catch (err) {
+            hideTyping(); finishTrail(true);
+            addMsg('bot', '**Connection error:** ' + err.message);
+        }
+        isSending = false; sendBtn.disabled = false;
+        if (isOpen) input.focus();
+    }
+
+    /* ── Voice input (SpeechRecognition) ── */
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var rec = null, listening = false, manualStop = false;
+    function setListening(on) {
+        listening = on;
+        if (micBtn) micBtn.classList.toggle('listening', on);
+        if (navMicBtn) navMicBtn.classList.toggle('listening', on);
+    }
+    function stopMic() {
+        manualStop = true;
+        setListening(false);
+        if (rec) { try { rec.stop(); } catch (e) { /* silent */ } }
+    }
+    function startMic() {
+        if (!SR) return;
+        if (listening) { stopMic(); return; }
+        try { rec = new SR(); } catch (e) { showNotice('Voice input unavailable: ' + e.message); return; }
+        var finalText = '';
+        manualStop = false;
+        rec.lang = 'en-US';
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.onresult = function(ev) {
+            var interim = '';
+            for (var i = ev.resultIndex; i < ev.results.length; i++) {
+                var tr = ev.results[i][0].transcript;
+                if (ev.results[i].isFinal) finalText += tr;
+                else interim += tr;
+            }
+            input.value = (finalText + interim).trim();
+        };
+        rec.onerror = function(ev) {
+            setListening(false);
+            var code = ev.error || 'unknown';
+            if (code === 'not-allowed' || code === 'service-not-allowed') {
+                showNotice('Microphone blocked. Allow mic access in your browser to talk to IGRIS.');
+            } else if (code === 'no-speech') {
+                showNotice('No speech detected — try again.');
+            } else if (code !== 'aborted') {
+                showNotice('Voice error: ' + code);
+            }
+        };
+        rec.onend = function() {
+            setListening(false);
+            var t = finalText.trim();
+            if (t && !manualStop) { input.value = t; igrisSend(); }
+        };
+        setListening(true);
+        try { rec.start(); } catch (e) {
+            setListening(false);
+            showNotice('Could not start voice input: ' + e.message);
+        }
+    }
+    if (SR) {
+        if (micBtn) {
+            micBtn.style.display = 'flex';
+            micBtn.addEventListener('click', startMic);
+        }
+        if (navMicBtn) {
+            navMicBtn.style.display = 'flex';
+            navMicBtn.addEventListener('click', function() {
+                if (!isOpen) igrisToggle();
+                startMic();
+            });
+        }
+    }
+
+    /* ── Speak-back (speechSynthesis, OFF by default, persisted) ── */
+    var hasTTS = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
+    var speakOn = false;
+    try { speakOn = localStorage.getItem('igrisSpeakBack') === '1'; } catch (e) { /* silent */ }
+    function renderSpeakBtn() {
+        if (!speakBtn) return;
+        speakBtn.classList.toggle('on', speakOn);
+        speakBtn.title = speakOn ? 'Speak replies: on' : 'Speak replies: off';
+    }
+    if (speakBtn) {
+        if (!hasTTS) {
+            speakBtn.style.display = 'none';
+            speakOn = false;
+        } else {
+            renderSpeakBtn();
+            speakBtn.addEventListener('click', function() {
+                speakOn = !speakOn;
+                try { localStorage.setItem('igrisSpeakBack', speakOn ? '1' : '0'); } catch (e) { /* silent */ }
+                renderSpeakBtn();
+                if (!speakOn) window.speechSynthesis.cancel();
+            });
+        }
+    }
+    function speakReply(text) {
+        if (!speakOn || !hasTTS) return;
+        var plain = String(text)
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/[*_`#~]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 400);
+        if (!plain) return;
+        try {
+            window.speechSynthesis.cancel();
+            var u = new SpeechSynthesisUtterance(plain);
+            u.lang = 'en-US';
+            window.speechSynthesis.speak(u);
+        } catch (e) { /* silent */ }
     }
 
     sendBtn.addEventListener('click', igrisSend);

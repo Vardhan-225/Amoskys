@@ -163,11 +163,15 @@ class IgrisBrain:
         prompt: str,
         system: str = "",
         history: List[Dict[str, Any]] = None,
+        on_step: Optional[Callable[[str, Dict[str, Any], str], None]] = None,
     ) -> BrainResult:
         """Run a full reasoning cycle.
 
         Claude receives the prompt + system context, calls tools as needed
         via tool_runner(), and returns a final verdict.
+
+        on_step, when given, is invoked per tool call with
+        (tool_name, args, result_summary) as the loop executes.
         """
         client = _get_client()
         start = time.monotonic()
@@ -251,6 +255,20 @@ class IgrisBrain:
             for tb in tool_use_blocks:
                 tool_calls += 1
                 result = self.toolkit.execute(tb.name, tb.input)
+
+                if on_step is not None:
+                    try:
+                        # Lazy import — chat.py imports this module
+                        from .chat import summarize_tool_result
+
+                        on_step(
+                            tb.name,
+                            dict(tb.input or {}),
+                            summarize_tool_result(tb.name, tb.input or {}, result),
+                        )
+                    except Exception:  # observer must never break the loop
+                        logger.debug("on_step callback failed", exc_info=True)
+
                 output_str = json.dumps(result, default=str)
                 # Truncate large results
                 if len(output_str) > 8000:

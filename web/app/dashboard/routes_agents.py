@@ -497,7 +497,20 @@ def hunt_search():
         offset=offset,
         min_risk=min_risk,
         category=category,
+        device_id=request.args.get("device_id") or None,
     )
+    # Same human-readable enrichment the unified event stream gets, so hunt
+    # rows can render 'Expected: ...' subtitles and technique names.
+    from .route_helpers import _expected_reason, _parse_mitre, _technique_names
+
+    for row in data.get("results", []):
+        try:
+            row["expected_reason"] = _expected_reason(row)
+            mitre = _parse_mitre(row.get("mitre_techniques"))
+            if mitre:
+                row["technique_names"] = _technique_names(mitre)
+        except Exception:
+            pass
     data["status"] = "success"
     data["timestamp"] = datetime.now(timezone.utc).isoformat()
     return jsonify(data)

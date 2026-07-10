@@ -9,13 +9,17 @@ import importlib
 import json
 import logging
 import os
+import queue
+import threading
 import time
+import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 
-from flask import jsonify, request
+from flask import Response, jsonify, request, session, stream_with_context
 
 from ..api.rate_limiter import require_rate_limit
-from ..middleware import require_login
+from ..middleware import get_current_user, require_login
 from . import dashboard_bp
 from .route_helpers import _get_store, _normalize_agent_id
 
@@ -359,55 +363,205 @@ def igris_coherence():
 
 
 # ── IGRIS Chat (AI-powered security analyst) ────────────────────
-_igris_chat_instance = None
+#
+# Conversations are keyed per web session: the same user+browser session
+# continues a conversation, a different browser session gets a fresh one.
+# The store is a small LRU with idle-TTL so memory can't grow unbounded.
+
+_CHAT_SESSIONS: "OrderedDict[str, dict]" = OrderedDict()  # sid -> {chat, last_used}
+_CHAT_SESSIONS_LOCK = threading.Lock()
+_CHAT_SESSIONS_MAX = 20
+_CHAT_SESSION_TTL_S = 2 * 3600  # evict conversations idle > 2h
 
 
-def _get_igris_chat():
-    global _igris_chat_instance
-    if _igris_chat_instance is None:
-        try:
-            import os as _os
+def _chat_session_key() -> str:
+    """Stable per-web-session key for the IGRIS conversation store.
 
-            from flask import current_app
+    Uses a uuid stored in the Flask session cookie; falls back to the
+    authenticated user id when the cookie session is unavailable.
+    """
+    try:
+        sid = session.get("igris_sid")
+        if not sid:
+            sid = uuid.uuid4().hex
+            session["igris_sid"] = sid
+        return str(sid)
+    except Exception:
+        user = get_current_user()
+        uid = getattr(user, "id", None) if user else None
+        return f"user:{uid}" if uid else "anonymous"
 
-            from amoskys.igris.chat import IgrisChat
 
-            action_executor = current_app.config.get("ACTION_EXECUTOR")
+def _prune_chat_sessions_locked(now: float) -> None:
+    """Evict idle-expired entries, then oldest-by-last-use over the cap."""
+    expired = [
+        sid
+        for sid, entry in _CHAT_SESSIONS.items()
+        if now - entry["last_used"] > _CHAT_SESSION_TTL_S
+    ]
+    for sid in expired:
+        _CHAT_SESSIONS.pop(sid, None)
+    while len(_CHAT_SESSIONS) > _CHAT_SESSIONS_MAX:
+        _CHAT_SESSIONS.popitem(last=False)  # oldest by last-use
 
-            # Fleet mode: use fleet_cache.db (synced from ops server)
-            # Local mode: use telemetry.db (agent running on this machine)
-            if _os.environ.get("AMOSKYS_OPS_SERVER"):
-                from web.app.dashboard.telemetry_bridge import _CACHE_DB_PATH
 
-                db_path = (
-                    str(_CACHE_DB_PATH)
-                    if _CACHE_DB_PATH.exists()
-                    else "data/telemetry.db"
-                )
-            else:
-                db_path = "data/telemetry.db"
+def _build_igris_chat():
+    """Construct a fresh IgrisChat wired to the right telemetry DB."""
+    import os as _os
 
-            _igris_chat_instance = IgrisChat(
-                telemetry_db=db_path,
-                fusion_db=db_path,  # fleet_cache has all tables
-                reliability_db=db_path,
-                action_executor=action_executor,
-            )
-        except Exception as e:
-            logger.error("Failed to initialize IGRIS chat: %s", e)
+    from flask import current_app
+
+    from amoskys.igris.chat import IgrisChat
+
+    action_executor = current_app.config.get("ACTION_EXECUTOR")
+
+    # Fleet mode: use fleet_cache.db (synced from ops server)
+    # Local mode: use telemetry.db (agent running on this machine)
+    if _os.environ.get("AMOSKYS_OPS_SERVER"):
+        from web.app.dashboard.telemetry_bridge import _CACHE_DB_PATH
+
+        db_path = (
+            str(_CACHE_DB_PATH) if _CACHE_DB_PATH.exists() else "data/telemetry.db"
+        )
+    else:
+        db_path = "data/telemetry.db"
+
+    return IgrisChat(
+        telemetry_db=db_path,
+        fusion_db=db_path,  # fleet_cache has all tables
+        reliability_db=db_path,
+        action_executor=action_executor,
+    )
+
+
+def _get_igris_chat(create: bool = True):
+    """Return the caller's session-scoped IgrisChat (LRU-tracked).
+
+    Must be called inside a request context. Returns None when the chat
+    backend can't be initialized (or create=False and no conversation
+    exists yet).
+    """
+    sid = _chat_session_key()
+    now = time.time()
+    with _CHAT_SESSIONS_LOCK:
+        entry = _CHAT_SESSIONS.get(sid)
+        if entry is not None:
+            entry["last_used"] = now
+            _CHAT_SESSIONS.move_to_end(sid)
+            _prune_chat_sessions_locked(now)
+            return entry["chat"]
+        if not create:
             return None
-    return _igris_chat_instance
+
+    # Build outside the lock — construction may import heavy modules
+    try:
+        chat = _build_igris_chat()
+    except Exception as e:
+        logger.error("Failed to initialize IGRIS chat: %s", e)
+        return None
+
+    with _CHAT_SESSIONS_LOCK:
+        # Another request may have raced us; keep the existing conversation
+        entry = _CHAT_SESSIONS.get(sid)
+        if entry is not None:
+            entry["last_used"] = time.time()
+            _CHAT_SESSIONS.move_to_end(sid)
+            return entry["chat"]
+        _CHAT_SESSIONS[sid] = {"chat": chat, "last_used": time.time()}
+        _prune_chat_sessions_locked(time.time())
+    return chat
+
+
+def _drop_igris_chat() -> bool:
+    """Remove the caller's conversation from the store. True if one existed."""
+    sid = _chat_session_key()
+    with _CHAT_SESSIONS_LOCK:
+        return _CHAT_SESSIONS.pop(sid, None) is not None
+
+
+def _ndjson_chat_stream(chat, message: str) -> Response:
+    """Run chat in a worker thread, streaming step events as NDJSON lines.
+
+    chat() is blocking, so on_step events go into a queue consumed by the
+    response generator: steps are emitted as they arrive, then the final
+    (or error) object terminates the stream.
+    """
+    from amoskys.igris.chat import tool_label
+
+    q: "queue.Queue" = queue.Queue()
+    _DONE = object()
+
+    def on_step(tool_name, args, result_summary):
+        q.put(
+            {
+                "type": "step",
+                "tool": tool_name,
+                "label": tool_label(tool_name, args),
+                "detail": result_summary,
+            }
+        )
+
+    def worker():
+        try:
+            response = chat.chat(message, on_step=on_step)
+            q.put(
+                {
+                    "type": "final",
+                    "response": response,
+                    "evidence": chat.get_last_evidence(),
+                    "history_length": len(chat.get_history()),
+                }
+            )
+        except Exception as e:  # terminal error object instead of final
+            logger.error("IGRIS chat stream error: %s", e, exc_info=True)
+            q.put({"type": "error", "message": str(e)})
+        finally:
+            q.put(_DONE)
+
+    # Daemon thread: if the client disconnects mid-answer, the chat still
+    # finishes (history stays consistent) and the thread exits on its own.
+    threading.Thread(target=worker, daemon=True, name="igris-chat-stream").start()
+
+    def generate():
+        while True:
+            item = q.get()
+            if item is _DONE:
+                break
+            # GeneratorExit on client disconnect propagates from here;
+            # the worker keeps draining into the (garbage-collected) queue.
+            yield json.dumps(item, default=str) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable proxy buffering
+        },
+    )
 
 
 @dashboard_bp.route("/api/igris/chat", methods=["POST"])
 @require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def igris_chat():
-    """IGRIS AI chat endpoint — security analyst copilot."""
+    """IGRIS AI chat endpoint — security analyst copilot.
+
+    Body: {"message": "...", "stream": true|false}
+
+    stream=false (default): JSON response with `response`, `evidence`
+    (list of {tool,label,detail,link}) and `history_length`.
+
+    stream=true: application/x-ndjson — one JSON object per line:
+      {"type":"step","tool":...,"label":...,"detail":...}   0..n, live
+      {"type":"final","response":...,"evidence":[...],"history_length":N}
+      {"type":"error","message":"..."}                      terminal
+    """
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     if not message:
         return jsonify({"status": "error", "message": "No message provided"}), 400
+    stream = bool(data.get("stream"))
 
     chat = _get_igris_chat()
     if chat is None:
@@ -421,12 +575,16 @@ def igris_chat():
             503,
         )
 
+    if stream:
+        return _ndjson_chat_stream(chat, message)
+
     try:
         response = chat.chat(message)
         return jsonify(
             {
                 "status": "success",
                 "response": response,
+                "evidence": chat.get_last_evidence(),
                 "history_length": len(chat.get_history()),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -439,10 +597,8 @@ def igris_chat():
 @dashboard_bp.route("/api/igris/chat/reset", methods=["POST"])
 @require_login
 def igris_chat_reset():
-    """Reset IGRIS chat conversation history."""
-    chat = _get_igris_chat()
-    if chat:
-        chat.reset()
+    """Reset the caller's IGRIS chat conversation (other sessions untouched)."""
+    _drop_igris_chat()
     return jsonify({"status": "success", "message": "Conversation reset"})
 
 
@@ -511,8 +667,8 @@ def igris_chat_backend():
 @dashboard_bp.route("/api/igris/chat/history")
 @require_login
 def igris_chat_history():
-    """Get IGRIS chat conversation history."""
-    chat = _get_igris_chat()
+    """Get the caller's IGRIS chat conversation history."""
+    chat = _get_igris_chat(create=False)
     if not chat:
         return jsonify({"status": "success", "history": []})
     return jsonify({"status": "success", "history": chat.get_history()})
