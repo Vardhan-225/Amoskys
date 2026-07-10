@@ -18,6 +18,7 @@ Supports the 3-layer ML architecture:
 """
 
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -82,10 +83,20 @@ class TelemetryStore(
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
         # ── Boot integrity check: detect and recover corrupted DB ──
+        # quick_check does page/structure validation (catches real corruption)
+        # WITHOUT the full per-cell + index cross-checks of integrity_check,
+        # which scanned the entire multi-GB store on EVERY startup and blocked
+        # the analyzer for minutes. Opt back into the exhaustive check with
+        # AMOSKYS_FULL_INTEGRITY_CHECK=1 when deep-verifying a suspect DB.
         if Path(db_path).exists():
             try:
                 _check_db = sqlite3.connect(db_path, timeout=5.0)
-                result = _check_db.execute("PRAGMA integrity_check(1)").fetchone()
+                _check_pragma = (
+                    "integrity_check(1)"
+                    if os.environ.get("AMOSKYS_FULL_INTEGRITY_CHECK")
+                    else "quick_check(1)"
+                )
+                result = _check_db.execute(f"PRAGMA {_check_pragma}").fetchone()
                 _check_db.close()
                 if result[0] != "ok":
                     logger.error(
