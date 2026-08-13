@@ -980,6 +980,50 @@ class TelemetryShipper:
         """
         if not agent_name:
             return {"success": False, "error": "No agent_name provided"}
+
+        # LIFECYCLE IS NOT THE SHIPPER'S TO OWN.
+        #
+        # The subprocess below is `launcher <action> --agents-only` — a BLANKET
+        # restart of the ENTIRE fleet — regardless of which single agent the
+        # command named. Meanwhile the supervisor already owns lifecycle and
+        # decides restarts from its own children. Two owners, one fleet.
+        #
+        # Measured consequence in a single run: ops sent 27 RESTART_AGENT for
+        # macos_proc, 26 for macos_flow, 19 for macos_auth and 11 for
+        # macos_persistence — 83 full-fleet restarts. Each one spawns a fresh
+        # generation and abandons the previous, which is where the 24 processes
+        # sitting at ppid=1 came from. Removing start_new_session=True from the
+        # launcher stopped agents from DETACHING; it could not stop them from
+        # being ORPHANED by a restart storm that replaces their parent.
+        #
+        # And orphans are not inert: the supervisor gates restart on
+        # `pgrep -f`, which cannot distinguish its own child from a ghost, so
+        # every abandoned generation degrades its ability to keep the fleet
+        # healthy. The remote command was actively making the thing it was
+        # asked to repair worse.
+        #
+        # So refuse, and say why. The operator keeps a truthful receipt in the
+        # command log, ops learns to stop retrying, and the supervisor remains
+        # the single lifecycle owner. Set AMOSKYS_ALLOW_REMOTE_LIFECYCLE=1 to
+        # restore the old behaviour on a host with no supervisor.
+        if os.getenv("AMOSKYS_ALLOW_REMOTE_LIFECYCLE") != "1":
+            logger.warning(
+                "Refusing remote %s for %r — lifecycle is owned by the "
+                "supervisor, and this command performs a full-fleet restart "
+                "that orphans the running generation.",
+                action,
+                agent_name,
+            )
+            return {
+                "success": False,
+                "error": (
+                    "agent lifecycle is owned by the local supervisor; remote "
+                    f"{action} refused (it would restart the whole fleet and "
+                    "orphan the running agents)"
+                ),
+                "lifecycle_owner": "supervisor",
+            }
+
         if agent_name.strip().lower() in self._RETIRED_AGENTS:
             logger.warning(
                 "Refusing %s for retired agent %r — retired 2026-07-06 (TCC "
