@@ -120,7 +120,23 @@ def _load_agents() -> List[Dict[str, Any]]:
     """
     agents = []
 
+    # Every sensor _try_load is ASKED for, so a registration that never becomes
+    # a running agent can be named rather than merely subtracted.
+    #
+    # This exists because the failure it catches is invisible by construction:
+    # _try_load swallows the exception, logs one WARNING, and the collector then
+    # announces "Loaded N agent configurations" — a number with nothing to
+    # compare against. protocol_collectors was skipped on every start for an
+    # AttributeError (the class is ProtocolCollectors, not
+    # ProtocolCollectorsAgent) and the only symptom was 17 where 18 was
+    # expected, which nobody can notice without knowing the expected figure.
+    #
+    # On an EDR a sensor that silently fails to load is a blind spot that
+    # reports as health. The reconciliation below makes that impossible.
+    requested: list = []
+
     def _try_load(module_path: str, class_name: str, name: str, interval: float):
+        requested.append(name)
         try:
             import importlib
 
@@ -216,9 +232,18 @@ def _load_agents() -> List[Dict[str, Any]]:
         "http_inspector",
         30.0,
     )
+    # Class is ProtocolCollectors, NOT ProtocolCollectorsAgent — every other
+    # sensor in this list ends in "Agent", and this one silently did not.
+    # _try_load caught the resulting AttributeError and logged
+    # "Skipping protocol_collectors: module ... has no attribute
+    # ProtocolCollectorsAgent" at WARNING, so the collector reported "Loaded 17
+    # agent configurations" against 18 registrations and nothing looked wrong.
+    # Verified before changing: ProtocolCollectors subclasses HardenedAgentBase
+    # and implements setup/collect_data/run, so it is a real agent that was
+    # simply never reachable by name.
     _try_load(
         "amoskys.agents.os.macos.protocol_collectors.protocol_collectors",
-        "ProtocolCollectorsAgent",
+        "ProtocolCollectors",
         "protocol_collectors",
         30.0,
     )
@@ -285,6 +310,29 @@ def _load_agents() -> List[Dict[str, Any]]:
         "db_activity",
         60.0,
     )
+
+    # Reconcile: every sensor asked for must have become a loadable agent.
+    #
+    # Logged at ERROR and named, because on an EDR a sensor that fails to load
+    # is a blind spot that reports as health, and the operator otherwise has no
+    # way to know: the only prior signal was a count with nothing to compare it
+    # against. This is deliberately not fatal — 17 working sensors are worth
+    # more than none — but it can never again be silent.
+    loaded_names = {a["name"] for a in agents}
+    missing = [n for n in requested if n not in loaded_names]
+    if missing:
+        logger.error(
+            "SENSOR LOAD GAP: %d of %d registered sensors failed to load and "
+            "are NOT monitoring: %s — see the 'Skipping <name>' warnings above "
+            "for the cause of each",
+            len(missing),
+            len(requested),
+            ", ".join(missing),
+        )
+    else:
+        logger.info(
+            "All %d registered sensors loaded — no blind spots", len(requested)
+        )
 
     return agents
 
