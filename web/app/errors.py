@@ -66,8 +66,16 @@ def _build_error_response(error: AmoskysError, include_debug: bool = False) -> d
 
 def _is_api_request() -> bool:
     """Check if the current request is an API request."""
-    # Check URL path
-    if request.path.startswith("/api/"):
+    # Check URL path.
+    # Not startswith("/api/"): the dashboard's entire JSON surface is mounted
+    # on dashboard_bp (url_prefix="/dashboard") and answers on
+    # /dashboard/api/..., so a prefix test matched 0 of those routes. An
+    # unhandled exception there fell through to render_template("errors/
+    # error.html") and returned a 500 HTML page to a fetch() that only calls
+    # .json() — the panel died on a parse error with nothing in the payload
+    # to explain it, no code, no correlation_id. Substring match also picks
+    # up /admin/api/... , which has the same problem.
+    if "/api/" in request.path:
         return True
 
     # Check Accept header

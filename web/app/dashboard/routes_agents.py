@@ -484,8 +484,11 @@ def hunt_search():
     if table not in ALLOWED_TABLES:
         return jsonify({"status": "error", "message": "Invalid table name"}), 400
     hours = request.args.get("hours", 24, type=int)
-    limit = min(request.args.get("limit", 50, type=int), 200)
-    offset = request.args.get("offset", 0, type=int)
+    # search_events() passes limit/offset straight into "LIMIT ? OFFSET ?" with
+    # no clamp of its own, and a negative LIMIT means "no limit" in SQLite — so
+    # min(limit, 200) alone let ?limit=-1 through and returned the whole table.
+    limit = max(1, min(request.args.get("limit", 50, type=int), 200))
+    offset = max(0, request.args.get("offset", 0, type=int))
     min_risk = request.args.get("min_risk", type=float)
     category = request.args.get("category")
 
@@ -719,6 +722,12 @@ def network_topology_data():
 
 # ── Event Correlation ─────────────────────────────────────────────
 
+# Upper bounds for /api/correlate. The timeline replay renders a seed event
+# and its neighbours; 7 days of context and 500 correlated rows per table is
+# already more than the panel draws.
+_MAX_CORRELATE_WINDOW_MIN = 60 * 24 * 7
+_MAX_CORRELATE_RESULTS = 500
+
 
 @dashboard_bp.route("/api/correlate")
 @require_login
@@ -729,8 +738,22 @@ def correlate_events():
 
     store = get_telemetry_store()
     event_id = request.args.get("event_id", type=int)
-    window_minutes = request.args.get("window_minutes", 30, type=int)
-    max_results = request.args.get("max_results", 100, type=int)
+    # Both of these go straight into SQL and both were uncapped: window_minutes
+    # widens a BETWEEN over timestamp_ns (?window_minutes=52560000 spans a
+    # century, i.e. a full scan of a 1.5GB telemetry.db), and max_results
+    # becomes LIMIT, where a negative value is SQLite's "no limit" — so
+    # ?max_results=-1 serialized every matching row of all three tables into
+    # one JSON response. 7 days / 500 rows is well past what the timeline UI
+    # renders.
+    window_minutes = max(
+        1,
+        min(
+            request.args.get("window_minutes", 30, type=int), _MAX_CORRELATE_WINDOW_MIN
+        ),
+    )
+    max_results = max(
+        1, min(request.args.get("max_results", 100, type=int), _MAX_CORRELATE_RESULTS)
+    )
 
     if store is None:
         return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
@@ -1520,7 +1543,12 @@ def agent_live_data(agent_id):
     from .telemetry_bridge import get_telemetry_store
 
     store = get_telemetry_store()
-    limit = min(request.args.get("limit", 25, type=int), 100)
+    # SQLite reads a negative LIMIT as "no limit", so min(limit, 100) only
+    # clamped one end: ?limit=-1 walked straight past it and returned every
+    # row — a 500-row repro table gave back all 500 where the cap says 100,
+    # and here that table is security_events inside a 1.5GB telemetry.db.
+    # Clamp the low end too.
+    limit = max(1, min(request.args.get("limit", 25, type=int), 100))
 
     # Map deep-overview IDs (proc, dns) to AGENT_CATALOG IDs (proc_agent, dns_agent)
     _id_map = {
@@ -2055,7 +2083,9 @@ def agent_domain_data(agent_id):
     from .telemetry_bridge import get_telemetry_store
 
     store = get_telemetry_store()
-    limit = min(request.args.get("limit", 50, type=int), 200)
+    # Same one-ended clamp as /live-data above: a negative LIMIT is "no limit"
+    # in SQLite, so ?limit=-1 dumped whole event tables. Clamp both ends.
+    limit = max(1, min(request.args.get("limit", 50, type=int), 200))
     rows = []
     schema = "generic"
 

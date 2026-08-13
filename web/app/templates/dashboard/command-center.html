@@ -497,7 +497,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
     const API = '/dashboard/api/command-center';
     let lastFeedId = 0;
@@ -574,7 +574,10 @@
                 tagClass = 'cc-tag-ok';
                 tagText = 'OK';
             }
-            return `<div class="cc-device-row" onclick="window._ccDrill('${d.device_id}', '${esc(d.hostname)}')">
+            // CSP: an inline onclick can never be authorised by a nonce, so the
+            // drill-down is carried on data-* and dispatched by the delegated
+            // listener below.
+            return `<div class="cc-device-row" data-device-id="${escAttr(d.device_id)}" data-hostname="${escAttr(d.hostname)}">
                 <span class="cc-device-dot ${dotClass}"></span>
                 <span class="cc-device-name">${esc(d.hostname)}</span>
                 <span class="cc-device-tag ${tagClass}">${tagText}</span>
@@ -718,6 +721,22 @@
         d.textContent = s;
         return d.innerHTML;
     }
+
+    // esc() escapes & < > but NOT the double quote, so it is not safe on its
+    // own inside a quoted attribute value — a hostname containing " would
+    // break out of data-hostname="…". Escape the quote too.
+    function escAttr(s) {
+        return esc(s).replace(/"/g, '&quot;');
+    }
+
+    // Delegated: the fleet map's innerHTML is replaced every 15s, but the
+    // container node itself survives, so one listener here covers every row.
+    document.getElementById('cc-fleet-map').addEventListener('click', function(ev) {
+        const row = ev.target.closest('.cc-device-row');
+        if (row && row.dataset.deviceId) {
+            window._ccDrill(row.dataset.deviceId, row.dataset.hostname || '');
+        }
+    });
 
     // Boot
     load();

@@ -39,6 +39,31 @@ def _ro_conn(db_path: Path) -> sqlite3.Connection | None:
         return None
 
 
+def _hours_arg(default: float) -> float:
+    """Parse ?hours= without letting a bad value take the endpoint down.
+
+    All 3 windowed /api/nexus/* handlers parsed this with a bare int()/float()
+    ABOVE their try block, so ?hours=abc raised ValueError where nothing could
+    catch it: the route answered 500 — and, because these paths live under
+    /dashboard, a 500 *HTML* error page to a fetch() that only ever parses
+    JSON. Numeric-but-absurd values blow up just past the parse, on the
+    cutoff_ns line that is also outside the try: hours=1e300 overflows the
+    float ("cannot convert float infinity to integer") and hours=1e30 gets
+    through that only to fail the bind ("Python int too large to convert to
+    SQLite INTEGER"). Clamping to 90 days covers both and is well past any
+    retention window, so no reachable data is lost.
+    """
+    raw = request.args.get("hours", default)
+    try:
+        hours = float(raw)
+    except (TypeError, ValueError):
+        return float(default)
+    # NaN compares false against everything, hence the self-comparison.
+    if hours != hours or hours <= 0:
+        return float(default)
+    return min(hours, 24.0 * 90)
+
+
 def _fleet_telemetry_conn() -> sqlite3.Connection | None:
     """Get connection to fleet_cache.db or local telemetry.db — whichever exists."""
     project_root = Path(__file__).resolve().parents[3]
@@ -71,7 +96,7 @@ def nexus_verdict_funnel():
       total_events → noise (SOMA familiar, low risk) → baseline (known patterns)
       → suspicious (medium risk) → threats (high risk) → incidents (correlated)
     """
-    hours = int(request.args.get("hours", 24))
+    hours = max(1, int(_hours_arg(24)))
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
     try:
@@ -363,7 +388,7 @@ def nexus_soma_stats():
 @require_login
 def nexus_asv_status():
     """Return current Agent Signature Vector — which agents fired recently."""
-    hours = float(request.args.get("hours", 1))
+    hours = _hours_arg(1)
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
     # Canonical agent list (must match inads_engine.py ASV_AGENTS)
@@ -439,7 +464,7 @@ def nexus_constellation():
     Two agents "co-fire" when both produce security events within a 60s window.
     Returns nodes (agents) and edges (co-firing pairs with strength).
     """
-    hours = float(request.args.get("hours", 24))
+    hours = _hours_arg(24)
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
     # Scale co-fire threshold with window: longer windows need higher thresholds

@@ -6,12 +6,20 @@ DNS, network, FIM, persistence, audit, and observation domain endpoints.
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import jsonify, request
+from amoskys.observability.blindness import (
+    list_blindness_events,
+    summarize_blindness_events,
+)
+from amoskys.observability.esf_authorization import inspect_esf_authorization
 
 from ..api.rate_limiter import require_rate_limit
 from ..middleware import require_login
@@ -21,6 +29,27 @@ from .route_helpers import _get_store, _parse_indicators, _parse_json_list, _par
 logger = logging.getLogger("web.app.dashboard")
 
 _MSG_DB_UNAVAILABLE = "Database unavailable"
+_THREAT_INTEL_STALE_DAYS = 3.0
+_SCHEMA_DRIFT_TABLE = "schema_drift_events"
+_SCHEMA_DRIFT_BLOCKING_ACTIONS = {"dropped", "failed"}
+_NETWORK_SCHEMA_COLUMNS = {
+    "timestamp_ns",
+    "device_id",
+    "dst_ip",
+    "dst_port",
+    "protocol",
+    "bytes_tx",
+    "bytes_rx",
+    "process_name",
+    "geo_dst_country",
+    "geo_dst_city",
+    "geo_dst_latitude",
+    "geo_dst_longitude",
+    "asn_dst_org",
+    "asn_dst_network_type",
+    "threat_intel_match",
+    "collection_agent",
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,6 +173,315 @@ def _load_incident_replay_events(store, incident):
         seen.add(key)
         deduped.append(_normalize_replay_event(row, source="security"))
     return deduped
+
+
+def _table_columns(db, table):
+    try:
+        return {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    except Exception:
+        return set()
+
+
+def _health_status(status, message, **extra):
+    payload = {"status": status, "message": message}
+    payload.update(extra)
+    return payload
+
+
+def _iso_age_days(value):
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - parsed).total_seconds() / 86400
+
+
+def _threat_intel_health():
+    """Report threat-intel feed health without creating fallback DB files."""
+    path = (os.getenv("AMOSKYS_THREAT_INTEL_DB") or "").strip()
+    if not path:
+        return _health_status(
+            "degraded",
+            "AMOSKYS_THREAT_INTEL_DB is not set",
+            configured=False,
+            indicators=0,
+            db_path="",
+        )
+    if not os.path.isabs(path):
+        return _health_status(
+            "degraded",
+            "AMOSKYS_THREAT_INTEL_DB is not absolute",
+            configured=False,
+            indicators=0,
+            db_path=path,
+        )
+    if not os.path.exists(path):
+        return _health_status(
+            "degraded",
+            "Threat-intel DB file is missing",
+            configured=False,
+            indicators=0,
+            db_path=path,
+        )
+
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = conn.execute("SELECT COUNT(*) FROM indicators").fetchone()
+            indicators = int(row[0] or 0) if row else 0
+            added = conn.execute("SELECT MAX(added_at) FROM indicators").fetchone()
+            updated_at = added[0] if added and added[0] else None
+            age_days = _iso_age_days(updated_at) if updated_at else None
+        finally:
+            conn.close()
+    except Exception:
+        return _health_status(
+            "degraded",
+            "Threat-intel DB could not be read",
+            configured=True,
+            indicators=0,
+            db_path=path,
+        )
+
+    if indicators <= 0:
+        return _health_status(
+            "degraded",
+            "Threat-intel DB has 0 indicators",
+            configured=True,
+            indicators=0,
+            db_path=path,
+            updated_at=updated_at,
+            age_days=age_days,
+        )
+    if age_days is None:
+        return _health_status(
+            "degraded",
+            "Threat-intel feed freshness is unknown",
+            configured=True,
+            indicators=indicators,
+            db_path=path,
+            updated_at=updated_at,
+            age_days=age_days,
+        )
+    if age_days > _THREAT_INTEL_STALE_DAYS:
+        return _health_status(
+            "degraded",
+            f"Threat-intel feed is stale ({age_days:.1f} days old)",
+            configured=True,
+            indicators=indicators,
+            db_path=path,
+            updated_at=updated_at,
+            age_days=round(age_days, 1),
+        )
+    return _health_status(
+        "healthy",
+        "Threat-intel feed loaded",
+        configured=True,
+        indicators=indicators,
+        db_path=path,
+        updated_at=updated_at,
+        age_days=round(age_days, 1),
+    )
+
+
+def _coverage_status(label, total, covered):
+    pct = round((covered / total) * 100, 1) if total else 0.0
+    if total <= 0:
+        return _health_status(
+            "unknown",
+            f"No flows to evaluate {label}",
+            covered=covered,
+            total=total,
+            coverage_pct=pct,
+        )
+    if covered > 0:
+        return _health_status(
+            "healthy",
+            f"{label} present on {pct}% of recent flows",
+            covered=covered,
+            total=total,
+            coverage_pct=pct,
+        )
+    return _health_status(
+        "degraded",
+        f"No recent flows carry {label}",
+        covered=covered,
+        total=total,
+        coverage_pct=pct,
+    )
+
+
+def _schema_health(db, missing_cols, hours):
+    """Report network schema health plus recent fleet sync drift incidents."""
+    events = []
+    blocking_events = []
+    added_count = 0
+    cutoff = time.time() - max(int(hours or 24), 1) * 3600
+
+    try:
+        exists = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (_SCHEMA_DRIFT_TABLE,),
+        ).fetchone()
+        if exists:
+            rows = db.execute(
+                f"""
+                SELECT detected_at, table_name, column_name, action, reason,
+                       column_type, sample_value
+                FROM {_SCHEMA_DRIFT_TABLE}
+                WHERE detected_at >= ?
+                ORDER BY detected_at DESC
+                LIMIT 25
+                """,
+                (cutoff,),
+            ).fetchall()
+            for row in rows:
+                event = {
+                    "detected_at": float(row[0] or 0),
+                    "table": row[1],
+                    "column": row[2],
+                    "action": row[3],
+                    "reason": row[4],
+                    "column_type": row[5],
+                    "sample_value": row[6],
+                }
+                events.append(event)
+                if event["action"] in _SCHEMA_DRIFT_BLOCKING_ACTIONS:
+                    blocking_events.append(event)
+                elif event["action"] == "added":
+                    added_count += 1
+    except Exception:
+        return _health_status(
+            "degraded",
+            "Schema drift ledger could not be inspected",
+            missing_columns=missing_cols,
+            drift_events=[],
+            drift_blocking_count=0,
+            drift_added_count=0,
+        )
+
+    if missing_cols and blocking_events:
+        message = "Network schema is missing columns and fleet sync dropped evidence"
+    elif missing_cols:
+        message = "Network schema is missing dashboard columns"
+    elif blocking_events:
+        message = "Fleet sync dropped or failed to store incoming columns"
+    elif added_count:
+        message = "Fleet sync auto-healed schema drift"
+    else:
+        message = "Network schema has required dashboard columns"
+
+    return _health_status(
+        "degraded" if missing_cols or blocking_events else "healthy",
+        message,
+        missing_columns=missing_cols,
+        drift_events=events,
+        drift_blocking_count=len(blocking_events),
+        drift_added_count=added_count,
+    )
+
+
+def _blindness_db_paths():
+    """DB candidates that may contain the canonical blindness ledger."""
+    root = Path(__file__).resolve().parents[3]
+    candidates = [
+        os.getenv("MCP_FLEET_DB", ""),
+        os.getenv("CC_DB_PATH", ""),
+        "server/fleet.db",
+        "data/fleet.db",
+        "data/fleet_cache.db",
+        str(root / "server" / "fleet.db"),
+        str(root / "data" / "fleet.db"),
+        str(root / "data" / "fleet_cache.db"),
+    ]
+    try:
+        from amoskys.mcp.config import cfg as mcp_cfg
+
+        candidates.insert(0, mcp_cfg.fleet_db)
+    except Exception:
+        pass
+
+    resolved = []
+    seen = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if not path.is_absolute():
+            path = root / path
+        key = str(path.resolve(strict=False))
+        if key not in seen and path.exists():
+            seen.add(key)
+            resolved.append(path)
+    return resolved
+
+
+def _collect_blindness_health(store=None, hours=24, device_id=None):
+    """Read active blindness events across dashboard and command ledgers."""
+    cutoff = time.time() - max(int(hours or 24), 1) * 3600
+    events_by_key = {}
+
+    def add_events(events, db_source):
+        for event in events:
+            event = dict(event)
+            event["db_source"] = db_source
+            key = event.get("event_key") or (
+                f"{db_source}:{event.get('sensor')}:{event.get('kind')}:"
+                f"{event.get('device_id')}:{event.get('last_seen')}"
+            )
+            existing = events_by_key.get(key)
+            if not existing or float(event.get("last_seen") or 0) > float(
+                existing.get("last_seen") or 0
+            ):
+                events_by_key[key] = event
+
+    if store is not None and getattr(store, "db", None) is not None:
+        add_events(
+            list_blindness_events(
+                store.db,
+                since=cutoff,
+                device_id=device_id,
+                limit=50,
+            ),
+            "telemetry_store",
+        )
+
+    for path in _blindness_db_paths():
+        try:
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+            conn.row_factory = sqlite3.Row
+            try:
+                add_events(
+                    list_blindness_events(
+                        conn,
+                        since=cutoff,
+                        device_id=device_id,
+                        limit=50,
+                    ),
+                    str(path),
+                )
+            finally:
+                conn.close()
+        except Exception:
+            continue
+
+    esf_event = inspect_esf_authorization(device_id=device_id)
+    if esf_event:
+        add_events([esf_event], "local_esf_authorization_probe")
+
+    events = sorted(
+        events_by_key.values(),
+        key=lambda event: float(event.get("last_seen") or 0),
+        reverse=True,
+    )[:50]
+    summary = summarize_blindness_events(events)
+    summary.update(
+        {
+            "checked_at": time.time(),
+            "hours": hours,
+            "device_id": device_id,
+        }
+    )
+    return summary
 
 
 def _flatten_incident_timeline_entries(entries):
@@ -369,7 +707,9 @@ def dns_top_domains():
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
     device_id = request.args.get("device_id") or None
-    return jsonify(store.get_dns_top_domains(hours, min(limit, 100), device_id=device_id))
+    return jsonify(
+        store.get_dns_top_domains(hours, min(limit, 100), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/dns/dga")
@@ -385,7 +725,9 @@ def dns_dga():
     limit = request.args.get("limit", 50, type=int)
     device_id = request.args.get("device_id") or None
     return jsonify(
-        store.get_dns_dga_suspects(hours, min_score, min(limit, 200), device_id=device_id)
+        store.get_dns_dga_suspects(
+            hours, min_score, min(limit, 200), device_id=device_id
+        )
     )
 
 
@@ -446,10 +788,210 @@ def network_flow_stats():
     """Network flow summary."""
     store = _get_store()
     if not store:
-        return jsonify({"total_flows": 0})
+        # Was a bare {"total_flows": 0}. The Network Intelligence page turns
+        # that into "No network flows recorded from <device> in the past 24
+        # hours" — i.e. an unreachable telemetry store was reported to the
+        # operator as a clean network. Say "unavailable" so the UI can show
+        # the visibility gap instead of a false all-clear.
+        return jsonify(
+            {
+                "available": False,
+                "error": "telemetry_store_unavailable",
+                "total_flows": 0,
+            }
+        )
     hours = request.args.get("hours", 24, type=int)
     device_id = request.args.get("device_id") or None
     return jsonify(store.get_flow_stats(hours, device_id=device_id))
+
+
+@dashboard_bp.route("/api/network/visibility-health")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_visibility_health():
+    """Health contract behind the Network Intelligence clean/unknown verdict."""
+    store = _get_store()
+    hours = request.args.get("hours", 24, type=int)
+    device_id = request.args.get("device_id") or None
+    blindness = _collect_blindness_health(store, hours, device_id)
+    if not store:
+        return jsonify(
+            {
+                "overall": "degraded",
+                "sensor": _health_status("degraded", _MSG_DB_UNAVAILABLE),
+                "schema": _health_status(
+                    "unknown",
+                    "flow_events schema could not be inspected",
+                    missing_columns=sorted(_NETWORK_SCHEMA_COLUMNS),
+                ),
+                "geoip": _coverage_status("GeoIP", 0, 0),
+                "asn": _coverage_status("ASN", 0, 0),
+                "threat_intel": _threat_intel_health(),
+                "blindness": blindness,
+                "quality": {},
+            }
+        )
+
+    cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+    cols = _table_columns(store.db, "flow_events")
+    missing_cols = sorted(_NETWORK_SCHEMA_COLUMNS - cols)
+    schema = _schema_health(store.db, missing_cols, hours)
+
+    if "timestamp_ns" not in cols:
+        return jsonify(
+            {
+                "overall": "degraded",
+                "sensor": _health_status(
+                    "degraded", "flow_events has no timestamp_ns column"
+                ),
+                "schema": schema,
+                "geoip": _coverage_status("GeoIP", 0, 0),
+                "asn": _coverage_status("ASN", 0, 0),
+                "threat_intel": _threat_intel_health(),
+                "blindness": blindness,
+                "quality": {},
+            }
+        )
+
+    where = "timestamp_ns > ?"
+    params = [cutoff_ns]
+    if device_id and "device_id" in cols:
+        where += " AND device_id = ?"
+        params.append(device_id)
+
+    def scalar(sql, values=None):
+        try:
+            row = store.db.execute(sql, values or ()).fetchone()
+            return row[0] if row else None
+        except Exception:
+            return None
+
+    total = int(scalar(f"SELECT COUNT(*) FROM flow_events WHERE {where}", params) or 0)
+    latest_ns = scalar(
+        f"SELECT MAX(timestamp_ns) FROM flow_events WHERE {where}", params
+    )
+    latest_age_s = None
+    if latest_ns:
+        latest_age_s = max(0.0, round(time.time() - (int(latest_ns) / 1e9), 1))
+
+    if total <= 0:
+        sensor = _health_status(
+            "unknown",
+            "No network flows in the selected window",
+            total_flows=0,
+            latest_ns=latest_ns,
+            latest_age_s=latest_age_s,
+        )
+    elif latest_age_s is not None and latest_age_s <= 600:
+        sensor = _health_status(
+            "healthy",
+            "Network telemetry is fresh",
+            total_flows=total,
+            latest_ns=latest_ns,
+            latest_age_s=latest_age_s,
+        )
+    else:
+        sensor = _health_status(
+            "degraded",
+            "Network telemetry is stale",
+            total_flows=total,
+            latest_ns=latest_ns,
+            latest_age_s=latest_age_s,
+        )
+
+    geo_count = 0
+    if {"geo_dst_country", "geo_dst_latitude"} & cols:
+        geo_parts = []
+        if "geo_dst_country" in cols:
+            geo_parts.append("(geo_dst_country IS NOT NULL AND geo_dst_country != '')")
+        if "geo_dst_latitude" in cols:
+            geo_parts.append("(geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0)")
+        geo_count = int(
+            scalar(
+                f"SELECT COUNT(*) FROM flow_events WHERE {where} AND ({' OR '.join(geo_parts)})",
+                params,
+            )
+            or 0
+        )
+
+    asn_count = 0
+    if "asn_dst_org" in cols:
+        asn_count = int(
+            scalar(
+                f"SELECT COUNT(*) FROM flow_events WHERE {where} "
+                "AND asn_dst_org IS NOT NULL AND asn_dst_org != ''",
+                params,
+            )
+            or 0
+        )
+
+    quality = {}
+    if "quality_state" in cols:
+        try:
+            rows = store.db.execute(
+                f"SELECT COALESCE(quality_state, 'valid'), COUNT(*) "
+                f"FROM flow_events WHERE {where} GROUP BY 1",
+                params,
+            ).fetchall()
+            quality = {str(r[0] or "valid"): int(r[1] or 0) for r in rows}
+        except Exception:
+            quality = {}
+
+    agents = []
+    if "collection_agent" in cols:
+        try:
+            rows = store.db.execute(
+                f"SELECT collection_agent, COUNT(*) FROM flow_events WHERE {where} "
+                "AND collection_agent IS NOT NULL AND collection_agent != '' "
+                "GROUP BY collection_agent ORDER BY COUNT(*) DESC LIMIT 5",
+                params,
+            ).fetchall()
+            agents = [{"name": r[0], "count": int(r[1] or 0)} for r in rows]
+        except Exception:
+            agents = []
+
+    threat_intel = _threat_intel_health()
+    geoip = _coverage_status("GeoIP", total, geo_count)
+    asn = _coverage_status("ASN", total, asn_count)
+    blockers = [
+        sensor["status"] == "degraded",
+        schema["status"] == "degraded",
+        threat_intel["status"] == "degraded",
+        blindness["status"] in ("degraded", "blind", "unauthorized"),
+    ]
+    if blindness["status"] in ("blind", "unauthorized"):
+        overall = "blind"
+    else:
+        overall = (
+            "degraded" if any(blockers) else ("unknown" if total <= 0 else "healthy")
+        )
+
+    return jsonify(
+        {
+            "overall": overall,
+            "sensor": sensor,
+            "schema": schema,
+            "geoip": geoip,
+            "asn": asn,
+            "threat_intel": threat_intel,
+            "blindness": blindness,
+            "quality": quality,
+            "agents": agents,
+            "checked_at": time.time(),
+            "hours": hours,
+            "device_id": device_id,
+        }
+    )
+
+
+@dashboard_bp.route("/api/health/blindness")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def health_blindness():
+    """Canonical active blindness stream across dashboard and command ledgers."""
+    hours = request.args.get("hours", 24, type=int)
+    device_id = request.args.get("device_id") or None
+    return jsonify(_collect_blindness_health(_get_store(), hours, device_id))
 
 
 @dashboard_bp.route("/api/network/geo")
@@ -500,9 +1042,7 @@ def network_device_location():
             if data and data.get("devices"):
                 devices = data["devices"]
                 if device_id:
-                    devices = [
-                        d for d in devices if d.get("device_id") == device_id
-                    ]
+                    devices = [d for d in devices if d.get("device_id") == device_id]
                 public_ip = devices[0].get("public_ip") if devices else None
                 if public_ip:
                     geo = _geoip_lookup(public_ip)
@@ -715,7 +1255,9 @@ def network_by_process():
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
     device_id = request.args.get("device_id") or None
-    return jsonify(store.get_flow_by_process(hours, min(limit, 100), device_id=device_id))
+    return jsonify(
+        store.get_flow_by_process(hours, min(limit, 100), device_id=device_id)
+    )
 
 
 @dashboard_bp.route("/api/network/flows")
@@ -770,7 +1312,9 @@ def fim_critical():
     limit = request.args.get("limit", 100, type=int)
     device_id = request.args.get("device_id") or None
     return jsonify(
-        store.get_fim_critical_changes(hours, min_risk, min(limit, 500), device_id=device_id)
+        store.get_fim_critical_changes(
+            hours, min_risk, min(limit, 500), device_id=device_id
+        )
     )
 
 
@@ -984,5 +1528,7 @@ def observation_search():
     limit = request.args.get("limit", 100, type=int)
     device_id = request.args.get("device_id") or None
     return jsonify(
-        store.search_observations(query, domain, hours, min(limit, 500), device_id=device_id)
+        store.search_observations(
+            query, domain, hours, min(limit, 500), device_id=device_id
+        )
     )

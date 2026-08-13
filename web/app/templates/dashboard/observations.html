@@ -123,7 +123,7 @@
     <!-- Search -->
     <div class="search-bar">
         <input type="text" class="search-input" id="searchInput" placeholder="Search observation attributes...">
-        <button class="search-btn" onclick="doSearch()">Search</button>
+        <button class="search-btn" id="searchBtn">Search</button>
     </div>
 
     <!-- Table -->
@@ -162,6 +162,19 @@ const PAGE_SIZE = 50;
 let domainStats = {};
 let activityChart = null;
 
+// Observation attributes are attacker-influenced telemetry (process names,
+// URLs, log lines captured off the host). They were being pasted straight
+// into innerHTML, so a filename like <img src=x onerror=...> executed in the
+// analyst's session. Escape every interpolated value; escAttr also covers the
+// double quote for values that land inside a quoted attribute.
+function esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 async function loadStats() {
     try {
         const data = await DashboardCache.fetch('/dashboard/api/observations/stats?hours=24' + _devQ, 25);
@@ -174,10 +187,12 @@ async function loadStats() {
 function renderTabs(data) {
     const tabs = document.getElementById('domainTabs');
     const domains = Object.entries(data.by_domain || {}).sort((a, b) => b[1] - a[1]);
-    let html = `<button class="domain-tab ${!currentDomain ? 'active' : ''}" onclick="selectDomain(null)">All <span class="tab-count">${formatCount(data.total || 0)}</span></button>`;
+    // CSP: inline onclick can never be authorised by a nonce, so the domain
+    // rides on data-domain and #domainTabs' delegated listener selects it.
+    let html = `<button class="domain-tab ${!currentDomain ? 'active' : ''}">All <span class="tab-count">${formatCount(data.total || 0)}</span></button>`;
     domains.forEach(([d, count]) => {
-        const label = d.replace(/_/g, ' ');
-        html += `<button class="domain-tab ${currentDomain === d ? 'active' : ''}" onclick="selectDomain('${d}')">${label} <span class="tab-count">${formatCount(count)}</span></button>`;
+        const label = esc(d.replace(/_/g, ' '));
+        html += `<button class="domain-tab ${currentDomain === d ? 'active' : ''}" data-domain="${escAttr(d)}">${label} <span class="tab-count">${formatCount(count)}</span></button>`;
     });
     tabs.innerHTML = html;
 }
@@ -189,7 +204,7 @@ function renderStatsCards(data) {
     html += `<div class="obs-stat-card"><div class="obs-stat-value">${domains.length}</div><div class="obs-stat-label">Active Domains</div></div>`;
     const topDomain = domains[0];
     if (topDomain) {
-        html += `<div class="obs-stat-card"><div class="obs-stat-value">${formatCount(topDomain[1])}</div><div class="obs-stat-label">${topDomain[0].replace(/_/g, ' ')}</div></div>`;
+        html += `<div class="obs-stat-card"><div class="obs-stat-value">${formatCount(topDomain[1])}</div><div class="obs-stat-label">${esc(topDomain[0].replace(/_/g, ' '))}</div></div>`;
     }
     stats.innerHTML = html;
 }
@@ -237,24 +252,24 @@ function renderTable(data) {
         return;
     }
     body.innerHTML = '';
-    results.forEach((obs, idx) => {
+    results.forEach((obs) => {
         const ts = (obs.timestamp || '').replace('T', ' ').substring(0, 19);
         const domain = obs.domain || '';
         const color = DOMAIN_COLORS[domain] || '#6b7a99';
         const attrs = obs.attributes || {};
         const keys = Object.keys(attrs).slice(0, 4);
-        const pills = keys.map(k => `<span class="attr-pill">${k}: ${String(attrs[k]).substring(0, 30)}</span>`).join('');
+        const pills = keys.map(k => `<span class="attr-pill">${esc(k)}: ${esc(String(attrs[k]).substring(0, 30))}</span>`).join('');
         const risk = obs.risk_score || 0;
         const riskColor = risk > 0.7 ? 'var(--neural-danger)' : risk > 0.3 ? 'var(--neural-warning)' : risk > 0 ? 'var(--neural-success)' : 'var(--text-muted)';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="ts">${ts}</td>
-            <td><span class="domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${domain.replace(/_/g, ' ')}</span></td>
-            <td style="color:var(--text-secondary)">${obs.event_type || ''}</td>
+            <td class="ts">${esc(ts)}</td>
+            <td><span class="domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${esc(domain.replace(/_/g, ' '))}</span></td>
+            <td style="color:var(--text-secondary)">${esc(obs.event_type || '')}</td>
             <td>${pills}${Object.keys(attrs).length > 4 ? '<span class="attr-pill">+' + (Object.keys(attrs).length - 4) + '</span>' : ''}</td>
             <td style="color:${riskColor};font-weight:600">${risk > 0 ? risk.toFixed(2) : '-'}</td>
-            <td><button class="expand-btn" onclick="toggleExpand(this, ${idx})">[+]</button></td>
+            <td><button class="expand-btn">[+]</button></td>
         `;
         tr.dataset.attrs = JSON.stringify(attrs, null, 2);
         body.appendChild(tr);
@@ -264,13 +279,13 @@ function renderTable(data) {
     const pag = document.getElementById('pagination');
     const total = data.total_count || results.length;
     pag.innerHTML = `
-        <button class="page-btn" onclick="prevPage()" ${currentOffset === 0 ? 'disabled' : ''}>Previous</button>
+        <button class="page-btn" data-page="prev" ${currentOffset === 0 ? 'disabled' : ''}>Previous</button>
         <span class="page-info">${currentOffset + 1}–${Math.min(currentOffset + PAGE_SIZE, total)} of ${formatCount(total)}</span>
-        <button class="page-btn" onclick="nextPage()" ${!data.has_more ? 'disabled' : ''}>Next</button>
+        <button class="page-btn" data-page="next" ${!data.has_more ? 'disabled' : ''}>Next</button>
     `;
 }
 
-function toggleExpand(btn, idx) {
+function toggleExpand(btn) {
     const tr = btn.closest('tr');
     const next = tr.nextElementSibling;
     if (next && next.classList.contains('expanded-row')) {
@@ -280,7 +295,9 @@ function toggleExpand(btn, idx) {
     }
     const expandTr = document.createElement('tr');
     expandTr.className = 'expanded-row';
-    expandTr.innerHTML = `<td colspan="6"><div class="attr-expanded">${tr.dataset.attrs}</div></td>`;
+    // dataset.attrs is the raw attribute JSON — escape it, it is the same
+    // attacker-influenced telemetry as the pills above.
+    expandTr.innerHTML = `<td colspan="6"><div class="attr-expanded">${esc(tr.dataset.attrs)}</div></td>`;
     tr.after(expandTr);
     btn.textContent = '[-]';
 }
@@ -290,6 +307,24 @@ function nextPage() { currentOffset += PAGE_SIZE; loadObservations(); }
 function doSearch() { currentOffset = 0; loadObservations(); }
 
 document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.getElementById('searchBtn').addEventListener('click', doSearch);
+
+// Delegated: these three containers have their innerHTML replaced on every
+// refresh but the container nodes themselves survive, so one listener each
+// covers every generated button.
+document.getElementById('domainTabs').addEventListener('click', e => {
+    const btn = e.target.closest('.domain-tab');
+    if (btn) selectDomain(btn.dataset.domain || null);
+});
+document.getElementById('obsTableBody').addEventListener('click', e => {
+    const btn = e.target.closest('.expand-btn');
+    if (btn) toggleExpand(btn);
+});
+document.getElementById('pagination').addEventListener('click', e => {
+    const btn = e.target.closest('.page-btn');
+    if (!btn || btn.disabled) return;
+    if (btn.dataset.page === 'prev') prevPage(); else if (btn.dataset.page === 'next') nextPage();
+});
 
 loadStats();
 loadObservations();

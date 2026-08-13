@@ -67,6 +67,23 @@ def get_current_org_id() -> Optional[str]:
     return getattr(user, "org_id", None)
 
 
+def _wants_json_response() -> bool:
+    """True when the caller is an XHR/API client that cannot follow a redirect.
+
+    This used to be spelled ``request.path.startswith("/api/")`` at all four
+    call sites, which misses the dashboard's own XHR surface entirely: every
+    one of those routes is registered on dashboard_bp (url_prefix="/dashboard")
+    and so answers on /dashboard/api/... — 0 of them match a "/api/" prefix.
+    An expired session therefore handed a 302 to the login HTML page to
+    fetch() calls that only parse JSON, and since fetch follows redirects
+    transparently the panel saw a 200 full of HTML: the dashboard silently
+    froze on stale data instead of prompting the user to log in again.
+    Matching "/api/" anywhere in the path covers both /api/... and the
+    /dashboard/api/... and /admin/api/... blueprints.
+    """
+    return "/api/" in request.path or request.is_json
+
+
 def require_login(f):
     """
     Decorator to require authentication for a route.
@@ -110,7 +127,7 @@ def require_login(f):
             logger.debug("No session cookie found - redirecting to login")
 
             # Check if this is an API request
-            is_api_request = request.path.startswith("/api/") or request.is_json
+            is_api_request = _wants_json_response()
 
             if is_api_request:
                 return (
@@ -150,7 +167,7 @@ def require_login(f):
                     )
 
                     # Check if this is an API request
-                    is_api_request = request.path.startswith("/api/") or request.is_json
+                    is_api_request = _wants_json_response()
 
                     if is_api_request:
                         return (
@@ -201,7 +218,7 @@ def require_login(f):
             logger.error("Session validation error", error=str(e), exc_info=True)
 
             # Check if this is an API request
-            is_api_request = request.path.startswith("/api/") or request.is_json
+            is_api_request = _wants_json_response()
 
             if is_api_request:
                 return (
@@ -259,7 +276,7 @@ def require_role(role: str):
                     user_role=user.role.value,
                 )
 
-                is_api_request = request.path.startswith("/api/") or request.is_json
+                is_api_request = _wants_json_response()
 
                 if is_api_request:
                     return (

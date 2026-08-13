@@ -53,6 +53,28 @@ config = get_config()
 CERT_DIR = config.agent.cert_dir
 QUEUE_PATH = "data/queue/macos_unified_log.db"
 
+# Substrings identifying pure XPC connection-lifecycle chatter. Matched against
+# the log message only, and only to decide whether to ARCHIVE the raw entry as
+# an observation — detection probes still see every entry.
+#
+# Deliberately narrow and anchored to fixed macOS wording rather than a generic
+# "connection" match: dropping a real securityd failure would create a blind
+# spot, which is a far worse outcome than storing some noise. Anything not on
+# this list is still recorded.
+_XPC_NOISE_SUBSTRINGS = (
+    "activating connection: mach=",
+    "invalidated because the client process",
+    "invalidated because the current process cancelled the connection",
+)
+
+
+def _is_xpc_lifecycle_noise(entry) -> bool:
+    """True when a unified-log entry is XPC bookkeeping with no security value."""
+    msg = getattr(entry, "message", None)
+    if not msg:
+        return False
+    return any(s in msg for s in _XPC_NOISE_SUBSTRINGS)
+
 
 class MacOSUnifiedLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
     """macOS Unified Log Observatory agent.
@@ -168,9 +190,34 @@ class MacOSUnifiedLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
         """Run collector + probes, emit raw observations + detections."""
         snapshot = self.collector.collect()
 
-        # Build OBSERVATION events for every raw log entry
+        # Build OBSERVATION events for every raw log entry — minus pure XPC
+        # connection churn.
+        #
+        # The securityd predicate pulls in the whole lifecycle of every XPC
+        # connection on the box: "activating connection: mach=false
+        # listener=false peer=true ..." and "[0x...] invalidated because the
+        # client process (pid N) either cancelled the connection or exited".
+        # Measured on a freshly restarted store: 6,991 of 8,697 unified_log
+        # observations — 80% — were exactly these two strings. They describe
+        # macOS IPC bookkeeping, carry no security signal on their own, and at
+        # this volume they were the largest contributor to observation_events.
+        #
+        # The DETECTION probes below are unaffected: they run against the full
+        # snapshot["log_entries"], so anything a probe would have matched is
+        # still matched. This drops only the raw archival copy, which is the
+        # part that grew without bound. Filtering here rather than in the
+        # predicate keeps the probes' input complete.
+        raw_entries = snapshot.get("log_entries", [])
+        obs_entries = [e for e in raw_entries if not _is_xpc_lifecycle_noise(e)]
+        if raw_entries and len(obs_entries) < len(raw_entries):
+            logger.debug(
+                "unified_log: dropped %d/%d XPC-churn entries from observations",
+                len(raw_entries) - len(obs_entries),
+                len(raw_entries),
+            )
+
         obs_events = self._make_observation_events(
-            snapshot.get("log_entries", []),
+            obs_entries,
             domain="unified_log",
             field_mapper=self._log_entry_to_obs,
         )

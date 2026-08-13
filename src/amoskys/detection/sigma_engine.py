@@ -437,6 +437,8 @@ class SigmaEngine:
             - Simple field matching (selection: {field: value})
             - Wildcard matching (field: "*.exe")
             - List matching (field: [val1, val2])
+            - Sigma field modifiers (field|contains, |startswith, |endswith,
+              |re, |all)
             - Negation via "not" in condition
             - count() aggregation in condition
         """
@@ -448,6 +450,20 @@ class SigmaEngine:
         for name, criteria in detection.items():
             if not isinstance(criteria, dict):
                 continue
+            # Warn once per rule at load time (not per event) about modifiers
+            # we do not implement — an unrecognised modifier silently reverts
+            # to a plain match, which is how these rules went dead before.
+            for key in criteria:
+                _, mods = _split_field_modifiers(str(key))
+                for mod in mods:
+                    if mod not in _SUPPORTED_MODIFIERS:
+                        logger.warning(
+                            "Sigma: unsupported field modifier '|%s' in "
+                            "selection '%s' — matching '%s' without it",
+                            mod,
+                            name,
+                            str(key).split("|")[0],
+                        )
             matchers.append(self._build_field_matcher(name, criteria))
 
         return matchers
@@ -457,8 +473,19 @@ class SigmaEngine:
     ) -> Callable[[Dict[str, Any]], bool]:
         """Build a field matcher function from detection criteria."""
 
+        # Split "cmdline|contains" into ("cmdline", ["contains"]) ONCE, outside
+        # the closure. Before this, the modifier stayed glued to the field name
+        # and event.get("cmdline|contains") was always None, so every rule
+        # using a modifier returned False for every event: 5 of the 56 shipped
+        # rules (amoskys-cred-003, -004, -011, -012 and amoskys-de-010) could
+        # never fire. All 5 fire on their own sample events now.
+        parsed: List[Tuple[str, List[str], Any]] = [
+            (*_split_field_modifiers(str(field_name)), expected)
+            for field_name, expected in criteria.items()
+        ]
+
         def matcher(event: Dict[str, Any]) -> bool:
-            for field_name, expected in criteria.items():
+            for field_name, modifiers, expected in parsed:
                 actual = event.get(field_name)
                 # Also check nested data dict
                 if actual is None and isinstance(event.get("data"), dict):
@@ -467,7 +494,7 @@ class SigmaEngine:
                 if actual is None:
                     return False
 
-                if not _value_matches(actual, expected):
+                if not _value_matches(actual, expected, modifiers):
                     return False
             return True
 
@@ -564,9 +591,71 @@ class SigmaEngine:
 
 # ── Value Matching Helpers ───────────────────────────────────────────────────
 
+# Sigma field modifiers this engine implements. "all" is a combining modifier
+# (list means AND instead of the default OR); the rest select the comparison.
+_SUPPORTED_MODIFIERS = frozenset({"contains", "startswith", "endswith", "re", "all"})
 
-def _value_matches(actual: Any, expected: Any) -> bool:
-    """Check if actual value matches expected (with wildcards and lists)."""
+
+def _split_field_modifiers(key: str) -> Tuple[str, List[str]]:
+    """Split a Sigma detection key into (field_name, modifiers).
+
+    "cmdline|contains|all" → ("cmdline", ["contains", "all"])
+    "cmdline"              → ("cmdline", [])
+    """
+    if "|" not in key:
+        return key, []
+    parts = key.split("|")
+    return parts[0], [p.strip().lower() for p in parts[1:] if p.strip()]
+
+
+def _modifier_compare(actual_str: str, expected: Any, ops: List[str]) -> bool:
+    """Apply the comparison modifiers to one scalar expected value.
+
+    All ops must hold; in practice Sigma rules carry exactly one.
+    """
+    expected_str = str(expected).lower()
+    for op in ops:
+        if op == "contains":
+            if expected_str not in actual_str:
+                return False
+        elif op == "startswith":
+            if not actual_str.startswith(expected_str):
+                return False
+        elif op == "endswith":
+            if not actual_str.endswith(expected_str):
+                return False
+        elif op == "re":
+            try:
+                if not re.search(str(expected), actual_str, re.IGNORECASE):
+                    return False
+            except re.error:
+                return False
+    return True
+
+
+def _value_matches(
+    actual: Any, expected: Any, modifiers: Optional[List[str]] = None
+) -> bool:
+    """Check if actual value matches expected (with wildcards and lists).
+
+    `modifiers` carries the parsed Sigma field modifiers, e.g. ["contains"]
+    from "message|contains".
+    """
+    if modifiers:
+        # "all" turns the default OR over a value list into AND; every other
+        # modifier is a comparison op applied to each candidate value.
+        require_all = "all" in modifiers
+        ops = [m for m in modifiers if m in _SUPPORTED_MODIFIERS and m != "all"]
+        if ops:
+            actual_str = str(actual).lower()
+            values = expected if isinstance(expected, list) else [expected]
+            results = (_modifier_compare(actual_str, e, ops) for e in values)
+            return all(results) if require_all else any(results)
+        if require_all and isinstance(expected, list):
+            return all(_value_matches(actual, e) for e in expected)
+        # Unknown modifier only: fall through to the plain comparison below
+        # rather than failing shut, so the rule still matches on its field.
+
     if isinstance(expected, list):
         return any(_value_matches(actual, e) for e in expected)
 

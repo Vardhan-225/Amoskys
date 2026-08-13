@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import socket
 import time
 from pathlib import Path
@@ -770,6 +771,27 @@ class LogDestructionProbe(MicroProbe):
         return events
 
 
+def _is_apple_system_launch(process_name: str, exe_path: str = "") -> bool:
+    """True when this launch is a known-good Apple system binary.
+
+    Suppresses the constant relaunch chatter of Apple daemons, which is the
+    other half of the observation flood (runningboardd, mdworker_shared,
+    distnoted and friends restart continuously and were each recorded).
+
+    is_apple_system_process() requires BOTH the name and the executable path
+    to match a known profile, so a binary planted at /tmp/mdworker_shared does
+    not inherit the suppression and is still recorded. Import is local and
+    failures are non-fatal: a missing or broken allowlist must degrade to
+    "record the event", never to "drop it silently".
+    """
+    try:
+        from amoskys.agents.common.apple_allowlist import is_apple_system_process
+
+        return is_apple_system_process(process_name, exe_path).is_expected
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
 class AppLifecycleProbe(MicroProbe):
     """Real-time app launch/termination tracking for behavioral analysis."""
 
@@ -804,6 +826,13 @@ class AppLifecycleProbe(MicroProbe):
         }
     )
 
+    # Word-boundary form of the above, for matching against free-text log
+    # messages. Built once at class definition rather than per event — this
+    # runs on every line macOS emits.
+    _MSG_KEYWORD_RE = re.compile(
+        r"\b(?:" + "|".join(sorted(map(re.escape, _INTERESTING_KEYWORDS))) + r")\b"
+    )
+
     def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
@@ -816,11 +845,35 @@ class AppLifecycleProbe(MicroProbe):
             proc_lower = rt.process_name.lower()
             msg_lower = rt.details.get("message", "").lower()
 
-            # Filter: only record launches of security-interesting apps
+            # Filter: only record launches of security-interesting apps.
+            #
+            # The message is matched on WORD BOUNDARIES, not as a raw substring.
+            # The previous test was `kw in proc_lower or kw in msg_lower`, and
+            # "nc" (netcat) is a substring of "lau-nc-hd" — so every unified-log
+            # line that merely mentioned launchd matched the netcat rule. Routine
+            # runningboardd chatter such as
+            #   "Unable to obtain process properties from launchd for pid=92554"
+            # was recorded as a security-interesting app launch, at the full rate
+            # macOS emits it. That one substring produced the bulk of the
+            # 2,334,853 observation_events rows in the 23GB store that filled
+            # this disk and panicked the kernel. "nc" in "instance"/"sequence"
+            # and "pip" in "pipeline" leaked the same way.
+            #
+            # The process NAME keeps substring matching on purpose: "python3.13"
+            # should match "python" and "iTerm2" should match "iterm". Names are
+            # a small controlled string, not attacker- or OS-authored prose.
             is_interesting = any(
-                kw in proc_lower or kw in msg_lower for kw in self._INTERESTING_KEYWORDS
-            )
+                kw in proc_lower for kw in self._INTERESTING_KEYWORDS
+            ) or bool(msg_lower and self._MSG_KEYWORD_RE.search(msg_lower))
             if not is_interesting:
+                continue
+
+            # Second layer: never record a launch of a known-good Apple system
+            # binary, verified on name AND executable path so a planted
+            # /tmp/mdworker_shared is still recorded. Apple daemons relaunch
+            # constantly and are the other half of the observation flood.
+            exe_path = rt.details.get("exe", "") or rt.details.get("exe_path", "")
+            if _is_apple_system_launch(rt.process_name, exe_path):
                 continue
 
             events.append(

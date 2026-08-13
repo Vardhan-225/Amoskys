@@ -413,6 +413,13 @@ def overview_data():
         # to only those device_ids.  Admins see all devices.
         cc_devices = []
         allowed_device_ids: list[str] = []
+        # An empty cc_devices used to mean two completely different things —
+        # "the fleet really has no devices" and "we never reached the command
+        # center" — and both produced total_devices=0. Track which one it was,
+        # mirroring the available:true/false contract on
+        # _ts_domain_queries.get_flow_stats() and network_flow_stats().
+        ops_reachable = False
+        ops_error = None
 
         # Always call command center for device list (we need it for
         # both the device cards AND the device_id isolation filter)
@@ -430,8 +437,16 @@ def overview_data():
             with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
                 cc_data = json.loads(rsp.read())
             cc_devices = cc_data.get("devices", [])
+            ops_reachable = True
         except Exception as e:
-            logger.debug("Failed to get fleet status from command center: %s", e)
+            # WARNING, not debug: the web app configures logging at
+            # LOG_LEVEL=INFO (web/app/__init__.py), so this was discarded
+            # before it reached a handler and the outage left no trace
+            # anywhere — not in the logs, not on the page.
+            ops_error = str(e)
+            logger.warning(
+                "Failed to get fleet status from command center: %s", ops_error
+            )
 
         # Build allowed device_id list
         if cc_devices:
@@ -690,6 +705,38 @@ def overview_data():
         # ── Compute fleet posture ──
         posture = _compute_posture(critical, high)
 
+        if not ops_reachable:
+            # This is the fail-open the whole page hinges on. With the command
+            # center down the fetch above raised and cc_devices stayed [], so
+            # total=0 and online=0. For every org-scoped user evt_dev_clause is
+            # then pinned to device_id='__none__', which zeroes the event
+            # counts too: measured against a cache holding 3 'malicious' rows,
+            # the endpoint still returned last_24h critical=0. Feeding (0, 0)
+            # to _compute_posture() returns score 0 / "All Clear" / green — the
+            # operator was told the fleet was safe *because nothing could be
+            # seen*. An EDR reporting all-clear out of blindness is the worst
+            # failure direction there is, so never render the green badge on
+            # this path. (An admin with no org selected does keep counting
+            # cached events — same 3 rows came back critical=3 / "Needs
+            # Attention" — which is exactly why the override below touches
+            # only the green label and can never downgrade a real verdict.)
+            needs_attention.insert(
+                0,
+                {
+                    "severity": "high",
+                    "text": "Ops server unreachable — fleet status is unknown, "
+                    "not clear",
+                    "action": "Check connectivity to the command center",
+                    "link": "/dashboard/system",
+                },
+            )
+            if posture["label"] == "All Clear":
+                posture = {
+                    "score": 35,
+                    "label": "Visibility Lost",
+                    "color": "#ffb038",
+                }
+
         db.close()
 
         return jsonify(
@@ -697,6 +744,11 @@ def overview_data():
                 "available": True,
                 "posture": posture,
                 "fleet": {
+                    # Distinguish "no devices" from "could not ask" — every
+                    # count below is 0 in both cases.
+                    "available": ops_reachable,
+                    "error": None if ops_reachable else "ops_server_unreachable",
+                    "detail": ops_error,
                     "total_devices": total,
                     "online": online,
                     "offline": total - online,
@@ -753,7 +805,20 @@ def investigation_context(incident_id):
     # 1. Get incident
     incident = store.get_incident(incident_id)
     if not incident:
-        return jsonify({"status": "error", "message": "Incident not found"}), 404
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "code": "not_found",
+                    "message": (
+                        f"Incident #{incident_id} is not in this tier's incident "
+                        "data. Correlated incidents sync from the ops brain; "
+                        "resolved incidents may have been pruned."
+                    ),
+                }
+            ),
+            404,
+        )
 
     result: dict = {
         "status": "success",
@@ -861,7 +926,7 @@ def investigation_context(incident_id):
 
     # 5. Extract MITRE techniques
     techniques = set()
-    for field in ("tactics", "techniques"):
+    for field in ("tactics", "techniques", "mitre_techniques"):
         val = incident.get(field)
         if val:
             try:

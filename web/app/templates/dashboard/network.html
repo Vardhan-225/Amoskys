@@ -51,6 +51,57 @@
     .net-nlp p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; margin: 0; }
     .net-nlp strong { color: var(--neural-primary); }
     .net-nlp .warn-text { color: var(--neural-danger); }
+    .net-nlp .unknown-text { color: var(--neural-warning); }
+
+    .visibility-card {
+        background: rgba(5,8,22,0.78);
+        border: 1px solid rgba(0,217,255,0.18);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+    }
+    .visibility-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 1rem; margin-bottom: 0.8rem;
+    }
+    .visibility-title {
+        color: var(--text-primary); font-size: 0.9rem; font-weight: 700;
+    }
+    .visibility-verdict {
+        border-radius: 999px; padding: 0.18rem 0.65rem;
+        font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .vh-healthy {
+        background: rgba(0,255,136,0.14); color: #00ff88;
+        border: 1px solid rgba(0,255,136,0.25);
+    }
+    .vh-degraded {
+        background: rgba(255,170,0,0.14); color: #ffaa00;
+        border: 1px solid rgba(255,170,0,0.25);
+    }
+    .vh-blind {
+        background: rgba(255,55,95,0.16); color: #ff375f;
+        border: 1px solid rgba(255,55,95,0.32);
+    }
+    .vh-unknown {
+        background: rgba(255,255,255,0.08); color: var(--text-muted);
+        border: 1px solid rgba(255,255,255,0.12);
+    }
+    .visibility-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem;
+    }
+    .visibility-item {
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 8px; padding: 0.7rem;
+    }
+    .visibility-label {
+        color: var(--text-muted); font-size: 0.66rem; text-transform: uppercase;
+        letter-spacing: 0.05em; margin-bottom: 0.25rem;
+    }
+    .visibility-value {
+        color: var(--text-secondary); font-size: 0.78rem; line-height: 1.35;
+    }
 
     .section-title {
         font-size: 1.1rem; font-weight: 600; color: var(--neural-primary);
@@ -197,9 +248,11 @@
     @media (max-width: 1024px) {
         .net-stats-grid { grid-template-columns: repeat(3, 1fr); }
         .net-two-col { grid-template-columns: 1fr; }
+        .visibility-grid { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 640px) {
         .net-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .visibility-grid { grid-template-columns: 1fr; }
     }
 </style>
 
@@ -256,6 +309,44 @@
     <!-- Natural Language Summary -->
     <div class="net-nlp" id="net-nlp">
         <p><span class="skeleton" style="display:inline-block;height:1rem;width:80%;">&nbsp;</span></p>
+    </div>
+
+    <!-- Visibility Health -->
+    <div class="visibility-card" id="visibility-card">
+        <div class="visibility-head">
+            <div class="visibility-title">Visibility Health</div>
+            <div class="visibility-verdict vh-unknown" id="visibility-overall">Checking</div>
+        </div>
+        <div class="visibility-grid">
+            <div class="visibility-item">
+                <div class="visibility-label">Network Sensor</div>
+                <div class="visibility-value" id="vh-sensor">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">Threat Intel</div>
+                <div class="visibility-value" id="vh-intel">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">Pipeline Schema</div>
+                <div class="visibility-value" id="vh-schema">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">Blindness Events</div>
+                <div class="visibility-value" id="vh-blindness">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">GeoIP Coverage</div>
+                <div class="visibility-value" id="vh-geo">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">ASN Coverage</div>
+                <div class="visibility-value" id="vh-asn">Checking...</div>
+            </div>
+            <div class="visibility-item">
+                <div class="visibility-label">Quality</div>
+                <div class="visibility-value" id="vh-quality">Checking...</div>
+            </div>
+        </div>
     </div>
 
     <!-- Globe Threat Map -->
@@ -379,6 +470,7 @@
     let deviceCity = '', deviceOrg = '', deviceName = '';
     let selectedHours = 24;
     let activePoller = null;
+    let visibilityHealth = null;
 
     /* ── Helpers ── */
 
@@ -409,6 +501,86 @@
             case 'asn-isp':         return '#00d9ff';
             default:                return '#6b7a99';
         }
+    }
+
+    function healthClass(status) {
+        if (status === 'healthy') return 'vh-healthy';
+        if (status === 'degraded') return 'vh-degraded';
+        if (status === 'blind' || status === 'unauthorized') return 'vh-blind';
+        return 'vh-unknown';
+    }
+
+    function statusWord(status) {
+        if (status === 'healthy') return 'Healthy';
+        if (status === 'degraded') return 'Degraded';
+        if (status === 'blind') return 'Blind';
+        if (status === 'unauthorized') return 'Unauthorized';
+        return 'Unknown';
+    }
+
+    function ageLabel(seconds) {
+        if (seconds === null || seconds === undefined) return 'no recent flow';
+        if (seconds < 60) return Math.round(seconds) + 's ago';
+        if (seconds < 3600) return Math.round(seconds / 60) + 'm ago';
+        return Math.round(seconds / 3600) + 'h ago';
+    }
+
+    function coverageLabel(section) {
+        if (!section || section.coverage_pct === undefined || section.coverage_pct === null) {
+            return section && section.message ? section.message : 'Unknown';
+        }
+        return section.coverage_pct + '% covered (' +
+            formatNumber(section.covered || 0) + '/' + formatNumber(section.total || 0) + ' flows)';
+    }
+
+    function setHealthValue(id, status, text) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text;
+        el.className = 'visibility-value ' + healthClass(status);
+    }
+
+    function showVisibilityLoading() {
+        const overall = document.getElementById('visibility-overall');
+        overall.textContent = 'Checking';
+        overall.className = 'visibility-verdict vh-unknown';
+        ['vh-sensor', 'vh-intel', 'vh-schema', 'vh-blindness', 'vh-geo', 'vh-asn', 'vh-quality'].forEach(id => {
+            setHealthValue(id, 'unknown', 'Checking...');
+        });
+    }
+
+    function noThreatCopy() {
+        if (!visibilityHealth) {
+            return ' No connections were flagged by threat intelligence. Visibility health is still loading.';
+        }
+        const intel = visibilityHealth.threat_intel || {};
+        const sensor = visibilityHealth.sensor || {};
+        const schema = visibilityHealth.schema || {};
+        const blindness = visibilityHealth.blindness || {};
+        if (intel.status === 'healthy' && sensor.status === 'healthy' && schema.status === 'healthy' && blindness.status === 'healthy') {
+            const indicators = intel.indicators || 0;
+            return ' No connections were flagged by threat intelligence. Intel feed healthy: <strong>' +
+                formatNumber(indicators) + ' indicators</strong>; network telemetry is current.';
+        }
+        const reasons = [];
+        if (intel.status !== 'healthy') reasons.push('threat intel ' + (intel.status || 'unknown'));
+        if (sensor.status !== 'healthy') reasons.push('network telemetry ' + (sensor.status || 'unknown'));
+        if (schema.status !== 'healthy') reasons.push('pipeline schema ' + (schema.status || 'unknown'));
+        if (blindness.status !== 'healthy') reasons.push('blindness ' + (blindness.status || 'unknown'));
+        return ' <strong class="unknown-text">No threat-intel matches, but ' +
+            escHtml(reasons.join(', ') || 'visibility health is unknown') +
+            '. Do not treat this as clean yet.</strong>';
+    }
+
+    function noSuspiciousCopy() {
+        if (!visibilityHealth) {
+            return 'No suspicious connections detected. Visibility health is still loading.';
+        }
+        if (visibilityHealth.overall === 'healthy') {
+            return 'No suspicious connections detected. Visibility inputs are healthy for this window.';
+        }
+        return 'No suspicious connections detected, but visibility is ' +
+            escHtml(visibilityHealth.overall || 'unknown') + '. Treat this as unknown, not clean.';
     }
 
     /* ── Device location + name ── */
@@ -442,6 +614,21 @@
 
     function onStats(d) {
         _lastStatsData = d;
+
+        // When the stats query failed, render em-dashes rather than zeros.
+        // A tile reading "0 THREAT INTEL HITS" is a measurement claim; showing
+        // it for an unanswered query asserts something the backend never
+        // established. "—" says "unknown", which is the truth.
+        if (d && d.available === false) {
+            ['stat-flows', 'stat-dsts', 'stat-countries', 'stat-bytes', 'stat-threats']
+                .forEach(function (id) {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = '—'; el.title = 'Data unavailable — query failed'; }
+                });
+            buildNlpSummary(d);
+            return;
+        }
+
         document.getElementById('stat-flows').textContent = formatNumber(d.total_flows || 0);
         document.getElementById('stat-dsts').textContent = formatNumber(d.unique_destinations || 0);
         document.getElementById('stat-countries').textContent = d.countries_reached || 0;
@@ -451,8 +638,83 @@
         buildNlpSummary(d);
     }
 
+    function onVisibilityHealth(d) {
+        visibilityHealth = d || {};
+        const overallStatus = visibilityHealth.overall || 'unknown';
+        const overall = document.getElementById('visibility-overall');
+        overall.textContent = statusWord(overallStatus);
+        overall.className = 'visibility-verdict ' + healthClass(overallStatus);
+
+        const sensor = visibilityHealth.sensor || {};
+        setHealthValue(
+            'vh-sensor',
+            sensor.status,
+            (sensor.message || 'Unknown') +
+                (sensor.latest_age_s !== undefined && sensor.latest_age_s !== null ? ' - latest ' + ageLabel(sensor.latest_age_s) : '')
+        );
+
+        const intel = visibilityHealth.threat_intel || {};
+        const intelAge = intel.age_days !== undefined && intel.age_days !== null
+            ? ' - ' + intel.age_days + 'd old'
+            : '';
+        setHealthValue('vh-intel', intel.status,
+            (intel.message || 'Unknown') +
+            (intel.indicators !== undefined ? ' - ' + formatNumber(intel.indicators || 0) + ' indicators' : '') +
+            intelAge);
+
+        const schema = visibilityHealth.schema || {};
+        const missing = schema.missing_columns || [];
+        const driftBlocking = schema.drift_blocking_count || 0;
+        const driftAdded = schema.drift_added_count || 0;
+        let schemaText = schema.message || 'Complete';
+        if (driftBlocking) {
+            schemaText = 'Drift: ' + driftBlocking + ' dropped/failed';
+        } else if (missing.length) {
+            schemaText = 'Missing: ' + missing.slice(0, 4).join(', ') + (missing.length > 4 ? ' +' + (missing.length - 4) : '');
+        } else if (driftAdded) {
+            schemaText = 'Auto-healed ' + driftAdded + ' column' + (driftAdded === 1 ? '' : 's');
+        }
+        setHealthValue('vh-schema', schema.status, schemaText);
+
+        const blindness = visibilityHealth.blindness || {};
+        const blindCount = blindness.active_count || 0;
+        const blindText = blindCount
+            ? blindCount + ' active - ' + (blindness.message || 'investigate coverage')
+            : (blindness.message || 'No active blindness events');
+        setHealthValue('vh-blindness', blindness.status, blindText);
+
+        setHealthValue('vh-geo', visibilityHealth.geoip && visibilityHealth.geoip.status, coverageLabel(visibilityHealth.geoip));
+        setHealthValue('vh-asn', visibilityHealth.asn && visibilityHealth.asn.status, coverageLabel(visibilityHealth.asn));
+
+        const quality = visibilityHealth.quality || {};
+        const qualityKeys = Object.keys(quality).sort();
+        const qualityText = qualityKeys.length
+            ? qualityKeys.map(k => k + ': ' + formatNumber(quality[k])).join(' / ')
+            : 'No quality labels';
+        const qualityStatus = (quality.degraded || quality.invalid || quality.quarantined) ? 'degraded' : (qualityKeys.length ? 'healthy' : 'unknown');
+        setHealthValue('vh-quality', qualityStatus, qualityText);
+
+        if (_lastStatsData) buildNlpSummary(_lastStatsData);
+        if (allDestinations.length) renderSuspicious(allDestinations);
+    }
+
     function buildNlpSummary(d) {
         const nlp = document.getElementById('net-nlp');
+
+        // A failed stats query and a genuinely quiet endpoint both arrive here
+        // as total_flows === 0. Reporting the second wording for the first case
+        // tells the operator "nothing happened" when the truth is "I could not
+        // look" — the one direction an EDR must never fail in. The API now sets
+        // available:false when the telemetry store is unreachable or the query
+        // errored, so surface that as a visibility gap instead of an all-clear.
+        if (d && d.available === false) {
+            nlp.innerHTML = '<p><strong class="warn-text">Network visibility unavailable.</strong> ' +
+                'This is <em>not</em> a report that no traffic occurred &mdash; the flow data could not be read' +
+                (d.error ? ' (' + escHtml(String(d.error)) + ')' : '') +
+                '. Treat this endpoint as unmonitored for the selected window until it resolves.</p>';
+            return;
+        }
+
         const flows = d.total_flows || 0;
         const dsts = d.unique_destinations || 0;
         const countries = d.countries_reached || 0;
@@ -488,7 +750,7 @@
                 ' connection' + (threats > 1 ? 's' : '') +
                 ' flagged by threat intelligence</strong> — review the Suspicious Connections panel below for details.');
         } else {
-            parts.push(' No connections were flagged by threat intelligence — traffic appears clean.');
+            parts.push(noThreatCopy());
         }
 
         nlp.innerHTML = '<p>' + parts.join('') + '</p>';
@@ -869,7 +1131,7 @@
         );
 
         if (suspicious.length === 0) {
-            panel.innerHTML = '<div class="susp-empty">No suspicious connections detected. All traffic appears clean.</div>';
+            panel.innerHTML = '<div class="susp-empty">' + noSuspiciousCopy() + '</div>';
             return;
         }
 
@@ -949,6 +1211,7 @@
     function buildPollerConfigs(hours) {
         return [
             { url: `/dashboard/api/network/stats?hours=${hours}` + _devQ, callback: onStats, priority: 'high', ttl: 25 },
+            { url: `/dashboard/api/network/visibility-health?hours=${hours}` + _devQ, callback: onVisibilityHealth, priority: 'high', ttl: 25 },
             { url: `/dashboard/api/network/geo?hours=${hours}` + _devQ, callback: onGeo, priority: 'low', ttl: 55 },
             { url: `/dashboard/api/network/asn?hours=${hours}` + _devQ, callback: onAsn, priority: 'low', ttl: 55 },
             { url: `/dashboard/api/network/geo-points?hours=${hours}&limit=500` + _devQ, callback: onGeoPoints, priority: 'low', ttl: 55 },
@@ -981,6 +1244,8 @@
         processLoaded = false;
         destinationsLoaded = false;
         geoPointsCache = [];
+        visibilityHealth = null;
+        showVisibilityLoading();
 
         // Clear globe arcs while reloading
         if (globe) {
