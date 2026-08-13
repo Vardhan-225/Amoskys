@@ -37,6 +37,46 @@ from amoskys.storage._ts_signals import SignalMixin
 logger = logging.getLogger("TelemetryStore")
 
 
+class _RepeatSuppressFilter(logging.Filter):
+    """Collapse identical repeated records into one line plus a periodic tally.
+
+    A stuck condition here is emitted once per event, so a lock storm wrote
+    21.5M identical "database is locked" lines into a 2.1GB log and filled
+    the volume — which took the collector offline. Storage failures must not
+    be able to consume the storage they are reporting on.
+    """
+
+    def __init__(self, window_seconds: float = 60.0, burst: int = 5):
+        super().__init__()
+        self._window = window_seconds
+        self._burst = burst
+        self._seen: dict = {}
+        self._lock = threading.Lock()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno < logging.WARNING:
+            return True
+        key = (record.name, record.levelno, record.msg)
+        now = time.monotonic()
+        with self._lock:
+            count, window_start = self._seen.get(key, (0, now))
+            elapsed = now - window_start
+            if elapsed >= self._window:
+                self._seen[key] = (1, now)
+                dropped = max(0, count - self._burst)
+                if dropped:
+                    record.msg = (
+                        f"{record.msg}  [+{dropped} identical suppressed "
+                        f"in {int(elapsed)}s]"
+                    )
+                return True
+            self._seen[key] = (count + 1, window_start)
+            return count < self._burst
+
+
+logger.addFilter(_RepeatSuppressFilter())
+
+
 class TelemetryStore(
     SchemaMixin,
     InsertMixin,
@@ -49,7 +89,60 @@ class TelemetryStore(
 ):
     """Permanent storage for processed telemetry data"""
 
+    # ── One store per (resolved path, mode), per process ────────────────────
+    # Measured on the live analyzer: `lsof data/telemetry.db` showed PID 71235
+    # holding FOUR read-write fds (3u, 6u, 28u, 37u) to the same file, because
+    # analyzer_main.py:367 and wal_processor.py:91 each construct their own
+    # TelemetryStore — each with its own connection AND its own threading.Lock.
+    # Two independent locks guarding one file is not mutual exclusion, so the
+    # analyzer was contending with *itself*: a WALProcessor batch and an
+    # analyzer write could interleave mid-transaction. This is a large part of
+    # the 698,015 "database is locked" errors the codebase records, every one
+    # of which discarded an event.
+    #
+    # Interning on (realpath, readonly) collapses them to one object, one
+    # connection, one lock — without touching a single call site. The realpath
+    # matters: "data/telemetry.db" and an absolute path to the same file must
+    # not produce two stores. readonly is part of the key because a read-only
+    # handle is a genuinely different object and must not be handed to a writer.
+    #
+    # Escape hatch for rollback / tests: AMOSKYS_STORE_SINGLETON=0.
+    _instances: dict = {}
+    _instances_lock = threading.Lock()
+
+    def __new__(cls, db_path: str = "data/telemetry.db", readonly: bool = False):
+        if os.environ.get("AMOSKYS_STORE_SINGLETON") == "0":
+            return super().__new__(cls)
+        try:
+            key = (os.path.realpath(db_path), bool(readonly))
+        except (TypeError, ValueError):
+            return super().__new__(cls)
+        with cls._instances_lock:
+            inst = cls._instances.get(key)
+            if inst is None:
+                inst = super().__new__(cls)
+                inst._singleton_key = key
+                cls._instances[key] = inst
+            return inst
+
     def __init__(self, db_path: str = "data/telemetry.db", readonly: bool = False):
+        # __init__ runs on every construction, including the interned returns —
+        # re-running it would rebuild the connection and defeat the point.
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
+        # Monotonic count of inserts that failed with a real sqlite3.Error.
+        #
+        # This exists because insert_*() returning None is OVERLOADED: 13 sites
+        # return None after `logger.error("Failed to insert ...")` (genuine
+        # loss — the event must be retried), but 9 OTHER sites return None for
+        # deliberate suppression ("suppressed duplicate", "identical duplicate",
+        # "Not a real connection — socket inventory"). Those are correctly
+        # consumed. So the obvious ack fix — "only ack when the insert returned
+        # a rowid" — would redeliver every deduped snapshot forever, an infinite
+        # loop that looks like progress. The drain must key on THIS counter
+        # advancing, which only real write failures do.
+        self.write_failures = 0
         """Initialize telemetry store with schema
 
         Args:
@@ -159,7 +252,31 @@ class TelemetryStore(
         # Initialize database
         self.db = sqlite3.connect(db_path, check_same_thread=False, timeout=10.0)
         self.db.row_factory = sqlite3.Row
+
+        # Return deleted pages to the filesystem instead of only to SQLite's
+        # freelist. Without this, PRAGMA incremental_vacuum in cleanup_old_data()
+        # is a SILENT no-op — it does not error, it simply does nothing — so
+        # retention deletes rows and the file never shrinks. Measured on the
+        # store that filled this disk: 4,309,435 free pages, 17.7GB, 73% of a
+        # 23GB file, all already deleted and none of it returned to the OS.
+        #
+        # This MUST run before PRAGMA journal_mode=WAL, not in SCHEMA below.
+        # auto_vacuum is only settable while the database is empty, and setting
+        # journal_mode first is enough to make the change silently fail:
+        #   WAL then auto_vacuum -> auto_vacuum=0   (measured)
+        #   auto_vacuum then WAL -> auto_vacuum=2   (measured)
+        # Which is exactly why the version of this fix that lived in SCHEMA
+        # (executed at line ~215, after WAL) did nothing at all.
+        self.db.execute("PRAGMA auto_vacuum=INCREMENTAL")
+
         self.db.execute("PRAGMA journal_mode=WAL")
+        # Ceiling on the WAL file itself. wal_autocheckpoint bounds how often a
+        # checkpoint is ATTEMPTED, not how large the file may get: a passive
+        # checkpoint that loses to a busy reader leaves the log at its
+        # high-water mark, which is how this tree produced a 23GB telemetry WAL
+        # and a 10.09GB igris WAL. journal_size_limit truncates the file back to
+        # this bound after any successful checkpoint, partial ones included.
+        self.db.execute("PRAGMA journal_size_limit=268435456")  # 256MB
         self.db.execute("PRAGMA synchronous=NORMAL")  # safe with WAL, reduces fsync
         self.db.execute("PRAGMA temp_store=MEMORY")  # temp indices in RAM
         self.db.execute("PRAGMA mmap_size=268435456")  # 256MB mmap for read perf
@@ -232,9 +349,21 @@ class TelemetryStore(
         # within a 5-second window (typical WebSocket push interval).
         self._cache = _TTLCache(ttl_seconds=5.0)
 
-        # Background prewarm: keep expensive summary caches hot so users
-        # never hit a cold 1-2 s query.  Runs every 25 s (TTL is 30 s).
-        self._prewarm_thread = threading.Thread(
-            target=self._prewarm_loop, daemon=True, name="cache-prewarm"
-        )
-        self._prewarm_thread.start()
+        # Cache prewarm no longer runs on its own thread by default.
+        #
+        # _write_hourly_rollups() ends in self.db.commit() while _ts_inserts.py
+        # takes self._lock ZERO times, so a background prewarm could commit
+        # WALProcessor's open begin_batch() transaction mid-flight, splitting one
+        # logical batch into two partial ones. Interning the store (Stage 1a)
+        # made that sharper, not safer: both halves now provably share one
+        # connection. The analyzer instead calls store.prewarm_once() from its
+        # own loop, so warming is sequential with ingest rather than racing it.
+        #
+        # Set AMOSKYS_PREWARM_THREAD=1 to restore the old background thread.
+        self._prewarm_stop = threading.Event()
+        self._prewarm_thread = None
+        if os.environ.get("AMOSKYS_PREWARM_THREAD") == "1":
+            self._prewarm_thread = threading.Thread(
+                target=self._prewarm_loop, daemon=True, name="cache-prewarm"
+            )
+            self._prewarm_thread.start()

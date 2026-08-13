@@ -93,6 +93,11 @@ class WALProcessor(
         self.error_count = 0
         self.quarantine_count = 0
         self.chain_break_count = 0
+        # (source, row_id) -> consecutive drains whose writes hit a real
+        # sqlite3.Error. Rows that fail are retained rather than acked, and
+        # this bounds how long one poisoned row can sit at the head of the
+        # `ORDER BY id LIMIT 500` window before it is dead-lettered instead.
+        self._write_fail_retries: dict[tuple[str, int], int] = {}
 
         # A4.4: Enrichment pipeline (GeoIP → ASN → ThreatIntel → MITRE)
         try:
@@ -231,8 +236,12 @@ class WALProcessor(
                             row_id,
                             len(stored_cs),
                         )
-                        self._quarantine(row_id, raw, "invalid checksum size")
-                        processed_ids.append(row_id)
+                        # Ack only if the bytes actually reached the dead
+                        # letter table; a failed quarantine leaves the row in
+                        # WAL for the next cycle instead of deleting the only
+                        # copy of the event.
+                        if self._quarantine(row_id, raw, "invalid checksum size"):
+                            processed_ids.append(row_id)
                         continue
 
                     if stored_cs != expected:
@@ -240,8 +249,10 @@ class WALProcessor(
                             "CHECKSUM_MISMATCH: WAL row %d data corrupted, quarantining",
                             row_id,
                         )
-                        self._quarantine(row_id, raw, "BLAKE2b checksum mismatch")
-                        processed_ids.append(row_id)
+                        if self._quarantine(
+                            row_id, raw, "BLAKE2b checksum mismatch"
+                        ):
+                            processed_ids.append(row_id)
                         continue
 
                 # ── A2.2: Hash chain verification ──
@@ -254,10 +265,17 @@ class WALProcessor(
                             "mismatch — possible tampering, quarantining",
                             row_id,
                         )
-                        self._quarantine(row_id, raw, "hash chain signature mismatch")
                         self.chain_break_count += 1
-                        processed_ids.append(row_id)
+                        if self._quarantine(
+                            row_id, raw, "hash chain signature mismatch"
+                        ):
+                            processed_ids.append(row_id)
                         continue
+
+                # Snapshot the store's failure count BEFORE this row is
+                # processed; the ack below compares against it so the row is
+                # only DELETEd once its writes actually landed.
+                failures_before_row = self.store.write_failures
 
                 try:
                     # Parse envelope
@@ -285,15 +303,34 @@ class WALProcessor(
                     elif envelope.HasField("flow"):
                         self._process_flow_event(envelope.flow, ts_ns)
 
-                    processed_ids.append(row_id)
-                    processed += 1
+                    # Ack ONLY if no real write failure happened while this
+                    # envelope was being stored. This was previously
+                    # unconditional: the row was acked and DELETEd regardless
+                    # of whether anything reached the store, so an insert that
+                    # died on "database is locked" took the event with it.
+                    #
+                    # The check keys on store.write_failures advancing, NOT on
+                    # insert_*() returning None: None also means a deliberate
+                    # dedup suppression at 9 sites, and treating those as
+                    # failures would redeliver every deduped snapshot forever.
+                    if self.store.write_failures == failures_before_row:
+                        self._write_fail_retries.pop(("wal", row_id), None)
+                        processed_ids.append(row_id)
+                        processed += 1
+                    elif self._exhausted_write_retries(
+                        ("wal", row_id), row_id, raw, failures_before_row, "WAL"
+                    ):
+                        processed_ids.append(row_id)
 
                 except Exception as e:
                     logger.error(f"Failed to process WAL entry {row_id}: {e}")
                     self.error_count += 1
                     # ── P0-S1: Dead letter quarantine instead of silent loss ──
-                    self._quarantine(row_id, raw, str(e))
-                    processed_ids.append(row_id)
+                    # Ack only when the quarantine INSERT succeeded — a failed
+                    # quarantine must leave the row in WAL to retry, not delete
+                    # the only copy of the event.
+                    if self._quarantine(row_id, raw, str(e)):
+                        processed_ids.append(row_id)
 
             # Flush all buffered inserts with a single commit
             try:
@@ -334,7 +371,7 @@ class WALProcessor(
                 except Exception:
                     logger.debug("WAL connection close failed", exc_info=True)
 
-    def _quarantine(self, row_id: int, raw_bytes: bytes, error_msg: str) -> None:
+    def _quarantine(self, row_id: int, raw_bytes: bytes, error_msg: str) -> bool:
         """Move a failed WAL entry to the dead letter table.
 
         Preserves the original bytes for forensic analysis and replay.
@@ -344,6 +381,15 @@ class WALProcessor(
             row_id: WAL row identifier
             raw_bytes: Original envelope bytes
             error_msg: Description of failure
+
+        Returns:
+            True if the envelope reached wal_dead_letter. False means the
+            quarantine INSERT itself failed and the caller MUST NOT ack the
+            row — this returned None unconditionally before, so every caller
+            appended the row to processed_ids and DELETEd it regardless, which
+            destroyed the one copy of an unprocessable event instead of
+            retrying it. That contradicted the "stays in WAL for retry"
+            promise two lines above.
         """
         try:
             reason_code = self._classify_reason_code(error_msg)
@@ -368,8 +414,61 @@ class WALProcessor(
             )
             self.store.db.commit()
             self.quarantine_count += 1
+            return True
         except Exception as dl_err:
             logger.error(f"Failed to quarantine WAL entry {row_id}: {dl_err}")
+            return False
+
+    # A row whose writes failed is retained for retry instead of acked. Cap the
+    # retries: sqlite3.Error is usually transient (the incident that motivated
+    # this was 698,015 "database is locked" errors), but an IntegrityError from
+    # one malformed event never clears, and both drains read ORDER BY id, so a
+    # permanently-poisoned row would sit at the head of the window forever and
+    # wedge the pipeline. After this many attempts the envelope goes to
+    # wal_dead_letter, which keeps the bytes and a replay_cmd — still not loss.
+    _MAX_WRITE_FAIL_RETRIES = 3
+
+    def _exhausted_write_retries(
+        self,
+        key: tuple[str, int],
+        row_id: int,
+        raw_bytes: bytes,
+        failures_before: int,
+        source: str,
+    ) -> bool:
+        """Record a store write failure for a row; True if it may now be acked.
+
+        Returns True only after the row has been dead-lettered, so the caller
+        can delete it. False means "retain and retry on the next drain".
+        """
+        delta = self.store.write_failures - failures_before
+        attempts = self._write_fail_retries.get(key, 0) + 1
+        self._write_fail_retries[key] = attempts
+
+        if attempts < self._MAX_WRITE_FAIL_RETRIES:
+            logger.warning(
+                "Retaining %s row %s — %s store write failure(s) during store "
+                "(attempt %d/%d); will retry next drain",
+                source,
+                row_id,
+                delta,
+                attempts,
+                self._MAX_WRITE_FAIL_RETRIES,
+            )
+            return False
+
+        logger.error(
+            "%s row %s still failing to store after %d attempts (%s write "
+            "failure(s)) — dead-lettering instead of retrying forever",
+            source,
+            row_id,
+            attempts,
+            delta,
+        )
+        if self._quarantine(row_id, raw_bytes, "store write failure after retries"):
+            self._write_fail_retries.pop(key, None)
+            return True
+        return False
 
     @staticmethod
     def _classify_reason_code(error_msg: str) -> str:
@@ -454,13 +553,30 @@ class WALProcessor(
                         stopped_for_timeout = True
                         break
 
+                    # Same ack rule as process_batch: a queue row is only
+                    # deleted once its writes actually landed. Keyed on
+                    # store.write_failures advancing, not on insert_*()
+                    # returning None (None is also a deliberate dedup
+                    # suppression at 9 sites — see TelemetryStore.__init__).
+                    retry_key = (f"queue:{agent_name}", row_id)
+                    failures_before_row = self.store.write_failures
                     try:
                         dt = telemetry_pb2.DeviceTelemetry()
                         dt.ParseFromString(bytes(payload_bytes))
                         self._process_device_telemetry(
                             dt, ts_ns, f"local-queue-{agent_name}-{row_id}"
                         )
-                        processed_ids.append(row_id)
+                        if self.store.write_failures == failures_before_row:
+                            self._write_fail_retries.pop(retry_key, None)
+                            processed_ids.append(row_id)
+                        elif self._exhausted_write_retries(
+                            retry_key,
+                            row_id,
+                            bytes(payload_bytes),
+                            failures_before_row,
+                            agent_name,
+                        ):
+                            processed_ids.append(row_id)
                     except Exception as e:
                         logger.error(
                             "Failed to process queue entry %s/%d: %s",
@@ -469,12 +585,16 @@ class WALProcessor(
                             e,
                         )
                         self.error_count += 1
-                        self._quarantine(
+                        # Ack only on a SUCCESSFUL quarantine. This used to ack
+                        # unconditionally, so when the dead-letter INSERT itself
+                        # failed the unprocessable event was destroyed rather
+                        # than retried — the row is now left in the queue.
+                        if self._quarantine(
                             row_id,
                             bytes(payload_bytes),
                             str(e),
-                        )
-                        processed_ids.append(row_id)
+                        ):
+                            processed_ids.append(row_id)
 
                 # Remove processed entries from queue
                 if processed_ids:

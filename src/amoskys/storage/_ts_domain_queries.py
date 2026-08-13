@@ -206,6 +206,11 @@ class DomainQueryMixin:
                     (cutoff_ns, *dev_params),
                 ).fetchall()
                 result = {
+                    # "available" distinguishes a real measurement from a
+                    # failure. Without it every consumer sees total_flows=0 and
+                    # cannot tell "this endpoint sent no traffic" from "the
+                    # query blew up" — see the except branch below.
+                    "available": True,
                     "total_flows": row[0] or 0,
                     "unique_destinations": row[1] or 0,
                     "bytes_sent": row[2] or 0,
@@ -218,8 +223,23 @@ class DomainQueryMixin:
                 self._cache.put(cache_key, result, ttl=30)
                 return result
             except sqlite3.Error as e:
+                # Previously returned a bare {"total_flows": 0}, which the
+                # Network Intelligence page renders as the sentence "No network
+                # flows recorded from <device> in the past 24 hours" — a
+                # confident statement of fact produced by a failed query.
+                #
+                # For an EDR that is the worst possible failure direction: "I
+                # cannot see" is displayed as "there is nothing to see". Flag it
+                # instead so the UI can say the visibility is broken. The result
+                # is deliberately NOT cached, so a transient error does not
+                # pin a false all-clear for the full 30s TTL.
                 logger.error("Flow stats failed: %s", e)
-                return {"total_flows": 0}
+                return {
+                    "available": False,
+                    "error": "flow_stats_query_failed",
+                    "detail": str(e),
+                    "total_flows": 0,
+                }
 
     def get_flow_geo_stats(
         self, hours: int = 24, device_id: Optional[str] = None

@@ -242,9 +242,34 @@ class RoutingMixin:
                         }
                     )
                     return
+                # A failed insert is invisible from here: every
+                # _insert_*_observation() is `-> None` and drops the store's
+                # return value, so a row that never landed used to fall
+                # straight through to receipt_persisted() below — the ledger
+                # claimed checkpoint 4 for an event that does not exist, and
+                # the WAL/queue row was ACKed and DELETEd on top of that.
+                #
+                # Key on store.write_failures advancing instead, exactly as
+                # analyzer_main.py's drain loop does. insert_*() returning None
+                # is overloaded — 13 sites return None after a real
+                # sqlite3.Error, but 9 others return None for a deliberate
+                # dedup suppression ("suppressed duplicate", "identical
+                # duplicate") — so keying on None would re-deliver every
+                # deduped snapshot forever. write_failures is bumped only by
+                # the 13 `except sqlite3.Error` branches in _ts_inserts.py.
+                failures_before = self.store.write_failures
                 getattr(self, router)(
                     attrs, device_id, ts_ns, timestamp_dt, agent, version
                 )
+                if self.store.write_failures != failures_before:
+                    logger.error(
+                        "Observation insert failed for domain=%s (%s write "
+                        "failure(s)) — not recording persisted receipt; the "
+                        "source row is retained for retry",
+                        domain,
+                        self.store.write_failures - failures_before,
+                    )
+                    return
                 # Receipt ledger checkpoint 4: persisted to domain table
                 event_id = event.event_id
                 if event_id:

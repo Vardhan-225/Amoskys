@@ -27,9 +27,25 @@ class _ReadPool:
 
     @contextmanager
     def connection(self):
-        conn = sqlite3.connect(self._db_path, check_same_thread=False, timeout=5.0)
+        # Open genuinely read-only at the URI level, not via the advisory
+        # query_only PRAGMA. query_only is a per-connection flag any later
+        # statement can flip back off; mode=ro is enforced by the engine, so a
+        # write attempt fails with SQLITE_READONLY no matter what the caller
+        # does. This is a read pool — it must not be able to write, and until
+        # now it demonstrably could (see the checkpoint removal below).
+        #
+        # immutable=0 is explicit: the file IS being modified by the writer
+        # process, so SQLite must not assume a stable snapshot.
+        conn = sqlite3.connect(
+            f"file:{self._db_path}?mode=ro&immutable=0",
+            uri=True,
+            check_same_thread=False,
+            timeout=5.0,
+        )
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        # journal_mode is a property of the DATABASE, not the connection, and
+        # setting it needs write access — issuing it here was a no-op at best
+        # on a read-only handle. The writer establishes WAL mode.
         conn.execute("PRAGMA query_only=ON")
         conn.execute("PRAGMA cache_size=-8000")  # 8 MB
         conn.execute("PRAGMA temp_store=MEMORY")
@@ -40,16 +56,22 @@ class _ReadPool:
         finally:
             conn.close()  # Fully release — no WAL snapshot leak
 
-            # Periodic passive checkpoint every 60s
-            now = time.monotonic()
-            if now - self._last_checkpoint > 60:
-                self._last_checkpoint = now
-                try:
-                    ck = sqlite3.connect(self._db_path, timeout=2.0)
-                    ck.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                    ck.close()
-                except Exception:
-                    pass
+            # The 60s TRUNCATE checkpoint that used to live here is GONE.
+            #
+            # It opened a SECOND, read-WRITE connection (no query_only, no
+            # mode=ro) purely to checkpoint — which is why readonly=True was a
+            # lie: TelemetryStore builds a _ReadPool even in its readonly branch,
+            # so a "read-only" store still held a writable handle and issued the
+            # single most contended statement in SQLite from the reader side,
+            # against the writer.
+            #
+            # Checkpointing is now the writer's job: analyzer_main runs PASSIVE
+            # every 60s and escalates to TRUNCATE past a 256MB WAL. That
+            # compensating checkpoint had to land FIRST — wal_autocheckpoint is
+            # passive and loses to a busy writer, so deleting this without a
+            # writer-side replacement would trade a lock storm for a WAL storm
+            # on a tree that has already produced a 23GB telemetry WAL and a
+            # 10.09GB igris WAL.
 
     def close(self):
         pass  # No persistent connections to close

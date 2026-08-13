@@ -14,6 +14,13 @@ PRAGMA journal_mode=WAL;
 PRAGMA synchronous=NORMAL;
 PRAGMA cache_size=-64000;  -- 64MB cache
 
+-- NOTE: auto_vacuum is deliberately NOT set here. It is only settable while
+-- the database is empty, and this script runs after PRAGMA journal_mode=WAL,
+-- which is already enough to make the change fail silently (measured: WAL
+-- then auto_vacuum -> 0; auto_vacuum then WAL -> 2). It is therefore set in
+-- TelemetryStore.__init__ immediately after connect(), before any other
+-- pragma. Setting it here instead looks correct and reclaims nothing.
+
 -- Canonical envelope truth table (raw ingress contract events)
 CREATE TABLE IF NOT EXISTS telemetry_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

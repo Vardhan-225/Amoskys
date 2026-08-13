@@ -19,10 +19,13 @@ class RollupMixin:
 
     # ── Cache Prewarm ──
 
-    def _prewarm_loop(self) -> None:
-        """Background thread that refreshes caches + writes dashboard rollups."""
-        time.sleep(2)
-        _keys = [
+    def _build_prewarm_keys(self) -> list:
+        """The (cache_key, refresh_fn) pairs a prewarm pass refreshes.
+
+        Built lazily by prewarm_once() rather than inline in _prewarm_loop, so
+        prewarming still works now that nothing starts that loop by default.
+        """
+        return [
             ("device_posture:24", lambda: self.get_device_posture(hours=24)),
             ("nerve_posture:24", lambda: self.compute_nerve_posture(hours=24)),
             (
@@ -42,35 +45,67 @@ class RollupMixin:
                 lambda: self.get_threat_count(hours=24, min_risk=0.1),
             ),
         ]
-        _optimize_counter = 0
-        _amrdr_counter = 0
-        while True:
+
+    def _prewarm_loop(self) -> None:
+        """Legacy background-thread driver. Nothing starts this by default.
+
+        Retained so an operator can opt back into the old behaviour, but the
+        analyzer now drives prewarm_once() on its own thread instead — see the
+        docstring there for why a background thread was unsafe.
+        """
+        time.sleep(2)
+        while not self._prewarm_stop.is_set():
+            self.prewarm_once()
+            self._prewarm_stop.wait(20)
+
+    def prewarm_once(self) -> None:
+        """Run ONE prewarm pass on the CALLER's thread.
+
+        This body used to run on a daemon thread started in
+        TelemetryStore.__init__. That was unsafe in a way the lock discipline
+        hides: _write_hourly_rollups() ends in self.db.commit() (line ~172) and
+        _ts_inserts.py takes self._lock exactly ZERO times, so this thread could
+        commit WALProcessor's open begin_batch() transaction mid-flight —
+        turning one logical batch into two partial ones. Interning TelemetryStore
+        (Stage 1a) made that worse, not better, because both halves now
+        genuinely share one connection instead of accidentally having two.
+
+        So the loop no longer self-starts. The analyzer calls prewarm_once()
+        from its own thread between drains, which makes cache warming and
+        rollup writing sequential with ingest instead of racing it — the same
+        single-writer discipline applied inside the process.
+
+        Never raises: a failed prewarm must not break the analyzer loop.
+        """
+        keys = getattr(self, "_prewarm_keys", None)
+        if keys is None:
+            keys = self._build_prewarm_keys()
+            self._prewarm_keys = keys
+        try:
+            for cache_key, fn in keys:
+                self._cache.invalidate(cache_key)
+                fn()
             try:
-                for cache_key, fn in _keys:
-                    self._cache.invalidate(cache_key)
-                    fn()
-                try:
-                    self._write_hourly_rollups()
-                except Exception:
-                    logger.debug("Hourly rollup write failed", exc_info=True)
-                try:
-                    self.evaluate_auto_signals()
-                except Exception:
-                    logger.debug("Auto-signal evaluation failed", exc_info=True)
-                _amrdr_counter += 1
-                if _amrdr_counter >= 5:
-                    try:
-                        self._update_agent_trust()
-                    except Exception:
-                        logger.debug("AMRDR trust update failed", exc_info=True)
-                    _amrdr_counter = 0
-                _optimize_counter += 1
-                if _optimize_counter >= 24:
-                    self.db.execute("PRAGMA optimize")
-                    _optimize_counter = 0
+                self._write_hourly_rollups()
             except Exception:
-                logger.debug("Prewarm cycle failed, will retry", exc_info=True)
-            time.sleep(20)
+                logger.debug("Hourly rollup write failed", exc_info=True)
+            try:
+                self.evaluate_auto_signals()
+            except Exception:
+                logger.debug("Auto-signal evaluation failed", exc_info=True)
+            self._amrdr_counter = getattr(self, "_amrdr_counter", 0) + 1
+            if self._amrdr_counter >= 5:
+                try:
+                    self._update_agent_trust()
+                except Exception:
+                    logger.debug("AMRDR trust update failed", exc_info=True)
+                self._amrdr_counter = 0
+            self._optimize_counter = getattr(self, "_optimize_counter", 0) + 1
+            if self._optimize_counter >= 24:
+                self.db.execute("PRAGMA optimize")
+                self._optimize_counter = 0
+        except Exception:
+            logger.debug("Prewarm cycle failed, will retry", exc_info=True)
 
     def _write_hourly_rollups(self) -> None:
         """Compute and upsert hourly rollups into dashboard_rollups."""
@@ -173,6 +208,19 @@ class RollupMixin:
 
     # ── Observation Rollup Configuration ──────────────────────────────────
     _OBSERVATION_RAW_RETENTION_HOURS = 2
+
+    # Ceiling on how long a live investigation may hold raw observation rows
+    # past the window above. The hold used to be unbounded: any incident in
+    # ('open','investigating','contained') skipped the DELETE entirely. Nothing
+    # in this codebase ever moves an incident out of those states —
+    # create_incident() defaults to 'open' and only a human calling
+    # update_incident() can close one — while fusion/analyzer create them
+    # automatically. Live store: 1,761 incidents, every one 'open', oldest
+    # 2026-08-09, so pruning has been switched off since that day and
+    # 1,408,524 rollup-domain rows are sitting past their 2h window in a
+    # 1.6 GB telemetry.db. The hold is now scoped to incidents raised inside
+    # this cap and can never extend the window beyond it.
+    _OBSERVATION_INCIDENT_HOLD_HOURS = 24
     _ROLLUP_DOMAINS = frozenset(
         {
             "unified_log",
@@ -303,29 +351,43 @@ class RollupMixin:
                 }
             )
 
+        now = time.time()
         retention_cutoff_ns = int(
-            (time.time() - self._OBSERVATION_RAW_RETENTION_HOURS * 3600) * 1e9
+            (now - self._OBSERVATION_RAW_RETENTION_HOURS * 3600) * 1e9
         )
+        hold_epoch = now - self._OBSERVATION_INCIDENT_HOLD_HOURS * 3600
         try:
-            has_active_incidents = False
+            # A RECENT active incident widens the retention window to the hold
+            # cap. It no longer cancels the prune: an incident that nobody ever
+            # closed used to disable this DELETE forever (see
+            # _OBSERVATION_INCIDENT_HOLD_HOURS above). A failed lookup now falls
+            # through to the normal 2h cutoff rather than to "keep everything".
             try:
+                hold_since = datetime.fromtimestamp(
+                    hold_epoch, tz=timezone.utc
+                ).isoformat()
                 row = self.db.execute(
-                    "SELECT COUNT(*) FROM incidents WHERE status IN ('open','investigating','contained')"
+                    "SELECT COUNT(*) FROM incidents "
+                    "WHERE status IN ('open','investigating','contained') "
+                    "AND created_at >= ?",
+                    (hold_since,),
                 ).fetchone()
-                has_active_incidents = (row[0] or 0) > 0
+                if (row[0] or 0) > 0:
+                    retention_cutoff_ns = min(
+                        retention_cutoff_ns, int(hold_epoch * 1e9)
+                    )
             except sqlite3.Error:
                 pass
 
-            if not has_active_incidents:
-                pruned = self.db.execute(
-                    """DELETE FROM observation_events
-                       WHERE timestamp_ns < ? AND domain IN ({})""".format(
-                        ",".join(f"'{d}'" for d in self._ROLLUP_DOMAINS)
-                    ),
-                    (retention_cutoff_ns,),
-                ).rowcount
-                if pruned:
-                    logger.debug("Pruned %d old observation rows", pruned)
+            pruned = self.db.execute(
+                """DELETE FROM observation_events
+                   WHERE timestamp_ns < ? AND domain IN ({})""".format(
+                    ",".join(f"'{d}'" for d in self._ROLLUP_DOMAINS)
+                ),
+                (retention_cutoff_ns,),
+            ).rowcount
+            if pruned:
+                logger.debug("Pruned %d old observation rows", pruned)
         except sqlite3.Error:
             pass
 

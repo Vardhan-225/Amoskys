@@ -12,6 +12,39 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger("TelemetryStore")
 
 
+def _obs_raw_attributes(event_data: Dict[str, Any], attrs_json: str) -> Optional[str]:
+    """raw_attributes_json for observation_events, minus the duplicate copy.
+
+    On the *domain* tables (process/dns/security/...) raw_attributes_json is
+    real: it carries indicators that the typed columns do not, and igris,
+    inads_engine, soma_brain and shell.py all read it. Nothing here touches
+    those — they keep writing it unchanged.
+
+    observation_events is the exception. Its producers set raw_attributes_json
+    to json.dumps() of the same attributes dict already stored in `attributes`
+    (telemetry_bridge.py maps the column straight back to "attributes" for
+    exactly this reason), so every row stored its payload twice. On the
+    2,334,853-row table in the store that filled this disk, that is pure
+    duplication of the single widest column.
+
+    So: drop it only when it is byte-identical to what `attributes` already
+    holds, and keep it whenever a producer put something genuinely different
+    there. Readers use COALESCE(raw_attributes_json, attributes) or fall back
+    to "attributes", so a NULL here resolves to the same payload.
+    """
+    raw = event_data.get("raw_attributes_json")
+    if raw is None:
+        return None
+    if raw == attrs_json:
+        return None  # identical duplicate — `attributes` already has it
+    try:
+        if json.loads(raw) == json.loads(attrs_json):
+            return None  # same content, different key order/spacing
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return raw
+
+
 def _serialize_mitre(value) -> str:
     """Safely serialize mitre_techniques for SQLite storage.
 
@@ -36,7 +69,7 @@ class InsertMixin:
     def insert_telemetry_event(self, event_data: Dict[str, Any]) -> Optional[int]:
         """Insert canonical ingress envelope event into telemetry_events."""
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR REPLACE INTO telemetry_events (
                     event_id, idempotency_key, timestamp_ns, ingest_timestamp_ns,
@@ -74,6 +107,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert telemetry event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_process_event(self, event_data: dict[str, Any]) -> Optional[int]:
@@ -104,7 +138,7 @@ class InsertMixin:
                     self._commit()
                     return None  # suppressed duplicate
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR REPLACE INTO process_events (
                     timestamp_ns, timestamp_dt, device_id, pid, ppid, exe, cmdline,
@@ -157,6 +191,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert process event: %s", e)
+            self.write_failures += 1
             return None
 
     @staticmethod
@@ -258,7 +293,7 @@ class InsertMixin:
         self._extract_typed_features(event_data)
 
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO security_events (
                     timestamp_ns, timestamp_dt, device_id,
@@ -382,6 +417,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert security event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_flow_event(self, event_data: Dict[str, Any]) -> Optional[int]:
@@ -395,7 +431,7 @@ class InsertMixin:
             return None  # Not a real connection — socket inventory
 
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR IGNORE INTO flow_events (
                     timestamp_ns, timestamp_dt, device_id,
@@ -468,6 +504,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert flow event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_peripheral_event(self, event_data: Dict[str, Any]) -> Optional[int]:
@@ -496,7 +533,7 @@ class InsertMixin:
                     self._commit()
                     return None  # suppressed duplicate
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO peripheral_events (
                     timestamp_ns, timestamp_dt, device_id, peripheral_device_id,
@@ -548,12 +585,13 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert peripheral event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_dns_event(self, event_data: Dict[str, Any]) -> Optional[int]:
         """Insert a DNS event (query, DGA detection, beaconing, etc.)."""
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR IGNORE INTO dns_events (
                     timestamp_ns, timestamp_dt, device_id, domain, query_type,
@@ -609,6 +647,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert DNS event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_audit_event(self, event_data: Dict[str, Any]) -> Optional[int]:
@@ -643,7 +682,7 @@ class InsertMixin:
                         k: v for k, v in self._audit_dedup_cache.items() if v > cutoff
                     }
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO audit_events (
                     timestamp_ns, timestamp_dt, device_id, host, syscall,
@@ -699,6 +738,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert audit event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_persistence_event(self, event_data: Dict[str, Any]) -> Optional[int]:
@@ -729,13 +769,33 @@ class InsertMixin:
                 if self._check_snapshot_dedup(
                     "persistence_events", key, content_hash, timestamp_ns
                 ):
-                    # Duplicate content — just refresh the timestamp so it stays visible
+                    # Duplicate content — just refresh the timestamp so it stays
+                    # visible.
+                    #
+                    # This was "UPDATE ... LIMIT 1", which needs
+                    # SQLITE_ENABLE_UPDATE_DELETE_LIMIT. That option is NOT set
+                    # on the sqlite3 this venv ships (3.53.3; `pragma
+                    # compile_options` lists no ENABLE_UPDATE_DELETE_LIMIT), so
+                    # the statement raised `near "LIMIT": syntax error` on every
+                    # single call and the bare `except: pass` handler ate it. The
+                    # refresh has therefore NEVER run: _snapshot_baseline holds
+                    # 2,261 live persistence entries all updated seconds ago,
+                    # while 6,609 of the 8,261 persistence_events rows are >24h
+                    # old and the oldest sits at 71.0h — one hour off the 72h
+                    # cleanup_old_data() wall. Past that wall the row is deleted
+                    # and never comes back, because the baseline still matches
+                    # so the next scan dedups instead of re-inserting.
+                    # Same intent, expressed as a subselect on the primary key,
+                    # which needs no compile option.
                     try:
-                        self.db.execute(
+                        self._execute(
                             "UPDATE persistence_events SET timestamp_ns = ?, "
-                            "timestamp_dt = ? WHERE device_id = ? AND mechanism = ? "
+                            "timestamp_dt = ? WHERE id = ("
+                            "SELECT id FROM persistence_events "
+                            "WHERE device_id = ? AND mechanism = ? "
                             "AND (entry_id = ? OR path = ?) "
-                            "AND content_hash = ? LIMIT 1",
+                            "AND content_hash = ? "
+                            "ORDER BY timestamp_ns DESC LIMIT 1)",
                             (
                                 timestamp_ns,
                                 event_data.get(
@@ -750,11 +810,16 @@ class InsertMixin:
                             ),
                         )
                     except Exception:
-                        pass  # UPDATE best-effort; don't break the pipeline
+                        # Best-effort; don't break the pipeline. Logged, not
+                        # swallowed silently — a silent `pass` is what hid the
+                        # syntax error above for the life of this database.
+                        logger.debug(
+                            "Persistence timestamp refresh failed", exc_info=True
+                        )
                     self._commit()
                     return None  # still deduped, but timestamp refreshed
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO persistence_events (
                     timestamp_ns, timestamp_dt, device_id, event_type,
@@ -807,6 +872,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert persistence event: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_fim_event(self, event_data: Dict[str, Any]) -> Optional[int]:
@@ -827,11 +893,23 @@ class InsertMixin:
                 if self._check_snapshot_dedup(
                     "fim_events", key, new_hash, timestamp_ns
                 ):
+                    # Same dead statement as insert_persistence_event(): ORDER BY
+                    # / LIMIT on an UPDATE needs SQLITE_ENABLE_UPDATE_DELETE_LIMIT,
+                    # which this venv's sqlite3 3.53.3 was not built with, so this
+                    # raised `near "ORDER": syntax error` every call and the bare
+                    # `except: pass` hid it. Measured on the live store: 1,523 fim
+                    # baseline entries refreshing normally, but 268 of the 507
+                    # fim_events rows >24h old and the oldest at 71.0h against a
+                    # 72h retention wall — the FIM inventory is aging out even
+                    # though every file is still being observed each scan.
+                    # Subselect on the primary key does the same thing portably.
                     try:
-                        self.db.execute(
+                        self._execute(
                             "UPDATE fim_events SET timestamp_ns = ?, timestamp_dt = ? "
+                            "WHERE id = ("
+                            "SELECT id FROM fim_events "
                             "WHERE device_id = ? AND path = ? AND new_hash = ? "
-                            "ORDER BY timestamp_ns DESC LIMIT 1",
+                            "ORDER BY timestamp_ns DESC LIMIT 1)",
                             (
                                 timestamp_ns,
                                 event_data.get(
@@ -844,11 +922,11 @@ class InsertMixin:
                             ),
                         )
                     except Exception:
-                        pass
+                        logger.debug("FIM timestamp refresh failed", exc_info=True)
                     self._commit()
                     return None  # deduped but timestamp refreshed
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO fim_events (
                     timestamp_ns, timestamp_dt, device_id, event_type, path,
@@ -898,6 +976,7 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert FIM event: %s", e)
+            self.write_failures += 1
             return None
 
     # Snapshot-like observation domains — these scan full state every cycle
@@ -933,7 +1012,7 @@ class InsertMixin:
                     self._commit()
                     return None  # suppressed duplicate
 
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT INTO observation_events (
                     timestamp_ns, timestamp_dt, device_id, domain,
@@ -960,19 +1039,20 @@ class InsertMixin:
                     event_data.get("training_exclude", False),
                     event_data.get("contract_violation_code", "NONE"),
                     event_data.get("missing_fields"),
-                    event_data.get("raw_attributes_json"),
+                    _obs_raw_attributes(event_data, attrs_json),
                 ),
             )
             self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert observation event: %s", e)
+            self.write_failures += 1
             return None
 
     def upsert_observation_rollup(self, rollup_data: Dict[str, Any]) -> Optional[int]:
         """Upsert observation rollup bucket for adaptive shaping."""
         try:
-            self.db.execute(
+            self._execute(
                 """
                 INSERT INTO observation_rollups (
                     window_start_ns, window_end_ns, domain, fingerprint,
@@ -1004,12 +1084,13 @@ class InsertMixin:
             return 1
         except sqlite3.Error as e:
             logger.error("Failed to upsert observation rollup: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_device_telemetry(self, event_data: Dict[str, Any]) -> Optional[int]:
         """Insert a device telemetry snapshot."""
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR REPLACE INTO device_telemetry (
                     timestamp_ns, timestamp_dt, device_id, device_type,
@@ -1046,12 +1127,13 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert device telemetry: %s", e)
+            self.write_failures += 1
             return None
 
     def insert_metrics_timeseries(self, event_data: Dict[str, Any]) -> Optional[int]:
         """Insert a metrics timeseries data point."""
         try:
-            cursor = self.db.execute(
+            cursor = self._execute(
                 """
                 INSERT OR REPLACE INTO metrics_timeseries (
                     timestamp_ns, timestamp_dt, metric_name, metric_type,
@@ -1080,4 +1162,5 @@ class InsertMixin:
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert metrics timeseries: %s", e)
+            self.write_failures += 1
             return None
