@@ -222,26 +222,57 @@ def _load_agents() -> List[Dict[str, Any]]:
         "protocol_collectors",
         30.0,
     )
+    # ── Registered here 2026-08-03 as a BLOCKING PRECONDITION for retiring the
+    # launcher/collect_and_store execution models. ──────────────────────────
+    # These two sensors existed ONLY in the other two spawn paths
+    # (launcher.py:150,158 and scripts/collect_and_store.py:138,191) and had no
+    # _try_load entry here at all. Deleting those paths first — the obvious
+    # cleanup order — would therefore have silently removed kernel-audit /
+    # syscall / CSR-SIP monitoring and all unified-log detection, with no error
+    # anywhere: _try_load only warns when an import FAILS, never when an agent
+    # is simply never registered. Verified absent before adding.
+    #
+    # Note the module path: security_monitor's class lives in
+    # security_monitor/security_monitor_agent.py, not the agent.py that every
+    # other sensor in this list uses.
+    _try_load(
+        "amoskys.agents.os.macos.security_monitor.security_monitor_agent",
+        "MacOSSecurityMonitorAgent",
+        "security_monitor",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.unified_log.agent",
+        "MacOSUnifiedLogAgent",
+        "unified_log",
+        30.0,
+    )
 
     # ── TIER 4: Baseline (60s) — expensive or low-urgency ──
-    _try_load(
-        "amoskys.agents.os.macos.filesystem.agent",
-        "MacOSFileAgent",
-        "fim",
-        60.0,  # SHA256 hashing is CPU-bound
-    )
+    # fim (filesystem poller) RETIRED 2026-07-06 — superseded by the native ESF sensor's
+    # kernel file events. Its os.scandir sweeps of ~/Library & ~/Downloads triggered
+    # recurring TCC "python3.13 would like to access data from other apps" prompts.
+    # Restore this _try_load to re-enable. See docs/_local/amoskys_redesign/ESF_LOAD_PATH.md.
+    # _try_load(
+    #     "amoskys.agents.os.macos.filesystem.agent",
+    #     "MacOSFileAgent",
+    #     "fim",
+    #     60.0,  # SHA256 hashing is CPU-bound
+    # )
     _try_load(
         "amoskys.agents.os.macos.persistence.agent",
         "MacOSPersistenceAgent",
         "persistence",
         60.0,  # LaunchAgent changes are rare
     )
-    _try_load(
-        "amoskys.agents.os.macos.peripheral.agent",
-        "MacOSPeripheralAgent",
-        "peripheral",
-        60.0,  # USB events are rare
-    )
+    # peripheral RETIRED 2026-07-06 — media/photo access triggered TCC prompts.
+    # USB/peripheral monitoring should be reimplemented via IOKit (no TCC). Restore to re-enable.
+    # _try_load(
+    #     "amoskys.agents.os.macos.peripheral.agent",
+    #     "MacOSPeripheralAgent",
+    #     "peripheral",
+    #     60.0,  # USB events are rare
+    # )
     _try_load(
         "amoskys.agents.os.macos.discovery.agent",
         "MacOSDiscoveryAgent",

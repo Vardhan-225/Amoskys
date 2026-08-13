@@ -45,6 +45,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 
 from amoskys.agents.common.metrics import AgentMetrics
+# MeshMixin must be a real BASE CLASS, not just a module the __init__ borrows a
+# function from. base.py called `MeshMixin.__init_mesh__(self)` unbound, but
+# HardenedAgentBase did not inherit MeshMixin — so the very first statement in
+# that method, `self._adaptive_interval = self.CALM_INTERVAL`, raised
+# AttributeError on every agent. The except branch below swallowed it as
+# "running in local-only mode", so ALL 18 agents silently ran with no mesh:
+# no watch lists, no cross-agent IOC propagation, no adaptive polling. The
+# fleet was 18 blind singletons rather than one coordinated body.
+# mesh.mixin imports nothing from amoskys.agents, so this cannot cycle.
+from amoskys.mesh.mixin import MeshMixin
 from amoskys.config import get_config
 
 if TYPE_CHECKING:
@@ -192,7 +202,7 @@ class ValidationResult:
 # --- Hardened Agent Base ---------------------------------------------------
 
 
-class HardenedAgentBase(abc.ABC):
+class HardenedAgentBase(MeshMixin, abc.ABC):
     """Base class for all AMOSKYS agents.
 
     Provides a consistent foundation for agent development with built-in

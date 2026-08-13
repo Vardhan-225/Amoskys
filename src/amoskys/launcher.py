@@ -92,24 +92,15 @@ if PLATFORM == "darwin":
     CORE_AGENTS: List[ComponentDef] = [
         ("proc-agent", "amoskys.agents.os.macos.process", [], "darwin", "agent", None),
         ("auth-agent", "amoskys.agents.os.macos.auth", [], "darwin", "agent", None),
-        (
-            "fim-agent",
-            "amoskys.agents.os.macos.filesystem",
-            [],
-            "darwin",
-            "agent",
-            None,
-        ),
+        # fim-agent (filesystem poller) RETIRED 2026-07-06 — superseded by the native
+        # ESF sensor's kernel-level file events. Its os.scandir sweeps of ~/Library and
+        # ~/Downloads triggered recurring TCC "Python wants to access your Photos/
+        # Downloads" prompts. Restore the tuple to re-enable. See
+        # docs/_local/amoskys_redesign/ESF_LOAD_PATH.md.
         ("flow-agent", "amoskys.agents.os.macos.network", [], "darwin", "agent", None),
         ("dns-agent", "amoskys.agents.os.macos.dns", [], "darwin", "agent", None),
-        (
-            "peripheral-agent",
-            "amoskys.agents.os.macos.peripheral",
-            [],
-            "darwin",
-            "agent",
-            None,
-        ),
+        # peripheral-agent RETIRED 2026-07-06 — its media access triggered TCC prompts.
+        # USB/peripheral monitoring should be reimplemented via IOKit (no TCC). Restore to re-enable.
         (
             "persistence-agent",
             "amoskys.agents.os.macos.persistence",
@@ -178,17 +169,11 @@ else:
     CORE_AGENTS = [
         ("proc-agent", "amoskys.agents.os.macos.process", [], "all", "agent", None),
         ("auth-agent", "amoskys.agents.os.macos.auth", [], "all", "agent", None),
-        ("fim-agent", "amoskys.agents.os.macos.filesystem", [], "all", "agent", None),
+        # fim-agent (filesystem poller) RETIRED 2026-07-06 — superseded by native ESF
+        # sensor; caused recurring TCC prompts. See ESF_LOAD_PATH.md.
         ("flow-agent", "amoskys.agents.os.macos.network", [], "all", "agent", None),
         ("dns-agent", "amoskys.agents.os.macos.dns", [], "all", "agent", None),
-        (
-            "peripheral-agent",
-            "amoskys.agents.os.macos.peripheral",
-            [],
-            "all",
-            "agent",
-            None,
-        ),
+        # peripheral-agent RETIRED 2026-07-06 — TCC-triggering; reimplement via IOKit.
         (
             "persistence-agent",
             "amoskys.agents.os.macos.persistence",
@@ -476,7 +461,26 @@ def _start_component(
                 env=env,
                 stdout=fout,
                 stderr=ferr,
-                start_new_session=True,
+                # start_new_session=True REMOVED — it was the orphan factory.
+                #
+                # setsid() detaches the child into its own session and process
+                # group, so it outlives whatever launched it. Measured
+                # repeatedly on this machine: 11-12 agents sitting at ppid=1
+                # after every restart, still writing to the queues and the
+                # telemetry store with nothing supervising them.
+                #
+                # The damage is not merely untidy. The supervisor decides
+                # whether to restart a component with
+                # `pgrep -f 'amoskys.collector_main'`, and a cmdline match
+                # cannot distinguish "my child" from "a ghost from three
+                # restarts ago" — so a live orphan actively SUPPRESSES the
+                # restart of a healthy child. That is why the orphaning was
+                # chronic rather than transient, and it is the concrete
+                # obstacle to "one body, one mind": limbs that no mind owns.
+                #
+                # Staying in the parent's process group means a supervisor can
+                # actually reap its children, and killing the group cleans up
+                # the whole fleet instead of leaving a ghost generation behind.
             )
         # Verify process didn't die immediately
         time.sleep(0.3)

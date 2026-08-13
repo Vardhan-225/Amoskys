@@ -112,12 +112,19 @@ def main():
     except ImportError as e:
         logger.warning("Cannot import MacOSAuthAgent: %s", e)
 
-    try:
-        from amoskys.agents.os.macos.filesystem.agent import MacOSFileAgent
-
-        agents.append(("MacOSFilesystem", MacOSFileAgent, {}))
-    except ImportError as e:
-        logger.warning("Cannot import MacOSFilesystemAgent: %s", e)
+    # MacOSFilesystem (fim) RETIRED 2026-07-06 — superseded by the native ESF
+    # sensor's kernel file events. Its os.scandir sweeps of ~/Library and
+    # ~/Downloads triggered recurring TCC "python3.13 would like to access data
+    # from other apps" prompts, which is why collector_main.py:252 retired it.
+    # This path kept spawning it anyway, so the live pipeline was re-triggering
+    # the exact prompts the retirement existed to stop. Restore this block to
+    # re-enable. See docs/_local/amoskys_redesign/ESF_LOAD_PATH.md.
+    # try:
+    #     from amoskys.agents.os.macos.filesystem.agent import MacOSFileAgent
+    #
+    #     agents.append(("MacOSFilesystem", MacOSFileAgent, {}))
+    # except ImportError as e:
+    #     logger.warning("Cannot import MacOSFilesystemAgent: %s", e)
 
     try:
         from amoskys.agents.os.macos.persistence.agent import MacOSPersistenceAgent
@@ -126,12 +133,17 @@ def main():
     except ImportError as e:
         logger.warning("Cannot import MacOSPersistenceAgent: %s", e)
 
-    try:
-        from amoskys.agents.os.macos.peripheral.agent import MacOSPeripheralAgent
-
-        agents.append(("MacOSPeripheral", MacOSPeripheralAgent, {}))
-    except ImportError as e:
-        logger.warning("Cannot import MacOSPeripheralAgent: %s", e)
+    # MacOSPeripheral RETIRED 2026-07-06 — its media/photo access triggered TCC
+    # prompts (collector_main.py:268). USB/peripheral monitoring should be
+    # reimplemented via IOKit, which needs no TCC grant. Same story as the
+    # filesystem agent above: retired in one spawn path and left live in this
+    # one. Restore this block to re-enable.
+    # try:
+    #     from amoskys.agents.os.macos.peripheral.agent import MacOSPeripheralAgent
+    #
+    #     agents.append(("MacOSPeripheral", MacOSPeripheralAgent, {}))
+    # except ImportError as e:
+    #     logger.warning("Cannot import MacOSPeripheralAgent: %s", e)
 
     # Extended Observatory agents
     try:

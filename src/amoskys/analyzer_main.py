@@ -594,6 +594,11 @@ def main(run_once: bool = False) -> int:
 
                 processed_ids = []
                 for row_id, raw_bytes in rows:
+                    # Snapshot the store's failure count BEFORE this row is
+                    # processed; the ack at the bottom of the loop compares
+                    # against it so a row is only deleted from the queue once
+                    # its writes actually landed. See the comment there.
+                    _failures_before_row = store.write_failures
                     try:
                         dt = pb2.DeviceTelemetry()
                         dt.ParseFromString(raw_bytes)
@@ -974,11 +979,45 @@ def main(run_once: bool = False) -> int:
                                         _pid = attrs.get("pid")
                                         if _pid is not None:
                                             try:
+                                                # first_seen_ns is part of the
+                                                # PRIMARY KEY (device_id, pid,
+                                                # first_seen_ns), and this passed
+                                                # the CURRENT timestamp for it on
+                                                # every cycle. INSERT OR REPLACE
+                                                # therefore never matched an
+                                                # existing row — it appended a new
+                                                # one for every live process on
+                                                # every pass. Measured right after
+                                                # restart: 45,299 rows in ~3
+                                                # minutes, every key distinct, with
+                                                # single PIDs (e.g. 14108) holding
+                                                # 62 rows each — one per cycle.
+                                                # That is ~20M rows/day from a
+                                                # machine running ~300 processes,
+                                                # and it was the single largest
+                                                # driver of the 23GB store that
+                                                # filled the disk.
+                                                #
+                                                # A process incarnation is
+                                                # identified by (device_id, pid,
+                                                # create_time) — create_time is
+                                                # what disambiguates PID reuse. So
+                                                # reuse the first_seen_ns already
+                                                # recorded for that incarnation and
+                                                # only advance last_seen_ns; the
+                                                # REPLACE then lands on the same PK
+                                                # and updates in place. A genuinely
+                                                # new process finds no match and
+                                                # COALESCE falls back to now.
                                                 store.db.execute(
                                                     """INSERT OR REPLACE INTO process_genealogy
                                                     (device_id, pid, ppid, name, exe, cmdline, username,
                                                      parent_name, create_time, is_alive, first_seen_ns, last_seen_ns, process_guid)
-                                                    VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+                                                    VALUES (?,?,?,?,?,?,?,?,?,1,
+                                                        COALESCE((SELECT MIN(first_seen_ns) FROM process_genealogy
+                                                                  WHERE device_id = ? AND pid = ?
+                                                                    AND IFNULL(create_time, -1) = IFNULL(CAST(? AS REAL), -1)), ?),
+                                                        ?,?)""",
                                                     (
                                                         dt.device_id,
                                                         int(_pid) if _pid else 0,
@@ -992,8 +1031,12 @@ def main(run_once: bool = False) -> int:
                                                         attrs.get("username"),
                                                         attrs.get("parent_name"),
                                                         attrs.get("create_time"),
-                                                        ts_ns,
-                                                        ts_ns,
+                                                        # subquery params: identify this incarnation
+                                                        dt.device_id,
+                                                        int(_pid) if _pid else 0,
+                                                        attrs.get("create_time"),
+                                                        ts_ns,  # fallback first_seen_ns for a new process
+                                                        ts_ns,  # last_seen_ns always advances
                                                         attrs.get("process_guid"),
                                                     ),
                                                 )
@@ -1185,10 +1228,24 @@ def main(run_once: bool = False) -> int:
                                         # Unknown domain → generic observation table
                                         store.insert_observation_event(
                                             {
-                                                "event_id": ev.event_id,
-                                                "device_id": dt.device_id,
+                                                # _base carries timestamp_ns,
+                                                # timestamp_dt, device_id,
+                                                # collection_agent, agent_version.
+                                                # This branch used to hand-build a
+                                                # dict with event_timestamp_ns and
+                                                # event_id — names the inserter does
+                                                # not accept — and omit attributes,
+                                                # so every row landed with a
+                                                # fabricated timestamp, a NULL agent,
+                                                # and attributes='{}'. That empty
+                                                # value is also the snapshot dedup
+                                                # fingerprint, so in snapshot domains
+                                                # it suppressed everything after the
+                                                # first row. 98.2% of 4.49M rows.
+                                                **_base,
                                                 "domain": domain,
-                                                "event_timestamp_ns": ts_ns,
+                                                "event_type": ev.event_type,
+                                                "attributes": dict(attrs),
                                                 "raw_attributes_json": json.dumps(
                                                     attrs
                                                 ),
@@ -1200,10 +1257,24 @@ def main(run_once: bool = False) -> int:
                                     try:
                                         store.insert_observation_event(
                                             {
-                                                "event_id": ev.event_id,
-                                                "device_id": dt.device_id,
+                                                # _base carries timestamp_ns,
+                                                # timestamp_dt, device_id,
+                                                # collection_agent, agent_version.
+                                                # This branch used to hand-build a
+                                                # dict with event_timestamp_ns and
+                                                # event_id — names the inserter does
+                                                # not accept — and omit attributes,
+                                                # so every row landed with a
+                                                # fabricated timestamp, a NULL agent,
+                                                # and attributes='{}'. That empty
+                                                # value is also the snapshot dedup
+                                                # fingerprint, so in snapshot domains
+                                                # it suppressed everything after the
+                                                # first row. 98.2% of 4.49M rows.
+                                                **_base,
                                                 "domain": domain,
-                                                "event_timestamp_ns": ts_ns,
+                                                "event_type": ev.event_type,
+                                                "attributes": dict(attrs),
                                                 "raw_attributes_json": json.dumps(
                                                     attrs
                                                 ),
@@ -1216,8 +1287,36 @@ def main(run_once: bool = False) -> int:
                                             e,
                                         )
 
-                        processed_ids.append(row_id)
-                        total += 1
+                        # Ack ONLY if no real write failure happened while this
+                        # row was being stored.
+                        #
+                        # This was previously unconditional: the row was acked
+                        # and DELETEd below regardless of whether anything
+                        # reached the store. Combined with 698,015 "database is
+                        # locked" errors, that is precisely how events were
+                        # "discarded" — the insert failed, the queue row was
+                        # deleted anyway, and the event ceased to exist.
+                        #
+                        # The check keys on store.write_failures advancing, NOT
+                        # on insert_*() returning None: None also means a
+                        # deliberate dedup suppression at 9 sites, and treating
+                        # those as failures would redeliver every deduped
+                        # snapshot forever.
+                        #
+                        # A retained row is retried next drain. LocalQueue's
+                        # retry/max-retry accounting already bounds how long a
+                        # permanently-poisoned row can circulate.
+                        if store.write_failures == _failures_before_row:
+                            processed_ids.append(row_id)
+                            total += 1
+                        else:
+                            logger.warning(
+                                "Retaining queue row %s in %s — %d write failure(s) "
+                                "during store; will retry next drain",
+                                row_id,
+                                qdb_path,
+                                store.write_failures - _failures_before_row,
+                            )
                     except Exception as e:
                         logger.warning("Skipping corrupted queue row %s: %s", row_id, e)
                         processed_ids.append(row_id)  # Skip corrupted
@@ -1268,7 +1367,19 @@ def main(run_once: bool = False) -> int:
     DRAIN_MAX_ROWS = int(os.getenv("AMOSKYS_DRAIN_MAX_ROWS", "1500"))
     TACTICAL_EVERY_S, IGRIS_EVERY_S = 10.0, 60.0
     FUSION_EVERY_S, RETENTION_EVERY_S = 60.0, 600.0
-    _last = {"tactical": 0.0, "igris": 0.0, "fusion": 0.0, "retention": 0.0, "log": 0.0}
+    # Prewarm moved off its own daemon thread (see TelemetryStore.__init__) and
+    # WAL checkpointing moved off the reader side, so both are now driven here,
+    # on the analyzer's own thread, sequential with ingest.
+    PREWARM_EVERY_S, CKPT_EVERY_S = 20.0, 60.0
+    _last = {
+        "tactical": 0.0,
+        "igris": 0.0,
+        "fusion": 0.0,
+        "retention": 0.0,
+        "log": 0.0,
+        "prewarm": 0.0,
+        "ckpt": 0.0,
+    }
     cycle = 0
     total_events_processed = 0
 
@@ -1333,7 +1444,40 @@ def main(run_once: bool = False) -> int:
                 try:
                     # Evaluate all devices with recent events
                     for device_id in fusion.get_active_devices():
-                        incidents = fusion.evaluate_device(device_id)
+                        # evaluate_device returns (List[Incident], DeviceRiskSnapshot)
+                        # — see fusion_engine.py:298. Binding that 2-tuple to a
+                        # single name made this whole block a no-op for the
+                        # entire life of the pipeline:
+                        #   - `if incidents:` was ALWAYS true (a 2-tuple is truthy)
+                        #     even when fusion produced nothing;
+                        #   - len() was ALWAYS 2, so the log read "Fusion created
+                        #     2 incidents" on every cycle for every device —
+                        #     logs/analyzer.live.log has 781 such lines, never any
+                        #     other count, which is the fingerprint of this bug;
+                        #   - iterating the tuple yielded a list and a snapshot,
+                        #     neither of which has .rule_name, so create_incident
+                        #     raised AttributeError immediately for both, and the
+                        #     handler below logged at DEBUG while the root logger
+                        #     is INFO — so it was completely silent.
+                        # Net effect: ZERO fusion incidents ever reached
+                        # telemetry.db. Every correlation rule, kill-chain
+                        # sequence and drift incident was silently discarded.
+                        incidents, risk_snapshot = fusion.evaluate_device(device_id)
+
+                        # evaluate_device does not persist; evaluate_all_devices
+                        # is what normally calls persist_risk_snapshot (see
+                        # fusion_engine.py:1547) and the analyzer never calls it,
+                        # so device risk was never written either.
+                        if risk_snapshot is not None:
+                            try:
+                                fusion.persist_risk_snapshot(risk_snapshot)
+                            except Exception:
+                                logger.warning(
+                                    "Failed to persist risk snapshot for %s",
+                                    device_id,
+                                    exc_info=True,
+                                )
+
                         if incidents:
                             logger.info(
                                 "Fusion created %d incidents for %s",
@@ -1362,13 +1506,18 @@ def main(run_once: bool = False) -> int:
                                         }
                                     )
                                 except Exception:
-                                    logger.debug(
+                                    # WARNING, not DEBUG: the root logger is
+                                    # configured at INFO, so the previous debug
+                                    # call hid the AttributeError that made this
+                                    # bridge dead for its entire lifetime. A
+                                    # future shape mismatch must be visible.
+                                    logger.warning(
                                         "Failed to bridge incident %s",
                                         getattr(inc, "incident_id", "?"),
                                         exc_info=True,
                                     )
                 except Exception:
-                    logger.debug("Fusion evaluation failed", exc_info=True)
+                    logger.warning("Fusion evaluation failed", exc_info=True)
 
             # Retention cleanup (~every 10 min, wall-clock paced). Cycle-count
             # gating silently STOPPED running when cycles took hours — which is
@@ -1382,6 +1531,46 @@ def main(run_once: bool = False) -> int:
                         logger.info("Retention: cleaned %d old rows", total_deleted)
                 except Exception:
                     logger.debug("Retention cleanup failed", exc_info=True)
+
+            # Cache prewarm — on THIS thread, not a background one. See
+            # TelemetryStore.__init__: the old daemon thread could commit
+            # WALProcessor's open batch mid-flight because _ts_inserts.py never
+            # takes self._lock. Running it here makes warming sequential with
+            # ingest, which is the same single-writer discipline applied inside
+            # the process.
+            if t0 - _last["prewarm"] >= PREWARM_EVERY_S:
+                _last["prewarm"] = t0
+                try:
+                    store.prewarm_once()
+                except Exception:
+                    logger.debug("Prewarm pass failed", exc_info=True)
+
+            # WAL checkpointing, re-homed to the writer.
+            #
+            # It used to happen on the READER side: _ts_caching.py opens a second
+            # connection and runs wal_checkpoint(TRUNCATE) every 60s. That is the
+            # wrong process to do it from and contends with the writer, but it
+            # was also the only AGGRESSIVE checkpoint in the system —
+            # wal_autocheckpoint=1000 is PASSIVE and simply yields to a busy
+            # writer. Removing the reader-side TRUNCATE without putting an
+            # aggressive one here would trade a lock storm for a WAL storm, on a
+            # tree that has already produced a 23GB telemetry WAL and a 10.09GB
+            # igris WAL.
+            #
+            # So: PASSIVE every minute to keep the log near its floor, escalating
+            # to TRUNCATE only when it has genuinely run away.
+            if t0 - _last["ckpt"] >= CKPT_EVERY_S:
+                _last["ckpt"] = t0
+                try:
+                    store.db.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                    _wal = Path(str(TELEMETRY_DB) + "-wal")
+                    if _wal.exists() and _wal.stat().st_size > 256 * 1024 * 1024:
+                        store.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        logger.info(
+                            "WAL exceeded 256MB — TRUNCATE checkpoint issued"
+                        )
+                except Exception:
+                    logger.debug("WAL checkpoint failed", exc_info=True)
 
             total_events_processed += events_this_cycle
             dt = (time.time() - t0) * 1000

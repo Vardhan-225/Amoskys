@@ -751,6 +751,44 @@ class TelemetryShipper:
         if "id" not in valid_cols:
             return
 
+        # Self-heal a cursor that has run past the end of the table.
+        #
+        # The cursor is an autoincrement id, and the drain is
+        # `WHERE id > last_id`. If the local store is ever recreated, restored
+        # from a backup, or has its ids reset, last_id can exceed MAX(id) — and
+        # then this query matches nothing, forever, with no error: the shipper
+        # connects, registers, polls commands and reports {'shipped': 0} while
+        # the device silently stops reporting to the fleet.
+        #
+        # Observed exactly that: cursor flow_events=723302 against a live table
+        # whose ids ran 47213..69575, so nothing had shipped since 2026-08-12
+        # 20:46 while the Mac kept collecting. The dashboard read this as "no
+        # network flows in the past 24 hours".
+        #
+        # Rewind to just below the oldest row we still hold, so everything
+        # currently retained is (re)shipped. That is bounded by local retention,
+        # and the server dedupes on idempotency/event id — whereas the failure
+        # mode being fixed is unbounded silent data loss.
+        try:
+            row = db.execute(f"SELECT MIN(id), MAX(id) FROM {table}").fetchone()
+            min_id, max_id_present = (row[0], row[1]) if row else (None, None)
+        except Exception:
+            min_id = max_id_present = None
+        if max_id_present is not None and last_id > max_id_present:
+            rewound = (min_id - 1) if min_id is not None else 0
+            logger.warning(
+                "Shipper cursor for %s is past the end of the table "
+                "(cursor=%s, max id=%s) — the store was likely recreated or "
+                "restored. Rewinding to %s so shipping resumes; nothing would "
+                "ever ship otherwise.",
+                table,
+                last_id,
+                max_id_present,
+                rewound,
+            )
+            last_id = rewound
+            self.cursors.set(table, rewound)
+
         col_list = ", ".join(valid_cols)
         rows = db.execute(
             f"SELECT {col_list} FROM {table} WHERE id > ? ORDER BY id LIMIT ?",
@@ -901,10 +939,62 @@ class TelemetryShipper:
             logger.exception("Command execution failed: %s", cmd_type)
             return {"success": False, "error": str(e)}
 
+    # Agents retired on 2026-07-06 for triggering recurring TCC prompts
+    # (filesystem's os.scandir sweeps of ~/Library and ~/Downloads; peripheral's
+    # media/photo access). They are commented out in collector_main.py:252,268,
+    # launcher.py:95,102 and scripts/collect_and_store.py — but the ops server's
+    # agent registry still lists them and keeps commanding restarts.
+    _RETIRED_AGENTS = frozenset(
+        {
+            "macos_fim",
+            "macos_filesystem",
+            "fim",
+            "filesystem",
+            "macos_peripheral",
+            "peripheral",
+        }
+    )
+
     def _cmd_agent_lifecycle(self, action: str, agent_name: str) -> dict:
-        """Start/stop/restart an agent via subprocess."""
+        """Start/stop/restart an agent via subprocess.
+
+        Refuses retired agents instead of quietly restarting the whole fleet.
+
+        Two defects met here. First, the launcher invocation below is
+        `--agents-only`, which restarts EVERY agent — the AMOSKYS_AGENT env var
+        names one but the command is a blanket restart. Second, no name was
+        validated, so a command for an agent that no longer exists still did the
+        full restart.
+
+        Measured on this device: the ops server had sent 149 RESTART_AGENT for
+        macos_fim and 148 for macos_peripheral — both retired two months ago —
+        so roughly three hundred full-fleet restarts were performed on behalf of
+        agents that cannot run. Each restart spawns a new generation and
+        abandons the previous one, which is a direct contributor to the chronic
+        orphaning (12 agents at ppid=1) that makes the supervisor's pgrep-based
+        liveness check unreliable.
+
+        Returning an explicit failure receipt is the point: ops learns the agent
+        is gone instead of retrying forever, and the reason lands in the command
+        log where an operator can see it.
+        """
         if not agent_name:
             return {"success": False, "error": "No agent_name provided"}
+        if agent_name.strip().lower() in self._RETIRED_AGENTS:
+            logger.warning(
+                "Refusing %s for retired agent %r — retired 2026-07-06 (TCC "
+                "prompt storms). Remove it from the ops agent registry.",
+                action,
+                agent_name,
+            )
+            return {
+                "success": False,
+                "error": (
+                    f"agent '{agent_name}' was retired on 2026-07-06 and cannot "
+                    f"be started; remove it from the ops agent registry"
+                ),
+                "retired": True,
+            }
         import subprocess
 
         try:

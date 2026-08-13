@@ -54,6 +54,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS queue_idem ON queue(idem);
 CREATE INDEX IF NOT EXISTS queue_ts ON queue(ts_ns);
 """
 
+# Retention priority, computed once at enqueue and stored so eviction never has
+# to deserialize a protobuf. Higher survives longer.
+#
+# 3 = CRITICAL, 2 = HIGH, 1 = MEDIUM/unknown, 0 = LOW/INFO/metrics/heartbeats.
+_PRIORITY_BY_SEVERITY = {
+    "critical": 3,
+    "high": 2,
+    "medium": 1,
+    "warning": 1,
+    "low": 0,
+    "info": 0,
+    "informational": 0,
+    "debug": 0,
+}
+_PRIORITY_DEFAULT = 1
+# A high risk_score promotes an event even when its severity string is vague;
+# 0.8 is the same critical threshold _ts_rollups.py uses for severity bucketing.
+_PRIORITY_RISK_CRITICAL = 0.8
+_PRIORITY_RISK_HIGH = 0.5
+
+# Column added so backpressure can drop by VALUE rather than by age.
+_PRIORITY_COLUMN = {"priority": f"INTEGER DEFAULT {_PRIORITY_DEFAULT}"}
+
 # Columns added in the signing update.  Used by _migrate_schema().
 _SIGNING_COLUMNS = {
     "content_hash": "BLOB DEFAULT NULL",
@@ -97,7 +120,21 @@ class LocalQueue:
         self.db = sqlite3.connect(
             self.path, timeout=5.0, isolation_level=None, check_same_thread=False
         )
+        # A queue is pure churn: every row is enqueued, drained and deleted, so
+        # without auto_vacuum the file only ever grows to its high-water mark and
+        # keeps the space forever. Measured on a healthy, fully-drained pipeline:
+        # macos_process.db held 51.8MB of free pages for 0 rows, macos_persistence
+        # 17.9MB for 0 rows, macos_unified_log 5.3MB for 0 rows — ~75MB of pure
+        # dead weight across the queue set, on a machine whose disk filling up is
+        # what started all of this.
+        #
+        # Must precede executescript(SCHEMA) below, because that script's first
+        # statement is PRAGMA journal_mode=WAL and auto_vacuum is only settable
+        # while the database is empty — setting journal_mode first is enough to
+        # make this silently do nothing. Same trap as TelemetryStore.__init__.
+        self.db.execute("PRAGMA auto_vacuum=INCREMENTAL")
         self.db.executescript(SCHEMA)
+        self._last_reclaim = 0.0
         self._migrate_schema()
         logger.info(f"LocalQueue initialized: path={path}, max_bytes={max_bytes}")
 
@@ -145,8 +182,9 @@ class LocalQueue:
         with self._lock:
             try:
                 self.db.execute(
-                    "INSERT INTO queue(idem, ts_ns, bytes, content_hash, sig, prev_sig) "
-                    "VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO queue"
+                    "(idem, ts_ns, bytes, content_hash, sig, prev_sig, priority) "
+                    "VALUES(?,?,?,?,?,?,?)",
                     (
                         idempotency_key,
                         ts_ns,
@@ -154,6 +192,11 @@ class LocalQueue:
                         sqlite3.Binary(content_hash) if content_hash else None,
                         sqlite3.Binary(sig) if sig else None,
                         sqlite3.Binary(prev_sig) if prev_sig else None,
+                        # Classify once, here, while the protobuf is already in
+                        # hand — never during eviction, when the queue is
+                        # overflowing and deserializing is the last thing it
+                        # should be doing.
+                        self._compute_priority(telemetry),
                     ),
                 )
                 logger.debug(f"Enqueued: {idempotency_key}")
@@ -304,7 +347,34 @@ class LocalQueue:
         if drained > 0 and self._on_drain_success:
             self._on_drain_success(drained)
 
+        if drained > 0:
+            self._maybe_reclaim()
+
         return drained
+
+    def _maybe_reclaim(self) -> None:
+        """Return drained pages to the filesystem, at most once a minute.
+
+        auto_vacuum=INCREMENTAL (set in __init__) only moves freed pages onto the
+        freelist — it does NOT shrink the file until something actually runs
+        PRAGMA incremental_vacuum, and nothing in this class ever did. A queue is
+        pure churn, so the file otherwise keeps its all-time high-water mark
+        forever: measured 51.8MB retained for 0 rows on macos_process.db.
+
+        Throttled because incremental_vacuum does real page I/O and the drain
+        loop runs continuously; once a minute is enough to track the high-water
+        mark down without competing with ingest. Bounded to 256 pages (~1MB) per
+        call for the same reason. Never fatal — reclaiming space is best-effort
+        and must not break draining.
+        """
+        now = time.time()
+        if now - getattr(self, "_last_reclaim", 0.0) < 60.0:
+            return
+        self._last_reclaim = now
+        try:
+            self.db.execute("PRAGMA incremental_vacuum(256)")
+        except sqlite3.Error as e:
+            logger.debug("Queue reclaim skipped for %s: %s", self.path, e)
 
     def size(self) -> int:
         """Get number of events in queue.
@@ -344,21 +414,73 @@ class LocalQueue:
         which is a no-op if the column already exists (caught via
         OperationalError).
         """
-        for col_name, col_type in _SIGNING_COLUMNS.items():
+        for col_name, col_type in {**_SIGNING_COLUMNS, **_PRIORITY_COLUMN}.items():
             try:
                 self.db.execute(f"ALTER TABLE queue ADD COLUMN {col_name} {col_type}")
                 logger.info(f"Schema migration: added column queue.{col_name}")
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+    @staticmethod
+    def _compute_priority(telemetry) -> int:
+        """Retention priority for a batch: the highest priority it contains.
+
+        Computed once here, at enqueue, and stored in a column so that eviction
+        under pressure is a plain indexed ORDER BY and never has to deserialize
+        a protobuf while the queue is already overflowing.
+
+        A batch is kept at the level of its most important event — dropping a
+        batch discards everything in it, so a routine batch that happens to
+        carry one CRITICAL finding must be treated as critical.
+
+        Never raises: a malformed payload falls back to the default priority
+        and is retained as if it were medium, because failing to classify an
+        event is not a reason to preferentially destroy it.
+        """
+        best = -1
+        try:
+            for ev in getattr(telemetry, "events", []):
+                p = _PRIORITY_BY_SEVERITY.get(
+                    str(getattr(ev, "severity", "") or "").strip().lower(),
+                    _PRIORITY_DEFAULT,
+                )
+                risk = 0.0
+                try:
+                    risk = float(getattr(ev.security_event, "risk_score", 0.0) or 0.0)
+                except Exception:
+                    risk = 0.0
+                if risk >= _PRIORITY_RISK_CRITICAL:
+                    p = max(p, 3)
+                elif risk >= _PRIORITY_RISK_HIGH:
+                    p = max(p, 2)
+                best = max(best, p)
+        except Exception:
+            return _PRIORITY_DEFAULT
+        return best if best >= 0 else _PRIORITY_DEFAULT
+
     def _enforce_backlog(self) -> int:
-        """Enforce maximum queue size by dropping oldest events.
+        """Enforce the queue size limit by dropping the LEAST VALUABLE events.
 
-        Called automatically after enqueue(). If queue exceeds max_bytes,
-        deletes oldest events until under limit.
+        Called automatically after enqueue(). If the queue exceeds max_bytes,
+        deletes events until it is back under the limit.
 
-        Returns:
-            int: Number of events dropped (P0-10: must be visible).
+        This used to be `ORDER BY id` — strictly oldest-first, severity-blind.
+        Two things were wrong with that on a security queue:
+
+          1. It destroyed evidence in exactly the wrong order. The oldest
+             events in an intrusion are the initial access and staging steps —
+             the part of the chain you cannot reconstruct later. Under the very
+             pressure a real incident produces (a burst of activity filling the
+             queue), it deleted the beginning of the story first.
+          2. It was blind to value. A CRITICAL security_event was discarded as
+             readily as a routine metric or heartbeat sharing the same queue,
+             purely because it arrived earlier.
+
+        Now: lowest priority first, and oldest only WITHIN a priority band. Low
+        and informational telemetry is spent before anything of consequence, and
+        CRITICAL is evicted only if nothing cheaper remains — at which point the
+        loss is genuinely unavoidable and is logged with the breakdown so the
+        operator can see what was surrendered rather than inferring it.
         """
         total = self.size_bytes()
         if total <= self.max_bytes:
@@ -367,21 +489,43 @@ class LocalQueue:
         to_free = total - self.max_bytes
         freed = 0
         dropped_count = 0
+        dropped_by_priority: dict = {}
 
-        cur = self.db.execute("SELECT id, length(bytes) FROM queue ORDER BY id")
-        for rowid, sz in cur:
+        cur = self.db.execute(
+            "SELECT id, length(bytes), COALESCE(priority, ?) "
+            "FROM queue ORDER BY COALESCE(priority, ?) ASC, id ASC",
+            (_PRIORITY_DEFAULT, _PRIORITY_DEFAULT),
+        )
+        for rowid, sz, prio in cur.fetchall():
             self.db.execute("DELETE FROM queue WHERE id=?", (rowid,))
             freed += sz
             dropped_count += 1
+            dropped_by_priority[prio] = dropped_by_priority.get(prio, 0) + 1
             if freed >= to_free:
                 break
 
-        if dropped_count > 0:
+        if dropped_by_priority.get(3):
+            # Shedding CRITICAL means every cheaper option was already spent.
             logger.error(
-                "BACKPRESSURE_DROP: queue=%s dropped %d events "
+                "BACKPRESSURE_DROP shed %d CRITICAL event batch(es) on queue=%s "
+                "— the queue is undersized for this event rate, or the drain "
+                "has stalled; this is unrecoverable evidence loss",
+                dropped_by_priority[3],
+                self.path,
+            )
+
+        if dropped_count > 0:
+            _names = {3: "critical", 2: "high", 1: "medium", 0: "low"}
+            breakdown = ", ".join(
+                f"{_names.get(p, p)}={n}"
+                for p, n in sorted(dropped_by_priority.items(), reverse=True)
+            )
+            logger.error(
+                "BACKPRESSURE_DROP: queue=%s dropped %d events [%s] "
                 "(freed %d bytes, limit=%d bytes)",
                 self.path,
                 dropped_count,
+                breakdown,
                 freed,
                 self.max_bytes,
             )
