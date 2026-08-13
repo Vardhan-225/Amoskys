@@ -11,11 +11,38 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 from ..dashboard.query_service import get_dashboard_query_service
+from ..middleware import require_login
 
 logger = logging.getLogger(__name__)
 
 telemetry_bp = Blueprint("telemetry", __name__, url_prefix="/telemetry")
 _MSG_STORE_UNAVAILABLE = "Telemetry store not available yet"
+
+
+@telemetry_bp.before_request
+@require_login
+def _require_authenticated():
+    """Authenticate EVERY route in this blueprint.
+
+    All six routes here (/recent, /agents, /metrics/<device_id>, /stats,
+    /consistency, /attributes/catalog) shipped with no auth decorator at all,
+    and they read straight out of the canonical telemetry store — process
+    events, device metrics and the fleet agent summary. Verified live against
+    the running app: an unauthenticated GET /api/telemetry/recent returned
+    HTTP 200 with a JSON body, so this was reachable by anyone who could reach
+    the port. (It returned zero events only because the local store had just
+    been emptied; on a populated store it returns real fleet telemetry.)
+
+    A before_request guard rather than six decorators so a seventh route added
+    later cannot silently ship unauthenticated. @require_login already returns
+    401 JSON for /api/ paths instead of an HTML redirect.
+
+    NOTE: this authenticates but does not yet ORG-SCOPE the results. Cross-org
+    filtering for these endpoints still needs org_scope.get_allowed_device_ids()
+    applied to the queries, tracked separately — authentication is the floor,
+    not the whole fix.
+    """
+    return None
 
 
 def _safe_int(value: str, default: int, minimum: int, maximum: int) -> int:

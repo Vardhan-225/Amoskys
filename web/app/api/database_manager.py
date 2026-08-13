@@ -16,6 +16,7 @@ from datetime import datetime
 
 from flask import Blueprint, Response, jsonify, request
 
+from ..middleware import get_current_user, require_login
 from . import escape_like
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,52 @@ logger = logging.getLogger(__name__)
 database_manager_bp = Blueprint(
     "database_manager", __name__, url_prefix="/database-manager"
 )
+
+
+@database_manager_bp.before_request
+@require_login
+def _require_admin():
+    """Authenticate and require the admin role for EVERY route in this blueprint.
+
+    None of the routes below carried any auth decorator, while the blueprint
+    exposes POST /reset-database, POST /truncate-table/<table> and
+    POST /clear-wal — i.e. unauthenticated destruction of the entire telemetry
+    store — plus GET /export/<table> and GET /view-table/<table>, which dump
+    arbitrary table contents. Verified live against the running app: an
+    unauthenticated GET /api/database-manager/tables returned 500 (a database
+    error), not 401 — proof that the request reached the database layer with no
+    authentication in front of it. The 302s seen on other paths were the
+    force_https redirect, not an auth gate.
+
+    This is a blueprint-level before_request rather than nine individual
+    decorators on purpose: a tenth route added later inherits the guard instead
+    of silently shipping unauthenticated. @require_login supplies the 401-JSON
+    behaviour for /api/ paths and populates g.current_user.
+
+    Fails closed: any user whose role is not exactly "admin" is refused, and a
+    missing/!admin role is treated as not-admin.
+    """
+    user = get_current_user()
+    role = getattr(getattr(user, "role", None), "value", None)
+    if role != "admin":
+        logger.warning(
+            "database-manager access denied: user=%s role=%s path=%s",
+            getattr(user, "id", "?"),
+            role,
+            request.path,
+        )
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Administrator role required",
+                    "error_code": "FORBIDDEN",
+                }
+            ),
+            403,
+        )
+    return None
+
 
 # Resolve paths relative to the project root (3 levels up from this file)
 _PROJECT_ROOT = os.path.dirname(

@@ -214,10 +214,47 @@ def device_tab_page(device_id, tab="overview"):
     )
 
 
+def _deny_if_out_of_org(device_id: str):
+    """Return a 404 response if the current user may not see this device_id.
+
+    Every /api/command-center/device/<device_id>/* route took the id straight
+    from the URL and proxied it to the ops server with no org check, while the
+    ops endpoints behind them (bulk-export, device detail) filter by device_id
+    alone and not by org. Any authenticated user could therefore read — and
+    with /export, download as an evidence bundle — another tenant's
+    security/process/flow/dns/persistence/audit/fim/peripheral events simply by
+    supplying that tenant's device_id. The sibling cc_fleet_status already
+    passes org_id, so the tenant boundary is intended; these four routes just
+    never enforced it.
+
+    Mirrors the check routes_insight.api_device already performs. 404 (not 403)
+    so the endpoint does not confirm that an out-of-org device_id exists.
+
+    get_allowed_device_ids fails closed: no org or unreachable ops resolves to
+    an empty allowlist, which denies rather than exposes. Admins get None,
+    meaning unrestricted.
+    """
+    from .org_scope import get_allowed_device_ids
+
+    allowed, _is_admin = get_allowed_device_ids(get_current_user())
+    if allowed is not None and device_id not in allowed:
+        logger.warning(
+            "cross-org device access denied: user=%s device_id=%s path=%s",
+            getattr(get_current_user(), "id", "?"),
+            device_id,
+            request.path,
+        )
+        return jsonify({"error": "unknown device"}), 404
+    return None
+
+
 @dashboard_bp.route("/api/command-center/device/<device_id>/detail")
 @require_login
 def cc_device_detail(device_id):
     """Full device info + recent events — proxied from ops."""
+    denied = _deny_if_out_of_org(device_id)
+    if denied:
+        return denied
     data = _ops_get(f"/api/v1/devices/{device_id}")
     if data:
         return jsonify({"available": True, **data})
@@ -231,6 +268,9 @@ def cc_device_detail(device_id):
 @require_login
 def cc_device_telemetry(device_id):
     """Full Cortex-style telemetry — proxied from ops."""
+    denied = _deny_if_out_of_org(device_id)
+    if denied:
+        return denied
     data, reachable = _ops_get_ex(f"/api/v1/devices/{device_id}/telemetry")
     if data:
         return jsonify(data)
@@ -256,6 +296,9 @@ def cc_device_export(device_id):
     Proxies the ops bulk-export (read-only) scoped to this device and
     returns it as a file attachment for incident-response / forensics.
     """
+    denied = _deny_if_out_of_org(device_id)
+    if denied:
+        return denied
     hours = min(request.args.get("hours", 24, type=int), 72)
     data = _ops_get("/api/v1/bulk-export", {"device_id": device_id, "hours": hours})
     if data is None:
@@ -478,6 +521,9 @@ def cc_fleet_status():
 @require_login
 def cc_device_events(device_id):
     """Recent security events for a specific device — proxied from ops."""
+    denied = _deny_if_out_of_org(device_id)
+    if denied:
+        return denied
     # Try ops server
     limit = request.args.get("limit", 50, type=int)
     min_risk = request.args.get("min_risk", 0.0, type=float)
