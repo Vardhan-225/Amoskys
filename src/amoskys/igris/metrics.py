@@ -485,8 +485,19 @@ class MetricCollector:
         if not db_path or not os.path.exists(db_path):
             return None
         try:
-            conn = sqlite3.connect(db_path, timeout=5, check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
+            # Genuinely read-only. This previously opened a read-WRITE handle
+            # and ran `PRAGMA journal_mode=WAL` — a persistent write to the
+            # header of a file this class only reads. Together with the same
+            # bug in igris/auditor.py it kept re-arming WAL on
+            # igris/memory.db after its owner set journal_mode=DELETE to stop
+            # a log that had reached 10.09 GB against a 944 KB database.
+            # mode=ro is engine-enforced; journal_mode belongs to the owner.
+            conn = sqlite3.connect(
+                f"file:{db_path}?mode=ro",
+                uri=True,
+                timeout=5,
+                check_same_thread=False,
+            )
             conn.execute("PRAGMA query_only=ON")
             cursor = conn.execute(query, params)
             row = cursor.fetchone()

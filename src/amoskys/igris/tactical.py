@@ -854,6 +854,12 @@ class IGRISTacticalEngine:
                 "novel_events_count": self._state.novel_events_count,
             }
         )
+        # Bound the write-ahead log. _persist_state runs every tactical cycle,
+        # so this is the natural place to reclaim; checkpoint() self-throttles
+        # to once a minute. Without it the log only grows: memory.db is 784 KB
+        # and its -wal had reached 10.09 GB, adding ~21 GB/day and quietly
+        # becoming the largest disk consumer on the machine.
+        self._memory.checkpoint()
 
     def _read_recent_events(self, window_seconds: int = 300) -> List[dict]:
         """Read recent security events from telemetry.db."""

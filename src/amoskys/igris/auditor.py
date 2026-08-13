@@ -248,10 +248,30 @@ class Auditor:
     # ── SQL Helper ─────────────────────────────────────────────
 
     def _ro_connect(self, db_path: str) -> Optional[sqlite3.Connection]:
-        """Open a read-only SQLite connection."""
+        """Open a genuinely read-only SQLite connection.
+
+        This claimed to be read-only while doing the opposite twice over: it
+        opened a plain read-WRITE handle, then ran `PRAGMA journal_mode=WAL`,
+        which is a persistent write to the database header — on files this
+        class does not own (telemetry.db, flowagent.db, evidence_chain.db).
+        query_only=ON was only applied afterwards, and is advisory anyway.
+
+        That is how igris/memory.db kept reverting to WAL after its writer had
+        deliberately set journal_mode=DELETE to stop a log that had reached
+        10.09 GB against a 944 KB database. A reader silently re-armed the
+        exact failure mode the owner had just disarmed.
+
+        mode=ro is enforced by the engine, so a write cannot happen regardless
+        of what any later statement asks for, and journal_mode is left to
+        whoever owns the file.
+        """
         try:
-            conn = sqlite3.connect(db_path, timeout=5, check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
+            conn = sqlite3.connect(
+                f"file:{db_path}?mode=ro",
+                uri=True,
+                timeout=5,
+                check_same_thread=False,
+            )
             conn.execute("PRAGMA query_only=ON")
             return conn
         except sqlite3.Error as e:

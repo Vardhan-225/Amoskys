@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -127,19 +128,124 @@ class IGRISMemory:
         ON soma_observations(event_category);
     """
 
+    # ── One connection per process ──────────────────────────────────────────
+    # A WAL checkpoint cannot reset the log while ANY connection still holds a
+    # read snapshot older than the log's end. Every IGRISMemory() built its own
+    # connection, and the analyzer ended up holding FIVE of them at once
+    # (lsof: fds 11u, 20u, 35u, 38u, 40u) — so at any instant one was mid-read
+    # and wal_autocheckpoint=1000 could never complete. The log therefore only
+    # ever appended.
+    #
+    # Measured consequence: memory.db is 784 KB, its -wal was 10.09 GB —
+    # roughly 12,000x the database it belongs to — growing 14.7 MB/min
+    # (~21 GB/day), which made it the single largest disk consumer on this
+    # machine, on the machine whose disk filling up caused six kernel panics.
+    #
+    # Interning the instance collapses those five connections to one, so a
+    # checkpoint can actually complete. Same fix, same reason, as the
+    # TelemetryStore singleton. Escape hatch: AMOSKYS_IGRIS_SINGLETON=0.
+    _instance = None
+    _instance_lock = threading.Lock()
+
+    def __new__(cls):
+        if os.environ.get("AMOSKYS_IGRIS_SINGLETON") == "0":
+            return super().__new__(cls)
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+            return cls._instance
+
     def __init__(self):
+        # Re-running __init__ on the interned instance would rebuild the
+        # connection and reintroduce exactly the problem this prevents.
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
         MEMORY_DB.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(MEMORY_DB), timeout=5)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        # journal_mode=DELETE, deliberately NOT WAL.
+        #
+        # This database is 944 KB of tactical state. Writes are ~15
+        # INSERT OR REPLACE keys per 10s tactical cycle and soma_observations
+        # grows about one row a minute. It has no need of WAL's concurrency.
+        #
+        # What WAL cost instead, measured: the log grew ~10.8 MB/min without
+        # bound -- roughly 10 MB of log per row written -- and reached 10.09 GB
+        # against a 944 KB database, becoming the largest disk consumer on a
+        # machine whose full disk had already caused six kernel panics.
+        #
+        # The cause is structural, not tunable. A WAL is only reset by a
+        # checkpoint, and a checkpoint cannot reset while ANY connection holds
+        # an older snapshot. This file has long-lived readers -- SomaBrain
+        # (intel/soma.py) inside the analyzer, plus the Flask app
+        # (api/soma_brain.py:40, dashboard/routes_nexus.py:24) -- so
+        # wal_checkpoint(TRUNCATE) returned busy=1 with only 786 of 14,620
+        # pages done and every write appended forever. Three successive
+        # attempts to bound it failed for this same reason: interning the
+        # connection (5 handles -> 3, never 1), wal_autocheckpoint=256, and
+        # journal_size_limit=64MB -- the last verified breached at 86.7 MB
+        # after 8 minutes, still climbing linearly.
+        #
+        # DELETE mode has no -wal file at all, so unbounded log growth is
+        # impossible rather than merely bounded. The trade is that a writer
+        # briefly excludes readers; on a sub-megabyte database with
+        # millisecond transactions that is negligible, and busy_timeout makes
+        # readers wait rather than fail.
+        self._conn.execute("PRAGMA journal_mode=DELETE")
         self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(self._SCHEMA)
         self._conn.commit()
+        self._last_ckpt = 0.0
         logger.info("IGRIS memory initialized: %s", MEMORY_DB)
+
+    def checkpoint(self, force: bool = False) -> None:
+        """No-op under journal_mode=DELETE; retained for call-site stability.
+
+        _persist_state() calls this every tactical cycle. In DELETE mode there
+        is no write-ahead log to reclaim — the rollback journal is deleted at
+        the end of every transaction — so there is nothing to do and this
+        returns immediately. Kept (rather than deleted along with its callers)
+        so that switching back to WAL for this database, should it ever need
+        real reader concurrency, restores bounded behaviour by changing one
+        pragma instead of re-adding a call path.
+
+        The original WAL implementation follows in the docstring below for the
+        same reason.
+
+        Historic behaviour: truncate the WAL back to zero, at most once a
+        minute.
+
+        autocheckpoint is PASSIVE and yields to readers, so it keeps the log
+        bounded in steady state but never reclaims a log that has already run
+        away. TRUNCATE is the only mode that returns the file to zero length,
+        and it is safe to call here now that this process holds exactly one
+        connection. Never fatal: failing to checkpoint must not break IGRIS.
+        """
+        try:
+            mode = self._conn.execute("PRAGMA journal_mode").fetchone()[0]
+        except sqlite3.Error:
+            return
+        if str(mode).lower() != "wal":
+            return  # DELETE mode: no write-ahead log exists to reclaim
+        now = time.time()
+        if not force and now - getattr(self, "_last_ckpt", 0.0) < 60.0:
+            return
+        self._last_ckpt = now
+        try:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.Error as e:
+            logger.debug("IGRIS memory checkpoint skipped: %s", e)
 
     def close(self):
         if self._conn:
             self._conn.close()
+        cls = type(self)
+        with cls._instance_lock:
+            if cls._instance is self:
+                cls._instance = None
+        self._initialized = False
 
     # ── Tactical State ───────────────────────────────────────────────────
 
