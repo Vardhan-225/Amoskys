@@ -146,8 +146,21 @@ class TestProcessSecurityEventClassification:
         assert SecurityMixin._classify_risk(0.0) == "legitimate"
 
     def test_malicious_classification(self, tmp_path):
-        """A full_kill_chain re-scores into the malicious band (composite floored
-        at 0.70) and the FINAL classification agrees with the fleet path."""
+        """An UNCORROBORATED full_kill_chain is held at suspicious, not malicious.
+
+        Stale for the same reason as test_boundary_070_is_malicious: this
+        asserted the pre-2026-07-01 contract, where full_kill_chain floored to
+        0.70 unconditionally. The corroboration gate in scoring.py now requires
+        an independent signal (threat-intel match or foreign/off-home source)
+        before a self-certifying attack category may enter the malicious band,
+        because the probe inflates its own composite and the owner's own
+        ssh/curl deploy was reading as "malicious exfiltration".
+
+        Note the input risk_score here is 0.85 — ALREADY above the malicious
+        threshold — and it is still pulled down to 0.40. That is the gate
+        working as intended: a scary label plus a high self-reported score is
+        still just the probe vouching for itself.
+        """
         proc = _make_proc(tmp_path)
         ev = _make_security_event(risk_score=0.85, event_category="full_kill_chain")
         proc._process_security_event(
@@ -156,9 +169,9 @@ class TestProcessSecurityEventClassification:
 
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
         assert len(rows) == 1
-        # Re-scored risk lands on the malicious floor (0.70) and classifies malicious.
-        assert rows[0]["risk_score"] >= 0.70
-        assert rows[0]["final_classification"] == "malicious"
+        # Capped at suspicious without corroboration — never silently escalated.
+        assert rows[0]["risk_score"] == pytest.approx(0.40)
+        assert rows[0]["final_classification"] == "suspicious"
 
     def test_suspicious_classification(self, tmp_path):
         """A single-stage exfil category floors into the suspicious band
@@ -191,21 +204,60 @@ class TestProcessSecurityEventClassification:
         assert rows[0]["final_classification"] == "legitimate"
 
     def test_boundary_070_is_malicious(self, tmp_path):
-        """The malicious boundary is 0.70 (inclusive), NOT the old 0.75.
+        """full_kill_chain reaches the 0.70 malicious floor ONLY when corroborated.
 
-        full_kill_chain floors the composite to exactly _MALICIOUS_THRESHOLD
-        (0.70); the re-scored risk lands on that boundary and must classify
-        malicious on the WAL path — matching the fleet path.
+        This test previously asserted that full_kill_chain floors to 0.70
+        unconditionally. That was the contract until the corroboration gate
+        landed in scoring.py on 2026-07-01, and the test was never updated — so
+        it has been failing ever since against code that is deliberately more
+        conservative than it.
+
+        The gate exists because these categories inflate their OWN composite
+        (the full_kill_chain probe especially), which makes "the composite is
+        high" circular self-certification. Unconditional flooring meant the
+        owner's own ssh/curl deploy read as "malicious exfiltration". So the
+        malicious verdict now requires an INDEPENDENT signal — a threat-intel
+        match or a foreign/off-home source — and an uncorroborated kill chain
+        is capped at suspicious (0.40): worth a look, not an accusation.
+
+        Verified behaviour of the scorer:
+            uncorroborated          -> 0.40
+            threat_intel_match=True -> 0.85
+            foreign geo (RU)        -> 0.70
+
+        Both halves are asserted so a regression in EITHER direction fails:
+        losing the gate (uncorroborated escalating again) or losing the floor
+        (corroborated no longer reaching malicious).
         """
         proc = _make_proc(tmp_path)
+
+        # Uncorroborated: capped at suspicious, NOT laundered into malicious.
         ev = _make_security_event(risk_score=0.50, event_category="full_kill_chain")
         proc._process_security_event(
             ev, "dev-1", 1000, "2024-01-01T00:00:00", "test-agent"
         )
-
         rows = proc.store.get_recent_security_events(hours=24 * 365 * 100)
-        assert rows[0]["risk_score"] == pytest.approx(0.70)
-        assert rows[0]["final_classification"] == "malicious"
+        assert rows[0]["risk_score"] == pytest.approx(0.40)
+        assert rows[0]["final_classification"] == "suspicious"
+
+        # The corroborated half is asserted directly against the ScoringEngine
+        # rather than through the WAL path. geo_src_country is NOT a protobuf
+        # field — it is added by GeoIP enrichment, which needs the GeoLite DBs
+        # and is not reliably present in this harness. Driving the scorer
+        # directly tests the gate itself without making the assertion depend on
+        # enrichment being configured.
+        from amoskys.intel.scoring import ScoringEngine
+
+        engine = ScoringEngine()
+        corroborated = {
+            "event_category": "full_kill_chain",
+            "risk_score": 0.50,
+            "severity": "CRITICAL",
+            "device_id": "dev-1",
+            "geo_src_country": "RU",  # foreign source = independent signal
+        }
+        engine.score_event(corroborated)
+        assert corroborated["risk_score"] >= 0.70
 
     def test_boundary_040_is_suspicious(self, tmp_path):
         """The suspicious boundary is 0.40 (inclusive), NOT the old 0.50.
