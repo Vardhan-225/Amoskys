@@ -224,3 +224,36 @@ class EnrichmentPipeline:
         self._asn.close()
         self._threat_intel.close()
         self._mitre.close()
+
+
+def normalize_ip(ip: str) -> str:
+    """Strip the brackets macOS/socket tooling puts around IPv6 literals.
+
+    The collectors store IPv6 destinations in URL-authority form —
+    "[2607:6bc0::10]" — because that is how lsof/netstat render a host:port
+    pair. Nothing downstream expects that form, and two things break on it:
+
+      1. maxminddb rejects it outright:
+         ValueError: '[2607:6bc0::10]' does not appear to be an IPv4 or IPv6 address
+      2. _is_private_ip() calls ipaddress.ip_address(), catches that same
+         ValueError, and falls back to "unparseable -> skip". So a PUBLIC IPv6
+         address was being classified as private and never looked up at all.
+
+    The second is why the failure was silent: the address never reached the
+    reader, so there was no error to log — only an absence of geo data.
+
+    Measured impact on this device: 65,524 of 90,199 routable flows (73%)
+    carried no country, no city and no ASN, while IPv4 enrichment sat at a
+    perfect 24,675/24,675. The GeoLite2 databases have full IPv6 coverage —
+    verified directly, 2607:6bc0::10 resolves to US once the brackets are gone.
+
+    Kept deliberately narrow: only a matched leading '[' and trailing ']' are
+    removed. Anything else is returned untouched so a malformed address still
+    fails the same way it did before rather than being silently coerced.
+    """
+    if not ip:
+        return ip
+    s = ip.strip()
+    if len(s) > 2 and s[0] == "[" and s[-1] == "]":
+        return s[1:-1]
+    return s

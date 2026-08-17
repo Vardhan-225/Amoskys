@@ -109,6 +109,16 @@ class GeoIPEnricher:
             Dict with keys: country, city, latitude, longitude, continent,
             timezone — or None if unavailable / private IP.
         """
+        # Normalise BEFORE the private check, not just before the lookup.
+        # _is_private_ip() ends in "unparseable -> skip", and a bracketed IPv6
+        # literal is unparseable to ipaddress.ip_address(), so every public
+        # IPv6 destination was being classified private and dropped here —
+        # never reaching the reader, hence no error, only missing geo.
+        # Normalising first also keeps the LRU cache keyed on one canonical
+        # form instead of two.
+        from amoskys.enrichment import normalize_ip
+
+        ip = normalize_ip(ip)
         if not ip or _is_private_ip(ip):
             return None
         if not self._available:

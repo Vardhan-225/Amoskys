@@ -145,6 +145,16 @@ class ASNEnricher:
             Dict with keys: number, org, network_type,
             is_hosting, is_tor, is_vpn — or None.
         """
+        # The twin of the same fix in geoip.lookup(). Fixing one half of a pair
+        # and not the other is this codebase's documented recurring failure
+        # (see _ts_lifecycle._execute), and ASN coverage was degraded by the
+        # identical cause: a bracketed IPv6 literal is unparseable to
+        # ipaddress.ip_address(), so _is_private_ip()'s "unparseable -> skip"
+        # fallback classified every public IPv6 destination as private and
+        # returned before the reader was ever consulted.
+        from amoskys.enrichment import normalize_ip
+
+        ip = normalize_ip(ip)
         if not ip or not self._available:
             return None
 
