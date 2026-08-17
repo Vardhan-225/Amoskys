@@ -195,8 +195,88 @@ def _iso_age_days(value):
     return (datetime.now(timezone.utc) - parsed).total_seconds() / 86400
 
 
-def _threat_intel_health():
-    """Report threat-intel feed health without creating fallback DB files."""
+def _threat_intel_evidence_from_data(store, hours=24):
+    """Did intel actually RUN on the telemetry being displayed?
+
+    The local env var answers "is this box configured", which on a
+    presentation server is the wrong question: threat-intel matching happens at
+    the ENDPOINT, at scoring time, and arrives here already decided in the
+    threat_intel_match column. A fleet view that reports its own missing config
+    as fleet-wide degradation is describing the viewer, not the sensors.
+
+    The data answers the right question, because the column distinguishes three
+    states rather than two:
+        NULL -> enrichment never ran; genuinely blind
+        0    -> it ran and found nothing; a real negative
+        1    -> it ran and matched
+
+    Measured here when this was written: 8,128 of 8,128 flows carried 0, not
+    NULL — intel had run on every single one while the card said "0 indicators,
+    degraded".
+
+    Returns (checked, matched, total) or None when it cannot be determined.
+    """
+    try:
+        with store._read_pool.connection() as rdb:
+            cutoff = int((time.time() - hours * 3600) * 1e9)
+            row = rdb.execute(
+                """SELECT COUNT(*),
+                          SUM(CASE WHEN threat_intel_match IS NOT NULL THEN 1 ELSE 0 END),
+                          SUM(CASE WHEN threat_intel_match = 1 THEN 1 ELSE 0 END)
+                   FROM flow_events WHERE timestamp_ns > ?""",
+                (cutoff,),
+            ).fetchone()
+        if not row or not row[0]:
+            return None
+        return (int(row[1] or 0), int(row[2] or 0), int(row[0]))
+    except Exception:
+        return None
+
+
+def _threat_intel_health(store=None):
+    """Report threat-intel feed health.
+
+    Prefers evidence from the telemetry itself over this host's configuration —
+    see _threat_intel_evidence_from_data for why. Falls back to inspecting the
+    local DB when the data cannot answer (no flows, or the column absent).
+    """
+    if store is not None:
+        ev = _threat_intel_evidence_from_data(store)
+        if ev is not None:
+            checked, matched, total = ev
+            if checked >= total and total > 0:
+                return _health_status(
+                    "healthy",
+                    (
+                        f"Intel evaluated at the collector on {checked:,} of "
+                        f"{total:,} flows — {matched:,} matched"
+                    ),
+                    configured=True,
+                    indicators=None,
+                    source="collector",
+                )
+            if checked > 0:
+                return _health_status(
+                    "degraded",
+                    (
+                        f"Intel evaluated on only {checked:,} of {total:,} flows "
+                        f"— the rest arrived unchecked"
+                    ),
+                    configured=True,
+                    indicators=None,
+                    source="collector",
+                )
+            return _health_status(
+                "degraded",
+                (
+                    f"No intel verdict on any of {total:,} flows — the collector "
+                    f"is not running threat-intel enrichment"
+                ),
+                configured=False,
+                indicators=0,
+                source="collector",
+            )
+
     path = (os.getenv("AMOSKYS_THREAT_INTEL_DB") or "").strip()
     if not path:
         return _health_status(
@@ -826,7 +906,7 @@ def network_visibility_health():
                 ),
                 "geoip": _coverage_status("GeoIP", 0, 0),
                 "asn": _coverage_status("ASN", 0, 0),
-                "threat_intel": _threat_intel_health(),
+                "threat_intel": _threat_intel_health(store),
                 "blindness": blindness,
                 "quality": {},
             }
@@ -847,7 +927,7 @@ def network_visibility_health():
                 "schema": schema,
                 "geoip": _coverage_status("GeoIP", 0, 0),
                 "asn": _coverage_status("ASN", 0, 0),
-                "threat_intel": _threat_intel_health(),
+                "threat_intel": _threat_intel_health(store),
                 "blindness": blindness,
                 "quality": {},
             }
@@ -950,7 +1030,7 @@ def network_visibility_health():
         except Exception:
             agents = []
 
-    threat_intel = _threat_intel_health()
+    threat_intel = _threat_intel_health(store)
     geoip = _coverage_status("GeoIP", total, geo_count)
     asn = _coverage_status("ASN", total, asn_count)
     blockers = [
