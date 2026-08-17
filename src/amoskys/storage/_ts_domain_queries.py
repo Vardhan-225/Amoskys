@@ -511,7 +511,19 @@ class DomainQueryMixin:
                     "exe": None,
                 }
                 # Walk up to 4 generations. Ancestry is what distinguishes
-                # "Terminal -> zsh -> curl" from "launchd -> something in /tmp".
+                # "Terminal -> zsh -> curl" from "launchd -> something in /tmp",
+                # and it is the single most useful field for judging a flow.
+                #
+                # Two sources, in preference order, because they are not both
+                # available everywhere:
+                #   process_genealogy — richest (name, exe, code_signing) but
+                #     it is WITHOUT ROWID with no `id` column, and the shipper
+                #     drains every table with `WHERE id > cursor`. It therefore
+                #     CANNOT ship, and is empty on the presentation server.
+                #   process_events    — is shipped, and carries pid/ppid/exe.
+                #     Names are derived from the exe basename. Less detail, but
+                #     it means the ancestry chain renders on the fleet view
+                #     instead of collapsing to a bare process name.
                 pid, seen = pr[1], set()
                 for _ in range(4):
                     if pid is None or pid in seen:
@@ -524,7 +536,25 @@ class DomainQueryMixin:
                         (pid,),
                     ).fetchone()
                     if not g:
-                        break
+                        try:
+                            g2 = rdb.execute(
+                                """SELECT ppid, exe FROM process_events
+                                   WHERE pid = ? ORDER BY timestamp_ns DESC LIMIT 1""",
+                                (pid,),
+                            ).fetchone()
+                        except sqlite3.Error:
+                            g2 = None
+                        if not g2:
+                            break
+                        exe = g2[1] or ""
+                        nm = exe.rsplit("/", 1)[-1] if exe else ("pid " + str(pid))
+                        entry["ancestry"].append(
+                            {"name": nm, "pid": pid, "exe": exe or None}
+                        )
+                        if entry["exe"] is None:
+                            entry["exe"] = exe or None
+                        pid = g2[0]
+                        continue
                     entry["ancestry"].append({"name": g[0], "pid": pid, "exe": g[2]})
                     if entry["code_signing"] is None:
                         entry["code_signing"] = g[3]
