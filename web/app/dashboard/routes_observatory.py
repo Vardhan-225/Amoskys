@@ -1260,6 +1260,56 @@ def network_by_process():
     )
 
 
+@dashboard_bp.route("/api/network/connection-story")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_connection_story():
+    """Assemble ONE destination into a narrative a human can act on.
+
+    The rest of this page reports aggregates — bars by country, by ASN, by
+    process. Aggregates tell you the shape of the traffic and nothing about
+    whether any of it matters. This assembles the four things an analyst
+    actually asks about a single destination, from tables that already hold
+    them and were simply never joined:
+
+        WHAT   flow_events        volume, ports, protocol, first/last seen
+        WHO    process_genealogy  the process AND its ancestry + code signing
+        WHERE  flow_events        geo city/country + the ASN org that OWNS it
+        WHY    the corroboration ledger, below
+
+    The ledger is the point. Every other security console shows a verdict.
+    This shows the EVIDENCE FOR the verdict, including — deliberately — the
+    evidence that is missing. AMOSKYS caps an uncorroborated attack category
+    at "suspicious" rather than escalating it (scoring.py's corroboration
+    gate), and an operator who cannot see WHY a thing was capped has no reason
+    to trust either the cap or the escalation. So the response says, in as many
+    words, "I would rate this higher but nothing independent supports it."
+
+    Note on naming: macOS masks DNS names in the unified log as
+    <mask.hash: 'xxx'>, so the resolved domain genuinely is not recoverable
+    here. The ASN organisation is the naming layer instead — and it is the
+    better one, because "Anthropic, PBC" identifies the counterparty where a
+    domain only labels it.
+    """
+    store = _get_store()
+    if not store:
+        return jsonify({"available": False, "error": "telemetry_store_unavailable"})
+
+    dst_ip = (request.args.get("dst_ip") or "").strip()
+    if not dst_ip:
+        return jsonify({"available": False, "error": "dst_ip required"}), 400
+    # Clamped both ends: a negative or absurd window is a full-table scan.
+    hours = max(1, min(request.args.get("hours", 24, type=int) or 24, 24 * 14))
+    device_id = request.args.get("device_id") or None
+
+    try:
+        story = store.get_connection_story(dst_ip, hours=hours, device_id=device_id)
+    except Exception:
+        logger.warning("connection story failed for %s", dst_ip, exc_info=True)
+        return jsonify({"available": False, "error": "story_query_failed"})
+    return jsonify(story)
+
+
 @dashboard_bp.route("/api/network/flows")
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)

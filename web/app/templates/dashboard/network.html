@@ -409,8 +409,27 @@
     </div>
 
     <!-- Top Destinations Table (lazy-loaded) -->
+    <!-- Connection Story — the narrative layer.
+         Everything else on this page is an aggregate: bars by country, by ASN,
+         by process. Aggregates describe the SHAPE of traffic and say nothing
+         about whether any of it matters. Selecting a destination assembles the
+         four questions an analyst actually asks — what, who, where, why — and
+         shows the corroboration ledger behind the verdict rather than just the
+         verdict. Hidden until a row is chosen. -->
+    <div class="net-card" id="story-section" style="display:none;">
+        <div class="net-card-title">
+            Connection Story
+            <span id="story-dst" style="font-family:monospace;color:var(--neural-primary);margin-left:0.5rem;"></span>
+            <button id="story-close" title="Close"
+                style="float:right;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;line-height:1;">&times;</button>
+        </div>
+        <div id="story-body" style="padding:0.25rem 0.1rem;">
+            <div style="color:var(--text-muted);padding:1rem;">Select a destination below to build its story.</div>
+        </div>
+    </div>
+
     <div class="net-card" id="destinations-section">
-        <div class="net-card-title">Top Destinations</div>
+        <div class="net-card-title">Top Destinations <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">— click a row for its story</span></div>
         <div class="net-search-bar">
             <input type="text" class="net-search-input" id="dst-search" placeholder="Search by IP, country, ASN...">
             <button class="net-search-btn" id="dst-filter-btn">Filter</button>
@@ -1109,7 +1128,10 @@
             const netType = d.network_type || 'unknown';
             const totalBytes = (d.bytes_tx || 0) + (d.bytes_rx || 0) + (d.bytes || 0);
             const cls = asnTypeClass(netType);
-            return '<tr' + (isThreat ? ' style="background:rgba(255,51,102,0.03);"' : '') + '>' +
+            // data-dst drives the story panel. Delegated listener, not an
+            // inline onclick — a CSP nonce can never authorise an on* attribute.
+            return '<tr data-dst="' + escHtml(d.dst_ip || '') + '" style="cursor:pointer;' +
+                   (isThreat ? 'background:rgba(255,51,102,0.03);' : '') + '">' +
                 '<td style="font-family:monospace;font-size:0.78rem;color:var(--neural-primary);">' + escHtml(d.dst_ip || '') + '</td>' +
                 '<td>' + (d.dst_port || '-') + '</td>' +
                 '<td><span style="padding:0.1rem 0.4rem;background:rgba(0,255,136,0.15);color:#00ff88;border-radius:4px;font-size:0.7rem;font-weight:700;">' + escHtml(d.protocol || 'TCP') + '</span></td>' +
@@ -1267,5 +1289,151 @@
     startPoller(selectedHours);
 
 })();
+    // ── Connection Story ───────────────────────────────────────────────────
+    // Turns one destination into a narrative. The corroboration ledger is the
+    // reason this exists: every other console shows a verdict, this shows the
+    // evidence FOR the verdict — including the evidence that is absent, which
+    // is why a thing stayed "suspicious" instead of escalating.
+    function fmtBytes(n) {
+        n = n || 0;
+        if (n > 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+        if (n > 1048576) return (n / 1048576).toFixed(1) + ' MB';
+        if (n > 1024) return (n / 1024).toFixed(1) + ' KB';
+        return n + ' B';
+    }
+
+    async function loadStory(dstIp) {
+        const sec = document.getElementById('story-section');
+        const body = document.getElementById('story-body');
+        document.getElementById('story-dst').textContent = dstIp;
+        sec.style.display = '';
+        body.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Assembling story…</div>';
+        sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        try {
+            const r = await fetch('/dashboard/api/network/connection-story?dst_ip=' +
+                encodeURIComponent(dstIp) + '&hours=' + selectedHours + _devQ);
+            const s = await r.json();
+            if (s.available === false) {
+                body.innerHTML = '<div style="padding:1rem;"><strong class="warn-text">Story unavailable.</strong> ' +
+                    'The flow data could not be read (' + escHtml(String(s.error || 'unknown')) +
+                    '). This is not a statement that the connection is clean.</div>';
+                return;
+            }
+            if (!s.found) {
+                body.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">No flows to this destination in the selected window.</div>';
+                return;
+            }
+            renderStory(s);
+        } catch (e) {
+            body.innerHTML = '<div style="padding:1rem;"><strong class="warn-text">Story request failed.</strong></div>';
+        }
+    }
+
+    function renderStory(s) {
+        const w = s.what, wh = s.where, why = s.why;
+        const ports = (w.ports || []).slice(0, 4)
+            .map(function (p) { return (p.port || '?') + '/' + (p.protocol || '?'); }).join(', ');
+
+        var who = (s.who || []).slice(0, 3).map(function (p) {
+            var chain = (p.ancestry || []).map(function (a) { return escHtml(a.name || '?'); }).join(' &larr; ')
+                || escHtml(p.name || '?');
+            var sign = p.code_signing || 'unknown';
+            var signWarn = (['signed', 'apple', 'valid'].indexOf(sign) === -1);
+            return '<div style="margin:0.3rem 0;">' +
+                '<span style="font-family:monospace;color:var(--neural-primary);">' + chain + '</span>' +
+                ' <span style="color:var(--text-muted);font-size:0.78rem;">' + p.flows + ' flows &middot; signing: </span>' +
+                '<span style="font-size:0.78rem;color:' + (signWarn ? '#ffb347' : '#00ff88') + ';">' + escHtml(sign) + '</span>' +
+                (p.exe ? '<div style="font-family:monospace;font-size:0.72rem;color:var(--text-muted);">' + escHtml(p.exe) + '</div>' : '') +
+                '</div>';
+        }).join('') || '<div style="color:var(--text-muted);">No process attributed to these flows.</div>';
+
+        var ledger = (why.checks || []).map(function (c) {
+            var icon = c.fired ? '&#x25CF;' : '&#x25CB;';
+            var col = c.corroborating ? '#00ff88' : (c.fired ? '#ffb347' : 'var(--text-muted)');
+            return '<div style="display:flex;gap:0.5rem;padding:0.22rem 0;font-size:0.82rem;">' +
+                '<span style="color:' + col + ';">' + icon + '</span>' +
+                '<span style="min-width:150px;font-weight:600;">' + escHtml(c.name) + '</span>' +
+                '<span style="color:var(--text-muted);">' + escHtml(c.detail) + '</span></div>';
+        }).join('');
+
+        var related = (s.related_events || []).map(function (e) {
+            return '<span style="display:inline-block;padding:0.12rem 0.45rem;margin:0.12rem;border-radius:4px;' +
+                'background:rgba(0,217,255,0.10);font-size:0.74rem;">' + escHtml(e.category || '?') +
+                ' <span style="color:var(--text-muted);">' + (e.risk != null ? Number(e.risk).toFixed(2) : '?') + '</span></span>';
+        }).join('') || '<span style="color:var(--text-muted);font-size:0.8rem;">none in this window</span>';
+
+        var ceilingColor = why.verdict_ceiling === 'malicious' ? '#ff3366' : '#ffb347';
+
+        document.getElementById('story-body').innerHTML =
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;">' +
+              '<div>' +
+                '<div class="story-h">WHERE</div>' +
+                '<div style="font-size:1.02rem;font-weight:600;">' + escHtml(wh.asn_org || 'unknown owner') + '</div>' +
+                '<div style="color:var(--text-muted);font-size:0.82rem;">' +
+                  escHtml([wh.city, wh.country].filter(Boolean).join(', ') || 'not geolocated') +
+                  (wh.network_type ? ' &middot; ' + escHtml(wh.network_type) : '') + '</div>' +
+                '<div class="story-h" style="margin-top:0.8rem;">WHAT</div>' +
+                '<div style="font-size:0.86rem;">' + w.flows + ' flows &middot; ' +
+                  fmtBytes((w.bytes_sent || 0) + (w.bytes_received || 0)) + '</div>' +
+                '<div style="color:var(--text-muted);font-size:0.8rem;">ports ' + escHtml(ports || 'unknown') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="story-h">WHO</div>' + who +
+              '</div>' +
+            '</div>' +
+            '<div style="margin-top:1rem;padding-top:0.8rem;border-top:1px solid rgba(255,255,255,0.07);">' +
+              '<div class="story-h">WHY &mdash; corroboration ledger</div>' + ledger +
+              '<div style="margin-top:0.6rem;padding:0.6rem 0.7rem;border-radius:6px;background:rgba(255,255,255,0.03);">' +
+                '<span style="font-weight:700;color:' + ceilingColor + ';">Verdict ceiling: ' +
+                escHtml(why.verdict_ceiling) + '</span>' +
+                '<div style="color:var(--text-muted);font-size:0.82rem;margin-top:0.25rem;">' +
+                escHtml(why.explanation) + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.8rem;">' +
+              '<div class="story-h">RELATED DETECTIONS</div>' + related +
+            '</div>' +
+            '<div style="margin-top:1rem;">' +
+              '<button id="story-hunt" class="net-search-btn" data-dst="' + escHtml(s.dst_ip) + '">' +
+              'Ask IGRIS to hunt this connection</button>' +
+            '</div>';
+    }
+
+    // Delegated listeners — no inline handlers (CSP cannot authorise on* attrs).
+    document.addEventListener('click', function (ev) {
+        var row = ev.target.closest ? ev.target.closest('tr[data-dst]') : null;
+        if (row && row.getAttribute('data-dst')) { loadStory(row.getAttribute('data-dst')); return; }
+
+        if (ev.target && ev.target.id === 'story-close') {
+            document.getElementById('story-section').style.display = 'none';
+            return;
+        }
+
+        var hunt = ev.target.closest ? ev.target.closest('#story-hunt') : null;
+        if (hunt) {
+            // Hand the destination to IGRIS with enough context that the hunt
+            // starts from evidence rather than from the IP alone.
+            var dst = hunt.getAttribute('data-dst');
+            var owner = (document.querySelector('#story-body .story-h') &&
+                document.querySelector('#story-body div[style*="1.02rem"]'));
+            var ownerTxt = owner ? owner.textContent.trim() : '';
+            var prompt = 'Hunt the connection to ' + dst +
+                (ownerTxt ? ' (' + ownerTxt + ')' : '') +
+                '. Which processes opened it, what else did they touch in the same window, ' +
+                'and is there any independent corroboration that this is hostile?';
+            var panel = document.getElementById('igris-chat-panel');
+            var toggle = document.getElementById('igris-chat-toggle');
+            if (panel && panel.style.display === 'none' && toggle) toggle.click();
+            var input = document.getElementById('igris-input');
+            var send = document.getElementById('igris-send');
+            if (input) {
+                input.value = prompt;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.focus();
+            }
+            if (send) setTimeout(function () { send.click(); }, 120);
+        }
+    });
+
 </script>
 {% endblock %}

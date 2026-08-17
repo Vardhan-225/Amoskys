@@ -411,6 +411,220 @@ class DomainQueryMixin:
                 logger.error("Flow top destinations failed: %s", e)
                 return []
 
+    def get_connection_story(
+        self, dst_ip: str, hours: int = 24, device_id: str = None
+    ) -> dict:
+        """Assemble one destination into WHAT / WHO / WHERE / WHY.
+
+        Every other query on this page returns an aggregate. Aggregates
+        describe the shape of the traffic and say nothing about whether any of
+        it matters. This joins four tables that already held the answer and
+        were simply never asked together.
+
+        The corroboration ledger is the reason this exists. AMOSKYS caps an
+        uncorroborated attack category at "suspicious" instead of escalating
+        it, and an operator who cannot see WHY something was capped has no
+        reason to trust the cap or the escalation. So the ledger reports each
+        check, whether it fired, and — when nothing corroborates — says plainly
+        that the verdict is being held down rather than earned.
+
+        Read-only, and degrades rather than raises: a missing sub-query yields
+        an empty section, never a failed story.
+        """
+        cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        dev_sql = " AND device_id = ?" if device_id else ""
+        dev_p: tuple = (device_id,) if device_id else ()
+        out: dict = {"available": True, "dst_ip": dst_ip, "hours": hours}
+
+        with self._read_pool.connection() as rdb:
+            # ── WHAT ────────────────────────────────────────────────────────
+            row = rdb.execute(
+                f"""SELECT COUNT(*), SUM(COALESCE(bytes_tx,0)), SUM(COALESCE(bytes_rx,0)),
+                           MIN(timestamp_ns), MAX(timestamp_ns),
+                           COUNT(DISTINCT dst_port), COUNT(DISTINCT protocol),
+                           MAX(COALESCE(threat_intel_match,0))
+                    FROM flow_events
+                    WHERE dst_ip = ? AND timestamp_ns > ?{dev_sql}""",
+                (dst_ip, cutoff_ns, *dev_p),
+            ).fetchone()
+            if not row or not row[0]:
+                return {"available": True, "found": False, "dst_ip": dst_ip}
+            out["found"] = True
+            out["what"] = {
+                "flows": row[0],
+                "bytes_sent": row[1] or 0,
+                "bytes_received": row[2] or 0,
+                "first_seen_ns": row[3],
+                "last_seen_ns": row[4],
+                "distinct_ports": row[5] or 0,
+                "distinct_protocols": row[6] or 0,
+            }
+            ti_match = bool(row[7])
+
+            ports = [
+                {"port": r[0], "protocol": r[1], "flows": r[2]}
+                for r in rdb.execute(
+                    f"""SELECT dst_port, protocol, COUNT(*) c FROM flow_events
+                        WHERE dst_ip = ? AND timestamp_ns > ?{dev_sql}
+                        GROUP BY dst_port, protocol ORDER BY c DESC LIMIT 5""",
+                    (dst_ip, cutoff_ns, *dev_p),
+                ).fetchall()
+            ]
+            out["what"]["ports"] = ports
+
+            # ── WHERE ───────────────────────────────────────────────────────
+            loc = rdb.execute(
+                f"""SELECT geo_dst_country, geo_dst_city, asn_dst_org,
+                           asn_dst_number, asn_dst_network_type
+                    FROM flow_events
+                    WHERE dst_ip = ? AND timestamp_ns > ?{dev_sql}
+                      AND (asn_dst_org IS NOT NULL OR geo_dst_country IS NOT NULL)
+                    ORDER BY timestamp_ns DESC LIMIT 1""",
+                (dst_ip, cutoff_ns, *dev_p),
+            ).fetchone()
+            country = (loc[0] if loc else None) or ""
+            out["where"] = {
+                "country": country or None,
+                "city": (loc[1] if loc else None) or None,
+                "asn_org": (loc[2] if loc else None) or None,
+                "asn_number": (loc[3] if loc else None),
+                "network_type": (loc[4] if loc else None) or None,
+            }
+
+            # ── WHO (process + ancestry + signing) ───────────────────────────
+            procs = []
+            for pr in rdb.execute(
+                f"""SELECT process_name, pid, conn_user, COUNT(*) c
+                    FROM flow_events
+                    WHERE dst_ip = ? AND timestamp_ns > ?{dev_sql}
+                      AND process_name IS NOT NULL AND process_name != ''
+                    GROUP BY process_name, pid ORDER BY c DESC LIMIT 5""",
+                (dst_ip, cutoff_ns, *dev_p),
+            ).fetchall():
+                entry = {
+                    "name": pr[0],
+                    "pid": pr[1],
+                    "user": pr[2],
+                    "flows": pr[3],
+                    "ancestry": [],
+                    "code_signing": None,
+                    "exe": None,
+                }
+                # Walk up to 4 generations. Ancestry is what distinguishes
+                # "Terminal -> zsh -> curl" from "launchd -> something in /tmp".
+                pid, seen = pr[1], set()
+                for _ in range(4):
+                    if pid is None or pid in seen:
+                        break
+                    seen.add(pid)
+                    g = rdb.execute(
+                        """SELECT name, ppid, exe, code_signing
+                           FROM process_genealogy WHERE pid = ?
+                           ORDER BY last_seen_ns DESC LIMIT 1""",
+                        (pid,),
+                    ).fetchone()
+                    if not g:
+                        break
+                    entry["ancestry"].append({"name": g[0], "pid": pid, "exe": g[2]})
+                    if entry["code_signing"] is None:
+                        entry["code_signing"] = g[3]
+                        entry["exe"] = g[2]
+                    pid = g[1]
+                procs.append(entry)
+            out["who"] = procs
+
+            # ── WHY — the corroboration ledger ──────────────────────────────
+            # Mirrors scoring.py's gate so the UI explains the SAME rule the
+            # scorer applied, rather than a second opinion that could drift.
+            home = {"US", "GB", "IE", "NL", "CA", "DE", "FR", "AU"}
+            foreign = bool(country) and country not in home
+            unsigned = any(
+                (p.get("code_signing") or "unknown") not in ("signed", "apple", "valid")
+                for p in procs
+            )
+            first_ns = out["what"]["first_seen_ns"] or 0
+            novel = bool(first_ns) and (time.time() * 1e9 - first_ns) < 3600 * 1e9
+
+            checks = [
+                {
+                    "name": "Threat intelligence",
+                    "fired": ti_match,
+                    "detail": (
+                        "matched a known-bad indicator"
+                        if ti_match
+                        else "no match against the loaded indicator set"
+                    ),
+                    "corroborating": ti_match,
+                },
+                {
+                    "name": "Geography",
+                    "fired": foreign,
+                    "detail": (
+                        f"{country} is outside the home regions"
+                        if foreign
+                        else f"{country or 'unknown'} is a home region or ungeolocated"
+                    ),
+                    "corroborating": foreign,
+                },
+                {
+                    "name": "Code signing",
+                    "fired": unsigned,
+                    "detail": (
+                        "an involved binary is unsigned or unknown"
+                        if unsigned
+                        else "involved binaries are signed"
+                    ),
+                    "corroborating": False,  # supporting context, not independent
+                },
+                {
+                    "name": "Novelty",
+                    "fired": novel,
+                    "detail": (
+                        "first seen within the last hour"
+                        if novel
+                        else "seen before this window"
+                    ),
+                    "corroborating": False,
+                },
+            ]
+            corroborated = any(c["corroborating"] for c in checks)
+            out["why"] = {
+                "checks": checks,
+                "corroborated": corroborated,
+                "verdict_ceiling": "malicious" if corroborated else "suspicious",
+                "explanation": (
+                    "Independent evidence supports escalation, so this destination "
+                    "may be rated malicious."
+                    if corroborated
+                    else "Nothing independent corroborates this destination, so its "
+                    "rating is deliberately capped at suspicious. A category label "
+                    "and a high self-reported score are not evidence — the probe "
+                    "would be vouching for itself."
+                ),
+            }
+
+            # ── related security events, for the narrative tail ─────────────
+            out["related_events"] = [
+                {
+                    "category": r[0],
+                    "risk": r[1],
+                    "classification": r[2],
+                    "mitre": r[3],
+                }
+                for r in rdb.execute(
+                    """SELECT event_category, risk_score, final_classification,
+                              COALESCE(mitre_techniques,'[]')
+                       FROM security_events
+                       WHERE timestamp_ns > ? AND (
+                             COALESCE(raw_attributes_json,'') LIKE ?
+                          OR COALESCE(indicators,'') LIKE ? )
+                       ORDER BY risk_score DESC LIMIT 5""",
+                    (cutoff_ns, f"%{dst_ip}%", f"%{dst_ip}%"),
+                ).fetchall()
+            ]
+
+        return out
+
     def get_flow_by_process(
         self, hours: int = 24, limit: int = 20, device_id: Optional[str] = None
     ) -> List[Dict]:
