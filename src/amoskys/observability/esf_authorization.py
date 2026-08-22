@@ -113,6 +113,7 @@ def _inspect_fda(paths: list[Path], binary: Path | None) -> dict[str, Any]:
     basename = binary.name
     state = "missing"
     others: list[dict[str, Any]] = []
+    ghosts: list[dict[str, Any]] = []
     for path in paths:
         if not path.exists():
             continue
@@ -134,8 +135,58 @@ def _inspect_fda(paths: list[Path], binary: Path | None) -> dict[str, Any]:
             if client == target:
                 state = "allowed" if auth == 2 else "denied"
             elif client.endswith("/" + basename) and auth == 2:
-                others.append({"client": client, "auth_value": auth})
-    return {"state": state, "same_name_elsewhere": others, "target": target}
+                # A path-form grant (client starts with "/") can outlive the
+                # file it names. System Settings still lists it with a
+                # checkmark, so the grant LOOKS held while protecting nothing.
+                # That is the worst failure shape this module exists to catch:
+                # a green control panel over a blind sensor. Checked without
+                # reading client_type so this survives TCC schema drift.
+                is_path = client.startswith("/")
+                exists = os.path.exists(client) if is_path else True
+                entry = {
+                    "client": client,
+                    "auth_value": auth,
+                    "path_exists": exists,
+                }
+                others.append(entry)
+                if is_path and not exists:
+                    ghosts.append(entry)
+    return {
+        "state": state,
+        "same_name_elsewhere": others,
+        "ghost_grants": ghosts,
+        "target": target,
+    }
+
+
+def _fda_clause(fda: dict[str, Any]) -> str:
+    """One sentence naming the FDA problem, or "" when FDA is not a problem.
+
+    Appended to whatever the primary verdict is, because ESF and FDA fail
+    INDEPENDENTLY and the old code returned on the first blocker it found.
+    That turned a two-fault machine into two debugging sessions: fix the ESF
+    grant, restart, wait, and only then learn FDA was also missing.
+    """
+    state = fda.get("state")
+    if state in ("allowed", "unknown"):
+        return ""
+    ghosts = fda.get("ghost_grants") or []
+    if ghosts:
+        stale = ghosts[0]["client"]
+        return (
+            ". Full Disk Access is ALSO not held: the entry named "
+            f"'{os.path.basename(stale)}' points at {stale}, which no longer "
+            "exists. System Settings shows that entry enabled, so FDA looks "
+            "granted while protecting a deleted file. Remove it and add the "
+            ".app bundle itself."
+        )
+    others = fda.get("same_name_elsewhere") or []
+    if others:
+        return (
+            ". Full Disk Access is ALSO not held by this binary — a file with "
+            f"the same name holds it instead ({others[0]['client']})."
+        )
+    return ". Full Disk Access is ALSO not held by this binary."
 
 
 def _safe_int(value: Any) -> int | None:
@@ -321,12 +372,21 @@ def inspect_esf_authorization(
     checked_at = float(now or time.time())
     resolved_device_id = device_id or _device_id()
     tcc = _inspect_tcc(paths=tcc_paths, clients=clients, binary=binary)
+    # Inspected UP FRONT, not inside the FDA branch. ESF and FDA are separate
+    # grants that fail independently, and every verdict below returns early —
+    # so computing FDA lazily meant the first blocker found masked the second.
+    # On this machine both were broken at once: the ESF grant was denied for
+    # the bundle id AND the FDA grant pointed at a deleted file. Reporting one
+    # at a time turns a single fix into a fix-restart-rediscover loop.
+    fda = _inspect_fda(tcc_paths, binary)
+    fda_note = _fda_clause(fda)
     evidence = {
         "binary": str(binary),
         "binary_exists": binary.exists(),
         "log_path": source_path,
         "latest_line": line,
         "tcc": tcc,
+        "fda": fda,
     }
 
     if tcc["state"] == "denied":
@@ -336,7 +396,7 @@ def inspect_esf_authorization(
             checked_at=checked_at,
             kind="endpoint_security_tcc",
             status="unauthorized",
-            reason="AMOSKYS Sentinel installed, but Endpoint Security TCC is denied",
+            reason="AMOSKYS Sentinel installed, but Endpoint Security TCC is denied" + fda_note,
             evidence=evidence,
         )
     if tcc["state"] == "missing" and "guarding exec" not in line:
@@ -346,7 +406,7 @@ def inspect_esf_authorization(
             checked_at=checked_at,
             kind="endpoint_security_tcc_missing_grant",
             status="unauthorized",
-            reason="AMOSKYS Sentinel has no Endpoint Security TCC grant",
+            reason="AMOSKYS Sentinel has no Endpoint Security TCC grant" + fda_note,
             evidence=evidence,
         )
     if tcc["state"] == "limited":
@@ -356,7 +416,7 @@ def inspect_esf_authorization(
             checked_at=checked_at,
             kind="endpoint_security_tcc_limited",
             status="unauthorized",
-            reason="AMOSKYS Sentinel Endpoint Security TCC grant is limited",
+            reason="AMOSKYS Sentinel Endpoint Security TCC grant is limited" + fda_note,
             evidence=evidence,
         )
     if tcc["state"] == "allowed" and (not line or "guarding exec" in line):
@@ -371,8 +431,6 @@ def inspect_esf_authorization(
         # FDA explicitly. Report what is actually missing, and say WHICH file
         # needs the grant — because the common failure is a same-named binary
         # holding it at a different path.
-        fda = _inspect_fda(tcc_paths, binary)
-        evidence["fda"] = fda
         status = "unauthorized"
         kind = "endpoint_security_fda"
         evidence["tcc_service"] = _TCC_FDA_SERVICE
