@@ -170,8 +170,11 @@ class SecurityMixin:
                 event_data["enrichment_status"] = enriched_attrs.get(
                     "enrichment_status", "raw"
                 )
+                # See analyzer_main: None means "never checked", False means
+                # "checked and clean". Fixing only one of the writers is this
+                # codebase's documented recurring failure, so both move together.
                 event_data["threat_intel_match"] = enriched_attrs.get(
-                    "threat_intel_match", False
+                    "threat_intel_match"
                 )
                 event_data["geo_src_country"] = enriched_attrs.get(
                     "geo_src_country"
@@ -787,7 +790,7 @@ class SecurityMixin:
                     "asn_dst_org": attrs.get("asn_dst_org"),
                     "asn_dst_network_type": attrs.get("asn_dst_network_type"),
                     # Enrichment: ThreatIntel
-                    "threat_intel_match": attrs.get("threat_intel_match", False),
+                    "threat_intel_match": attrs.get("threat_intel_match"),
                     "threat_source": attrs.get("threat_source"),
                     "threat_severity": attrs.get("threat_severity"),
                 }

@@ -195,6 +195,36 @@ def _iso_age_days(value):
     return (datetime.now(timezone.utc) - parsed).total_seconds() / 86400
 
 
+def _intel_corpus_size():
+    """Number of UNEXPIRED indicators available to the matcher, or None.
+
+    Deliberately counts only unexpired rows: this feed had 1,155 rows on disk
+    and zero of them live, because every row shared one expires_at that passed
+    on 2026-07-01. A plain COUNT(*) would have reported a healthy 1,155 and
+    reproduced the exact failure this check exists to prevent.
+
+    Returns None when the corpus genuinely cannot be determined from here (no
+    configured DB), so the caller can say "unverified" instead of inventing a
+    number in either direction.
+    """
+    path = (os.getenv("AMOSKYS_THREAT_INTEL_DB") or "").strip()
+    if not path or not os.path.isabs(path) or not os.path.exists(path):
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM indicators "
+                "WHERE expires_at IS NULL OR expires_at > ?",
+                (datetime.now(timezone.utc).isoformat(),),
+            ).fetchone()
+            return int(row[0] or 0) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
 def _threat_intel_evidence_from_data(store, hours=24):
     """Did intel actually RUN on the telemetry being displayed?
 
@@ -245,14 +275,45 @@ def _threat_intel_health(store=None):
         if ev is not None:
             checked, matched, total = ev
             if checked >= total and total > 0:
+                # "It ran" is NOT "it was armed". An enricher with zero
+                # unexpired indicators still executes on every flow and still
+                # returns a verdict — one that is arithmetically forced to be
+                # negative. Reporting that as healthy is how a feed that
+                # expired wholesale on 2026-07-01 kept a green badge for 52
+                # days while 22,366 flows went past unexamined.
+                #
+                # A zero-match run only certifies the sensor if the corpus
+                # could have produced a match. matched > 0 proves that
+                # directly. Otherwise the corpus size has to be established
+                # independently, and if it cannot be, the honest answer is
+                # "unverified" — not "healthy".
+                corpus = _intel_corpus_size()
+                if matched > 0 or (corpus is not None and corpus > 0):
+                    return _health_status(
+                        "healthy",
+                        (
+                            f"Intel evaluated at the collector on {checked:,} of "
+                            f"{total:,} flows — {matched:,} matched"
+                        ),
+                        configured=True,
+                        indicators=corpus,
+                        source="collector",
+                    )
+                detail = (
+                    "the indicator feed is empty or fully expired"
+                    if corpus == 0
+                    else "the sensor does not report its indicator count"
+                )
                 return _health_status(
-                    "healthy",
+                    "degraded",
                     (
-                        f"Intel evaluated at the collector on {checked:,} of "
-                        f"{total:,} flows — {matched:,} matched"
+                        f"Intel ran on {checked:,} of {total:,} flows and matched "
+                        f"nothing, but {detail} — a zero-match result here is "
+                        f"arithmetic, not evidence. Refresh the feed "
+                        f"(scripts/update_threat_intel.py)."
                     ),
                     configured=True,
-                    indicators=None,
+                    indicators=corpus,
                     source="collector",
                 )
             if checked > 0:

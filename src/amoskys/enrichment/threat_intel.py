@@ -80,7 +80,9 @@ class ThreatIntelEnricher:
         # Fail loud, not open: an empty indicator store means every lookup
         # returns False — a silent false-clean. Surface it at startup so a
         # missing/unpopulated feed cannot masquerade as "no threats found".
-        self.degraded = self.indicator_count() == 0
+        self._armed_checked_at = 0.0
+        self._armed_cached = self.indicator_count() > 0
+        self.degraded = not self._armed_cached
         if self.degraded:
             logger.warning(
                 "ThreatIntel DB has 0 indicators (%s) — threat_intel_match will "
@@ -230,8 +232,30 @@ class ThreatIntelEnricher:
     def enrich_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Enrich event by checking IP, domain, and hash fields.
 
-        Sets ``threat_intel_match`` (bool) and ``threat_source`` on the event.
+        Sets ``threat_intel_match`` and ``threat_source`` on the event.
+
+        ``threat_intel_match`` is tri-state on purpose:
+            True  -> matched a live indicator
+            False -> checked against a live corpus, no match (a real negative)
+            None  -> NOT CHECKED; the corpus is empty or fully expired
+
+        None is not a failure to enrich, it is a refusal to certify. See the
+        abstain branch at the bottom of this method.
         """
+        # Checked FIRST, before any lookup. Two reasons, both load-bearing:
+        #
+        #  - check_indicator() is LRU-cached, so a match made while the corpus
+        #    was live keeps being served after those indicators expire. That
+        #    turned an expired feed into a source of stale CONVICTIONS — the
+        #    mirror of the stale-acquittal bug — and it beat the abstain branch
+        #    below because `if matches:` was evaluated first.
+        #  - An unarmed enricher has nothing to find, so the lookups are pure
+        #    cost on the hot path.
+        if not self.armed:
+            event["threat_intel_match"] = None
+            event["threat_intel_state"] = "unarmed"
+            return event
+
         matches: List[Dict[str, Any]] = []
 
         # Check IP fields
@@ -265,10 +289,64 @@ class ThreatIntelEnricher:
             best = min(matches, key=lambda m: severity_order.get(m["severity"], 99))
             event["threat_source"] = best["source"]
             event["threat_severity"] = best["severity"]
-        else:
+        elif self.armed:
             event["threat_intel_match"] = False
+        else:  # pragma: no cover - guarded by the early return above
+            # ABSTAIN, do not acquit. With zero active indicators a "no match"
+            # is arithmetic, not evidence — every lookup returns False whether
+            # the host is clean or fully compromised. Writing False here is
+            # what let a dead feed read as HEALTHY on the dashboard for 52
+            # days: all 1,155 indicators expired 2026-07-01, and every flow
+            # since carried a confident-looking False.
+            #
+            # None is the honest value and the column is nullable. Downstream
+            # readers all use truthiness (bool(...)/or/if), so None behaves
+            # exactly like False for scoring, while remaining distinguishable
+            # from it for HEALTH reporting — which is the entire point.
+            event["threat_intel_match"] = None
+            event["threat_intel_state"] = "unarmed"
 
         return event
+
+    _ARMED_TTL_S = 300.0
+
+    @property
+    def armed(self) -> bool:
+        """True when at least one UNEXPIRED indicator is loaded.
+
+        Re-evaluated on a TTL rather than frozen at __init__, because a feed
+        does not go empty at startup — it goes empty on a Tuesday, while every
+        process is happily running. This one expired wholesale on 2026-07-01
+        (all 1,155 rows shared a single expires_at), so a long-lived analyzer
+        would have kept reporting itself armed indefinitely against a corpus
+        that had silently gone to zero.
+
+        Cached for _ARMED_TTL_S so the hot enrichment path costs one indexed
+        COUNT every five minutes, not one per event.
+        """
+        now = time.monotonic()
+        if now - self._armed_checked_at > self._ARMED_TTL_S:
+            was = self._armed_cached
+            self._armed_cached = self.indicator_count() > 0
+            self._armed_checked_at = now
+            self.degraded = not self._armed_cached
+            if was != self._armed_cached:
+                # Both directions matter: disarming must drop cached HITS
+                # (stale convictions on expired indicators), and re-arming must
+                # drop cached MISSES (indicators that did not exist last time
+                # this IP was looked up). Either way the cached answers were
+                # computed against a corpus that no longer exists.
+                try:
+                    self._check_cached.cache_clear()
+                except Exception:
+                    pass
+                logger.warning(
+                    "ThreatIntel corpus went %s (%d active indicators) — "
+                    "lookup cache cleared",
+                    "ARMED" if self._armed_cached else "UNARMED",
+                    self.indicator_count(),
+                )
+        return self._armed_cached
 
     def indicator_count(self) -> int:
         """Return total number of active (non-expired) indicators."""

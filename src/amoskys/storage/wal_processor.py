@@ -781,7 +781,7 @@ class WALProcessor(
                     (
                         json.dumps(indicators),
                         indicators.get("enrichment_status", "raw"),
-                        indicators.get("threat_intel_match", False),
+                        indicators.get("threat_intel_match"),
                         geo_country,
                         asn_org,
                         row_id,

@@ -659,8 +659,16 @@ def main(run_once: bool = False) -> int:
                                         "asn_src_network_type"
                                     )
                                     or attrs.get("asn_dst_network_type"),
+                                    # No False default: "enrichment never ran" and
+                                    # "enrichment ran and cleared it" are different
+                                    # facts. Collapsing them destroyed the only signal
+                                    # health reporting had, and a feed whose indicators
+                                    # all expired on 2026-07-01 read as HEALTHY for 52
+                                    # days. Column is nullable; consumers use truthiness,
+                                    # so None scores like False but stays visible as
+                                    # "unchecked". All 12 writer sites moved together.
                                     "threat_intel_match": attrs.get(
-                                        "threat_intel_match", False
+                                        "threat_intel_match"
                                     ),
                                     "enrichment_status": attrs.get(
                                         "enrichment_status", "raw"
@@ -1094,8 +1102,7 @@ def main(run_once: bool = False) -> int:
                                                     "asn_dst_network_type"
                                                 ),
                                                 "threat_intel_match": attrs.get(
-                                                    "threat_intel_match", False
-                                                ),
+                                                    "threat_intel_match"),
                                             }
                                         )
 

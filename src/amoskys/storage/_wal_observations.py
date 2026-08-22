@@ -230,7 +230,7 @@ class ObservationMixin:
                 "asn_dst_org": attrs.get("asn_dst_org"),
                 "asn_dst_network_type": attrs.get("asn_dst_network_type"),
                 # ThreatIntel enrichment
-                "threat_intel_match": attrs.get("threat_intel_match", False),
+                "threat_intel_match": attrs.get("threat_intel_match"),
                 "threat_source": attrs.get("threat_source"),
                 "threat_severity": attrs.get("threat_severity"),
             }
