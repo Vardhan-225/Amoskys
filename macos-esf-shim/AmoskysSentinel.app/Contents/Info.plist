@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Bundle identity MUST match the App ID that carries the ESF entitlement. -->
+    <key>CFBundleIdentifier</key>
+    <string>com.amoskys.agent</string>
+    <key>CFBundleName</key>
+    <string>AmoskysSentinel</string>
+    <key>CFBundleDisplayName</key>
+    <string>AMOSKYS Sentinel</string>
+    <key>CFBundleExecutable</key>
+    <string>amoskys-sentinel</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <!-- Headless: no Dock icon, no UI. It is an agent/daemon body. -->
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>AMOSKYS — endpoint nervous system. Team 4Z5335ZWBH.</string>
+</dict>
+</plist>

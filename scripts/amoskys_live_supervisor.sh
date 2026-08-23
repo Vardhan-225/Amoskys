@@ -93,5 +93,13 @@ while true; do
   # are absent the shipper exits immediately and this loop simply retries,
   # which is the correct behaviour for an unregistered device.
   pgrep -f 'amoskys.shipper' >/dev/null || nohup "$PY" -m amoskys.shipper >> logs/shipper.live.log 2>&1 &
+  # ESF collector. The Sentinel is the only sensor that sees a process BEFORE
+  # it runs and the only one that reads cdhash and signing state as the kernel
+  # saw them; until this was wired it wrote to a file nothing read. It needs
+  # root and is therefore started separately (see scripts/esf_setup.sh) --
+  # this side only tails what it writes, so the two lifecycles stay
+  # independent: restarting the collector must never interrupt kernel
+  # authorization.
+  pgrep -f 'amoskys.agents.os.macos.esf' >/dev/null || nohup "$PY" -m amoskys.agents.os.macos.esf >> logs/esf_collector.live.log 2>&1 &
   sleep 25
 done

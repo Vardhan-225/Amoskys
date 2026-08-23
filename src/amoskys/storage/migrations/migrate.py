@@ -164,18 +164,84 @@ def rollback_migration(
 
 
 def _split_statements(sql: str) -> List[str]:
-    """Split SQL text into individual statements, filtering blanks/comments."""
-    stmts = []
-    for raw in sql.split(";"):
-        # Strip comment-only lines, keep lines with actual SQL
-        lines = [
-            line
-            for line in raw.strip().splitlines()
-            if line.strip() and not line.strip().startswith("--")
-        ]
-        stmt = "\n".join(lines).strip()
-        if stmt:
-            stmts.append(stmt)
+    """Split SQL text into individual statements, filtering blanks/comments.
+
+    Splits on TOP-LEVEL semicolons only. The previous implementation did a bare
+    sql.split(";") and stripped comments afterwards, so a semicolon anywhere
+    inside a comment or a string literal cut a statement in half. Migration 015
+    hit this with an ordinary English comment --
+
+        -- attacker-controlled and reused; this is not.
+
+    -- which truncated a CREATE TABLE mid-column-list and surfaced only as
+    "sqlite3.OperationalError: incomplete input", pointing at the statement
+    rather than at the splitter. A migration runner that mangles valid SQL
+    depending on comment punctuation is a trap for every migration written
+    after it, so this scans properly instead.
+    """
+    stmts: List[str] = []
+    buf: List[str] = []
+    i, n = 0, len(sql)
+    in_line_comment = False
+    in_block_comment = False
+    quote: Optional[str] = None
+
+    while i < n:
+        ch = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+                buf.append(ch)
+            i += 1
+            continue
+        if in_block_comment:
+            if ch == "*" and nxt == "/":
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if quote:
+            buf.append(ch)
+            # '' inside a single-quoted literal is an escaped quote, not a close.
+            if ch == quote:
+                if ch == "'" and nxt == "'":
+                    buf.append(nxt)
+                    i += 2
+                    continue
+                quote = None
+            i += 1
+            continue
+
+        if ch == "-" and nxt == "-":
+            in_line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            in_block_comment = True
+            i += 2
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == ";":
+            stmt = "".join(buf).strip()
+            if stmt:
+                stmts.append(stmt)
+            buf = []
+            i += 1
+            continue
+
+        buf.append(ch)
+        i += 1
+
+    tail = "".join(buf).strip()
+    if tail:
+        stmts.append(tail)
     return stmts
 
 
