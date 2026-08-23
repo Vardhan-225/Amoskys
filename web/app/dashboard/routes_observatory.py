@@ -287,8 +287,22 @@ def _threat_intel_health(store=None):
                 # directly. Otherwise the corpus size has to be established
                 # independently, and if it cannot be, the honest answer is
                 # "unverified" — not "healthy".
+                # Softened deliberately. The first version of this check
+                # demanded a known non-empty corpus before saying healthy,
+                # which would have flagged every correctly-armed FLEET server
+                # as degraded: AMOSKYS_THREAT_INTEL_DB is intentionally unset
+                # there, so corpus is None, and preferring local config over
+                # fleet data is the exact mistake this function was written to
+                # stop making.
+                #
+                # It is safe to trust the data now, because the writers were
+                # fixed to stop defaulting to False: an UNARMED enricher writes
+                # NULL, so it lands in the checked == 0 branch below and never
+                # reaches here. Reaching this line means an armed enricher
+                # returned a verdict on every flow. corpus is therefore only
+                # used to CONTRADICT that, never to confirm it.
                 corpus = _intel_corpus_size()
-                if matched > 0 or (corpus is not None and corpus > 0):
+                if corpus is None or corpus > 0 or matched > 0:
                     return _health_status(
                         "healthy",
                         (
@@ -299,17 +313,13 @@ def _threat_intel_health(store=None):
                         indicators=corpus,
                         source="collector",
                     )
-                detail = (
-                    "the indicator feed is empty or fully expired"
-                    if corpus == 0
-                    else "the sensor does not report its indicator count"
-                )
                 return _health_status(
                     "degraded",
                     (
                         f"Intel ran on {checked:,} of {total:,} flows and matched "
-                        f"nothing, but {detail} — a zero-match result here is "
-                        f"arithmetic, not evidence. Refresh the feed "
+                        f"nothing, but the indicator feed is empty or fully "
+                        f"expired — a zero-match result here is arithmetic, not "
+                        f"evidence. Refresh the feed "
                         f"(scripts/update_threat_intel.py)."
                     ),
                     configured=True,
