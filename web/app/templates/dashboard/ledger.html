@@ -4,7 +4,17 @@
 
 {% block extra_head %}
 <style>
-.lg-wrap { max-width: 1080px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
+/* base.html defines 23 design tokens and --border-color is NOT one of them.
+   Every `border: 1px solid var(--border-color)` below therefore had an invalid
+   value, which invalidates the whole shorthand — so these cards have been
+   rendering with NO border in production since the page shipped. Declared here,
+   scoped to this page, using base's own card-border value.
+   --font-mono is also undefined app-wide; every use in this file already
+   carries a `, monospace` fallback, so it degrades correctly. */
+.lg-wrap {
+    --border-color: rgba(0, 217, 255, 0.15);
+    max-width: 1080px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem;
+}
 
 /* ── Verdict bar: the one number, with its scale stated ─────────────── */
 .lg-verdict {
@@ -29,6 +39,17 @@
     font-size: 0.72rem; color: var(--text-muted); margin: 0 0 1.6rem 0.2rem;
     letter-spacing: 0.02em;
 }
+
+/* Why the score is what it is — harvested from the retired /dashboard/command,
+   which was the only page that ever showed the factors behind the number. */
+.lg-why-score { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.55rem 0 0; }
+.lg-factor {
+    font-size: 0.68rem; padding: 0.16rem 0.5rem; border-radius: 4px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+.lg-factor b { color: var(--text-primary); font-weight: 600; }
+.lg-factor.cleared { color: var(--text-muted); }
 
 /* ── The witness strip: the product's core claim, or its withdrawal ─── */
 .lg-witness {
@@ -249,6 +270,7 @@
 
 /* ── Toast ──────────────────────────────────────────────────────────── */
 #lg-toast {
+    --border-color: rgba(0, 217, 255, 0.15);   /* outside .lg-wrap */
     position: fixed; right: 1.4rem; bottom: 1.4rem; z-index: 9000;
     max-width: 380px; padding: 0.85rem 1.05rem; border-radius: 9px;
     background: var(--bg-secondary); border: 1px solid var(--border-color);
@@ -280,6 +302,7 @@
         <div>
             <div class="lg-headline" id="lg-headline">Reading your machine…</div>
             <div class="lg-sub" id="lg-sub">One verdict, computed once.</div>
+        <div class="lg-why-score" id="lg-why-score"></div>
         </div>
         <div class="lg-meta" id="lg-meta"></div>
     </div>
@@ -363,6 +386,20 @@
         }
         meta.push(esc(v.source || ''));
         document.getElementById('lg-meta').innerHTML = meta.join('<br>');
+
+        // The factors that produced the number. A score with no explanation is
+        // a number to argue with; a score with its top contributors is one you
+        // can check.
+        const why = document.getElementById('lg-why-score');
+        const factors = v.top_factors || [];
+        const counts = v.counts || {};
+        why.innerHTML = factors.map(function (f) {
+            return '<span class="lg-factor" title="' + esc(f.detail || '') + '">'
+                + '<b>' + esc(f.label) + '</b></span>';
+        }).join('') + (counts.suppressed
+            ? '<span class="lg-factor cleared">+' + esc(counts.suppressed)
+              + ' cleared automatically</span>'
+            : '');
 
         const note = document.getElementById('lg-scale-note');
         note.textContent = v.scale === 'risk'

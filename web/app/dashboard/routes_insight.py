@@ -13,7 +13,7 @@ allowlist. Admins are unrestricted; an unresolvable org FAILS CLOSED.
 
 from __future__ import annotations
 
-from flask import jsonify, render_template, request
+from flask import jsonify, redirect, render_template, request, url_for
 
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
@@ -42,9 +42,34 @@ def _scope() -> tuple[list[str] | None, str]:
 @dashboard_bp.route("/command")
 @require_login
 def command_dashboard():
-    """The redesigned Command dashboard (verdict + live globe + incident queue)."""
-    user = get_current_user()
-    return render_template("dashboard/command.html", user=user)
+    """Retired — redirects to /dashboard/ledger.
+
+    command.html was the unrepaired ancestor of incidents_v2.html: same queue,
+    same flyout, but it never went through the CSP-nonce pass. It carried six
+    inline on* attributes, and production CSP is script-src 'self' + nonce with
+    'unsafe-inline' removed — so on amoskys.com the incident rows did not
+    respond to clicks at all, the flyout's ✕ and its scrim did nothing, and the
+    verdict buttons were inert. Because CSP is disabled in dev, it tested clean
+    locally and was broken only for real users.
+
+    It also made three claims it could not support: a verdict read straight off
+    /api/insight, bypassing the coverage gating and staleness that verdict.py
+    exists to enforce; an "updated Nm ago" computed from when the MODEL was
+    cached rather than when the last event arrived, so a frozen fleet cache read
+    as fresh; a hardcoded Exposure of "Good"; and a verdict button that told the
+    user "Learned. AMOSKYS will auto-clear this pattern next time" while
+    persisting nothing anywhere.
+
+    The Ledger renders the same queue from the same insight_service model, in
+    the main shell, with buttons that actually write. Its "why this score"
+    chips were harvested from this page — they were the one thing here that had
+    no equivalent.
+
+    Kept as a redirect rather than deleted so existing links and bookmarks land
+    somewhere useful. /api/insight and /api/device stay: incidents_v2.html and
+    device.html still read them.
+    """
+    return redirect(url_for("dashboard.ledger_page"), code=302)
 
 
 @dashboard_bp.route("/api/insight")

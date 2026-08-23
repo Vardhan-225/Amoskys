@@ -43,7 +43,8 @@ def _telemetry_landing(domain: str):
 @require_login
 def dashboard_home():
     """Landing page — the original overview with the full page nav. (The
-    redesigned Command dashboard is opt-in at /dashboard/command while it is
+    redesigned Command dashboard was retired; /dashboard/command now redirects to
+    the Ledger, which is where the queue lives. This note is kept because it is
     reworked to improve the existing pages rather than replace them.)"""
     user = get_current_user()
     if user and not user.setup_completed:
