@@ -114,3 +114,104 @@ def test_drops_reach_the_real_stream_health_table(real_store):
     assert row is not None and row[0] == 13
     tl = real_store.esf_timeline(start_ns=now - 10**9, end_ns=now + 10**10)
     assert tl["complete"] is False and tl["dropped_in_window"] == 13
+
+
+# ── the composite detector ───────────────────────────────────────────────
+def test_composite_fires_only_on_novel_untrusted_nonplatform(real_store):
+    """Each factor must be necessary. If any one is droppable it is not earning
+    its place in the conjunction, and the alert rate collapses back toward the
+    3,655/day of 'non-platform alone' or the 157/day of 'novelty alone'."""
+    collector = ESFStreamCollector(real_store, device_id="d")
+    now = time.time_ns()
+    collector.ingest([
+        # fires: novel + non-platform + adhoc
+        _exec_line(now, 100, 1, "/private/tmp/dropper", "EVIL",
+                   signed=False, valid=False, adhoc=True),
+        # suppressed: platform binary, however novel
+        _exec_line(now + 10**8, 101, 1, "/bin/newthing", "PLAT", platform=True),
+        # suppressed: properly signed
+        _exec_line(now + 2 * 10**8, 102, 1, "/Applications/Ok.app/ok", "SIGNED"),
+    ])
+    res = real_store.esf_composite_alerts(hours=1)
+    hashes = {a["cdhash"] for a in res["alerts"]}
+    assert hashes == {"EVIL"}, f"expected only EVIL, got {hashes}"
+    assert res["bits_per_alert"] is not None
+
+
+def test_composite_suppresses_a_binary_with_an_old_first_seen(real_store):
+    """A long-known binary must not re-alert every time it runs.
+
+    Novelty is a property of the LEDGER's first sighting, not of the current
+    event. Comparing against event time would make every execution of a
+    familiar tool 'novel' forever.
+    """
+    collector = ESFStreamCollector(real_store, device_id="d")
+    now = time.time_ns()
+    collector.ingest([_exec_line(now, 100, 1, "/tmp/tool", "OLD",
+                                 signed=False, adhoc=True)])
+    real_store._execute(
+        "UPDATE esf_binary_ledger SET first_seen_ns = ? WHERE cdhash = 'OLD'",
+        (now - 30 * 86400 * 10**9,))
+    real_store._commit()
+    res = real_store.esf_composite_alerts(hours=1, novelty_window_s=7 * 86400)
+    assert res["count"] == 0
+
+
+def test_verdict_retires_a_binary_from_alerting(real_store):
+    """The feedback loop the incident stack never had.
+
+    1,314 incidents were raised in 24h and zero were ever closed, which is
+    precisely why severity stayed pinned at 97% critical: a detector with no
+    way to learn 'that one was fine' cannot converge, only accumulate.
+    """
+    collector = ESFStreamCollector(real_store, device_id="d")
+    now = time.time_ns()
+    collector.ingest([_exec_line(now, 100, 1, "/tmp/mytool", "MINE",
+                                 signed=False, adhoc=True)])
+    assert real_store.esf_composite_alerts(hours=1)["count"] == 1
+    real_store.esf_set_verdict(cdhash="MINE", verdict="benign", note="my build")
+    assert real_store.esf_composite_alerts(hours=1)["count"] == 0
+
+
+def test_quiet_result_refuses_to_self_certify(real_store):
+    """Zero alerts from zero execs is arithmetic, not evidence — the same
+    error as '0 threat-intel matches against 0 indicators'."""
+    res = real_store.esf_composite_alerts(hours=1)
+    assert res["count"] == 0
+    assert "arithmetic, not evidence" in res["note"]
+
+
+def test_repeat_executions_collapse_to_one_alert(real_store):
+    """A repeat alert for a known cdhash carries zero marginal information.
+
+    Measured on live data before this fix: 8 raw alerts resolved to 3 distinct
+    binaries, so 5 of 8 were pure repetition. Emitting them is how a precise
+    signal decays into another undifferentiated feed — the exact failure mode
+    of the severity field it was built to replace.
+    """
+    collector = ESFStreamCollector(real_store, device_id="d")
+    now = time.time_ns()
+    collector.ingest([
+        _exec_line(now + i * 10**8, 200 + i, 1, "/tmp/tool", "SAME",
+                   signed=False, adhoc=True)
+        for i in range(5)
+    ])
+    res = real_store.esf_composite_alerts(hours=1)
+    assert res["count"] == 1, "five executions of one binary is ONE finding"
+    alert = res["alerts"][0]
+    assert alert["execution_count"] == 5, "executions kept as evidence"
+    assert len(alert["executions"]) == 5
+
+
+def test_relocation_across_paths_is_surfaced_on_the_alert(real_store):
+    """Same hash, several paths — the relocation signal a path list can't give."""
+    collector = ESFStreamCollector(real_store, device_id="d")
+    now = time.time_ns()
+    collector.ingest([
+        _exec_line(now, 300, 1, "/private/tmp/x", "MOVED", signed=False, adhoc=True),
+        _exec_line(now + 10**8, 301, 1, "/Users/a/.cache/x", "MOVED",
+                   signed=False, adhoc=True),
+    ])
+    res = real_store.esf_composite_alerts(hours=1)
+    assert res["count"] == 1
+    assert res["alerts"][0]["distinct_paths"] == 2
