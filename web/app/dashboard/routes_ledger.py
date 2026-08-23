@@ -25,7 +25,7 @@ import logging
 from flask import jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
-from . import actions, dashboard_bp, ledger
+from . import actions, coverage, dashboard_bp, ledger
 from . import verdict as verdict_mod
 from . import verdict_store
 from .org_scope import get_allowed_device_ids
@@ -455,3 +455,19 @@ def api_actions_cancel(command_id):
         return jsonify({"error": "forbidden"}), 403
     payload, status = actions.cancel(command_id)
     return jsonify(payload), status
+
+
+@dashboard_bp.route("/api/coverage")
+@require_login
+def api_coverage():
+    """What AMOSKYS could not see — the honest counterpart to any all-clear."""
+    allowed, _ = _scope()
+    return (
+        jsonify(
+            coverage.report(
+                allowed_device_ids=allowed,
+                device_id=request.args.get("device_id") or None,
+            )
+        ),
+        200,
+    )

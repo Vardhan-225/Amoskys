@@ -30,6 +30,41 @@
     letter-spacing: 0.02em;
 }
 
+/* ── Coverage: what I couldn't see ──────────────────────────────────── */
+.lg-cov-toggle {
+    width: 100%; text-align: left; font: inherit; cursor: pointer;
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-left: 3px solid var(--lg-cov-tone, var(--border-color));
+    border-radius: 9px; padding: 0.8rem 1.1rem; color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+.lg-cov-toggle[data-cov="complete"] { --lg-cov-tone: #3ad29f; }
+.lg-cov-toggle[data-cov="partial"]  { --lg-cov-tone: #ffb038; }
+.lg-cov-toggle[data-cov="none"]     { --lg-cov-tone: #ff4d5e; }
+.lg-cov-toggle:hover { border-color: var(--neural-primary); }
+.lg-cov-toggle:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
+.lg-cov-toggle b { color: var(--text-primary); }
+.lg-cov-detail { display: none; margin: -0.9rem 0 1.6rem; }
+.lg-cov-detail.open { display: block; }
+.lg-sensor {
+    display: grid; grid-template-columns: 92px 150px 1fr auto; gap: 0.9rem;
+    padding: 0.5rem 1.1rem; border-bottom: 1px solid var(--border-color);
+    font-size: 0.83rem; align-items: baseline;
+}
+.lg-sensor:last-child { border-bottom: none; }
+.lg-sensor-status {
+    font-size: 0.64rem; letter-spacing: 0.09em; text-transform: uppercase;
+    font-weight: 700; padding: 0.12rem 0.4rem; border-radius: 3px; text-align: center;
+}
+.lg-sensor-status.fresh   { background: rgba(58,210,159,0.13); color: #3ad29f; }
+.lg-sensor-status.stale   { background: rgba(255,176,56,0.14); color: #ffb038; }
+.lg-sensor-status.dark    { background: rgba(255,77,94,0.14); color: #ff4d5e; }
+.lg-sensor-status.absent  { background: rgba(255,77,94,0.14); color: #ff4d5e; }
+.lg-sensor-status.missing { background: rgba(141,153,168,0.14); color: #8d99a8; }
+.lg-sensor-name { color: var(--text-primary); font-weight: 600; }
+.lg-sensor-blurb { color: var(--text-muted); }
+.lg-sensor-age { color: var(--text-secondary); font-family: var(--font-mono, monospace); font-size: 0.74rem; white-space: nowrap; }
+
 /* ── Section headings ───────────────────────────────────────────────── */
 .lg-sec-head { display: flex; align-items: baseline; gap: 0.7rem; margin: 2rem 0 0.85rem; flex-wrap: wrap; }
 .lg-sec-head h2 { font-size: 1.05rem; font-weight: 650; color: var(--text-primary); margin: 0; letter-spacing: 0.01em; }
@@ -230,6 +265,11 @@
     </div>
     <p class="lg-scale-note" id="lg-scale-note"></p>
 
+    <button type="button" class="lg-cov-toggle" id="lg-cov-toggle" aria-expanded="false" aria-controls="lg-cov-detail">
+        Checking what AMOSKYS can currently see…
+    </button>
+    <div class="lg-cov-detail" id="lg-cov-detail"></div>
+
     <div class="lg-sec-head">
         <h2>Needs you</h2>
         <span class="lg-count" id="lg-needs-count"></span>
@@ -397,6 +437,52 @@
                 '<b>Not me</b> keeps it in front of you and tells the detector it was right to ask.';
         }
     }
+
+    // ── What I couldn't see ──────────────────────────────────────────────
+    // The honest counterpart to any all-clear. A verdict computed over a sensor
+    // that stopped reporting three days ago is a statement about missing data,
+    // and this is where the page says so out loud.
+    async function loadCoverage() {
+        const btn = document.getElementById('lg-cov-toggle');
+        const box = document.getElementById('lg-cov-detail');
+        try {
+            const res = await fetch('/dashboard/api/coverage', { credentials: 'same-origin' });
+            const c = await res.json();
+            const level = !c.available ? 'none'
+                : c.reporting === c.expected ? 'complete'
+                : c.reporting === 0 ? 'none' : 'partial';
+            btn.dataset.cov = level;
+            btn.innerHTML = '<b>' + esc(c.headline) + '</b> — ' + esc(c.detail) +
+                ' · show me every sensor';
+            var blind = c.blindness || {};
+            box.innerHTML = (c.sensors || []).map(function (s) {
+                return '<div class="lg-sensor">' +
+                    '<span class="lg-sensor-status ' + esc(s.status) + '">' + esc(s.status) + '</span>' +
+                    '<span class="lg-sensor-name">' + esc(s.label) + '</span>' +
+                    '<span class="lg-sensor-blurb">' + esc(s.blurb) + '</span>' +
+                    '<span class="lg-sensor-age">' + esc(s.age_human) + '</span>' +
+                '</div>';
+            }).join('') +
+            (blind.active_count
+                ? '<div class="lg-sensor"><span class="lg-sensor-status dark">ledger</span>' +
+                  '<span class="lg-sensor-name">Blindness events</span>' +
+                  '<span class="lg-sensor-blurb">' + esc(blind.message || '') + '</span>' +
+                  '<span class="lg-sensor-age">' + esc(blind.status) + '</span></div>'
+                : '<div class="lg-sensor"><span class="lg-sensor-status fresh">ledger</span>' +
+                  '<span class="lg-sensor-name">Blindness events</span>' +
+                  '<span class="lg-sensor-blurb">Nothing has reported itself degraded.</span>' +
+                  '<span class="lg-sensor-age">clear</span></div>');
+        } catch (err) {
+            btn.dataset.cov = 'none';
+            btn.innerHTML = '<b>Coverage could not be read.</b> That is a gap, not an all-clear.';
+        }
+    }
+
+    document.getElementById('lg-cov-toggle').addEventListener('click', function () {
+        const box = document.getElementById('lg-cov-detail');
+        const open = box.classList.toggle('open');
+        this.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
 
     async function load() {
         try {
@@ -666,6 +752,7 @@
     });
 
     load();
+    loadCoverage();
     loadActionLog();
     setInterval(load, 60000);
 })();
