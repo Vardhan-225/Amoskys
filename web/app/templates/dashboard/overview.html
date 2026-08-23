@@ -92,6 +92,30 @@
 .ov-gc-btn:hover { border-color: rgba(0,217,255,0.4); color: #b4bcd0; }
 .ov-gc-btn.active { border-color: #00d9ff; color: #00d9ff; background: rgba(0,217,255,0.06); }
 /* Legend — bottom-right on globe */
+/* Who the machine talks to — a list, not labels fighting for space on a sphere. */
+.ov-dest-panel {
+    position: absolute; top: 16px; right: 24px; pointer-events: auto;
+    background: rgba(5,8,22,0.88); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(12px);
+    min-width: 208px; max-width: 260px;
+}
+.ov-dp-title {
+    font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #6b7a99; margin-bottom: 7px;
+}
+.ov-dp-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 0 8px;
+    padding: 3px 0; font-size: 0.68rem; align-items: baseline;
+}
+.ov-dp-name { color: #c8d8e8; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-dp-where { grid-column: 1; font-size: 0.55rem; color: #6b7a99; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-dp-bytes { grid-row: 1; grid-column: 2; color: #00d9ff; font-size: 0.6rem; font-variant-numeric: tabular-nums; }
+.ov-dp-row.threat .ov-dp-name { color: #ff6688; }
+.ov-dp-row.threat .ov-dp-bytes { color: #ff6688; }
+.ov-dp-more { margin-top: 6px; font-size: 0.55rem; color: #6b7a99; }
+.ov-dp-more a { color: #00d9ff; text-decoration: none; }
+.ov-dp-empty { font-size: 0.6rem; color: #6b7a99; }
+
 .ov-globe-legend {
     position: absolute; bottom: 16px; right: 24px; pointer-events: auto;
     display: flex; gap: 12px;
@@ -442,6 +466,7 @@
         html += '</div>';
 
         // Legend — bottom-right
+        html += '<div class="ov-dest-panel" id="ov-dest-panel"></div>';
         html += '<div class="ov-globe-legend">';
         html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00ff88"></span>Clean</span>';
         html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#ff3366"></span>Threat</span>';
@@ -783,7 +808,16 @@
         // sit within a few degrees of each other, so "Anthropic", "Google" and
         // "Amazon.com" landed on top of one another and on the device cards —
         // an unreadable pile in the middle of the map.
-        labels = labels.concat(cullLabels(destLabels, labels));
+        // Names come off the sphere. Tuning clearance constants was a losing
+        // game: at this scale a device card occupies ~20 degrees, and with two
+        // machines and four US destinations there is genuinely no room — every
+        // setting either overlapped or flung a label 1,400km into Canada.
+        // So the map shows WHERE (arcs, points, device cards) and the panel
+        // shows WHO. Threats keep a label on the globe, because a threat is
+        // worth pointing at.
+        var destClusters = cullLabels(destLabels, labels);
+        labels = labels.concat(destClusters.filter(function (c) { return c.threat; }));
+        renderDestinationPanel(destClusters);
 
         globe.arcsData(arcs).pointsData(pts).ringsData(rings).htmlElementsData(labels);
     }
@@ -800,9 +834,19 @@
        Angular distance is used rather than screen distance because the globe
        rotates: a cull computed once in screen space would be wrong a second
        later, whereas neighbours on the sphere stay neighbours. */
-    var LABEL_CLUSTER_DEG = 9;          // orgs closer than this share one label
-    var LABEL_DEVICE_CLEARANCE_DEG = 7; // a cluster this close to a device shifts
-    var LABEL_MAX_LABELS = 7;
+    /* Calibrated against how this globe actually renders, not against
+       intuition about degrees. The container is 520px tall and the sphere fills
+       roughly 480px of it for 180 degrees of latitude — about 2.7 pixels per
+       degree. A device card is ~55px tall and ~150px wide, so it occupies
+       something like 20 degrees vertically. The first attempt used 7 degrees of
+       clearance (~19px) and the labels still sat on top of the cards on live
+       data, because the number looked reasonable and was never checked against
+       the projection. */
+    var GLOBE_PX_PER_DEG = 2.7;
+    var LABEL_CLUSTER_DEG = 18;          // orgs closer than this share one label
+    var LABEL_DEVICE_CLEARANCE_DEG = 21; // ~57px — clears a device card
+    var LABEL_MAX_LABELS = 6;
+    var LABEL_PUSH_PASSES = 3;
 
     function angularDistance(a, b) {
         // Small-angle planar approximation corrected for latitude — accurate
@@ -874,28 +918,69 @@
             });
         });
 
-        // 3. A cluster sitting on a device card shifts just far enough to clear
-        //    it — a few degrees, never across a continent.
-        clusters.forEach(function (c) {
-            for (var i = 0; i < deviceLabels.length; i++) {
-                var dev = deviceLabels[i];
-                var dist = angularDistance(c, dev);
-                if (dist >= LABEL_DEVICE_CLEARANCE_DEG) continue;
-                var dLat = (c.lat || 0) - (dev.lat || 0);
-                var dLng = (c.lng || 0) - (dev.lng || 0);
-                var mag = Math.sqrt(dLat * dLat + dLng * dLng) || 1;
-                var push = LABEL_DEVICE_CLEARANCE_DEG - dist + 1;
-                c.lat = Math.max(-82, Math.min(82, c.lat + (dLat / mag) * push));
-                c.lng = c.lng + (dLng / mag) * push;
-                c.nudged = true;
-            }
-        });
+        // 3. Shift clusters clear of the device cards. Several passes, because
+        //    moving away from one device can push a label onto another — with
+        //    two machines on the same continent a single pass leaves it worse.
+        for (var pass = 0; pass < LABEL_PUSH_PASSES; pass++) {
+            var moved = false;
+            clusters.forEach(function (c) {
+                deviceLabels.forEach(function (dev) {
+                    var dist = angularDistance(c, dev);
+                    if (dist >= LABEL_DEVICE_CLEARANCE_DEG) return;
+                    var dLat = (c.lat || 0) - (dev.lat || 0);
+                    var dLng = (c.lng || 0) - (dev.lng || 0);
+                    var mag = Math.sqrt(dLat * dLat + dLng * dLng);
+                    if (mag < 0.01) { dLat = 1; dLng = 0; mag = 1; }  // exactly on top
+                    var push = LABEL_DEVICE_CLEARANCE_DEG - dist + 2;
+                    c.lat = Math.max(-80, Math.min(80, c.lat + (dLat / mag) * push));
+                    c.lng = c.lng + (dLng / mag) * push;
+                    c.nudged = true;
+                    moved = true;
+                });
+            });
+            if (!moved) break;
+        }
 
         clusters.sort(function (a, b) {
             if (!!b.threat !== !!a.threat) return b.threat ? 1 : -1;
             return (b.bytes || 0) - (a.bytes || 0);
         });
         return clusters.slice(0, LABEL_MAX_LABELS);
+    }
+
+    /* The destinations panel — who this machine talks to, in one place that
+       cannot collide with the map. Ordered by volume, threats first. */
+    function renderDestinationPanel(clusters) {
+        var host = document.getElementById('ov-dest-panel');
+        if (!host) return;
+        var rows = [];
+        (clusters || []).forEach(function (c) {
+            (c.members || [c]).forEach(function (m) { rows.push(m); });
+        });
+        rows.sort(function (a, b) {
+            if (!!b.threat !== !!a.threat) return b.threat ? 1 : -1;
+            return (b.bytes || 0) - (a.bytes || 0);
+        });
+        if (!rows.length) {
+            host.innerHTML = '<div class="ov-dp-empty">No external destinations '
+                + 'in this window.</div>';
+            return;
+        }
+        var shown = rows.slice(0, 6);
+        host.innerHTML = '<div class="ov-dp-title">Talking to</div>'
+            + shown.map(function (m) {
+                var name = esc((m.asnOrg || 'Unknown').split(/[\s,]/)[0]);
+                var where = esc([m.city, m.country].filter(Boolean).join(', '));
+                return '<div class="ov-dp-row' + (m.threat ? ' threat' : '') + '">'
+                    + '<span class="ov-dp-name">' + name + '</span>'
+                    + '<span class="ov-dp-where">' + where + '</span>'
+                    + '<span class="ov-dp-bytes">' + fmtBytes(m.bytes || 0) + '</span>'
+                    + '</div>';
+            }).join('')
+            + (rows.length > shown.length
+                ? '<div class="ov-dp-more">+' + (rows.length - shown.length)
+                  + ' more &middot; <a href="/dashboard/network">see all</a></div>'
+                : '');
     }
 
     function bindControls() {
