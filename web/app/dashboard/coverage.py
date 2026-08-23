@@ -169,6 +169,41 @@ def report(
     finally:
         db.close()
 
+    # The kernel witness is not one sensor among seven — it is the difference
+    # between witnessing an execution and sampling for it afterwards. It gets
+    # its own row, and its dropped-event count is reported as a hole in the
+    # record rather than folded into a freshness colour.
+    try:
+        from . import kernel
+
+        health = kernel.stream_health()
+        if not health["present"]:
+            k_status, k_age = "missing", "no exec stream on this tier"
+        elif health["status"] == "idle":
+            k_status, k_age = "absent", "installed, never reported"
+        elif health["status"] == "stopped":
+            beat = health.get("last_beat_age_seconds")
+            k_status = "dark"
+            k_age = _age_human(beat) if beat is not None else "never"
+        elif health["status"] == "gapped":
+            k_status = "stale"
+            k_age = f"{health['dropped']:,} events dropped"
+        else:
+            k_status, k_age = "fresh", _age_human(health.get("last_beat_age_seconds"))
+        sensors.append(
+            {
+                "table": "esf_exec_events",
+                "label": "Kernel witness",
+                "blurb": "every execution, seen by the kernel as it happens",
+                "status": k_status,
+                "age_seconds": health.get("last_beat_age_seconds"),
+                "age_human": k_age,
+                "detail": health.get("detail"),
+            }
+        )
+    except Exception:  # pragma: no cover - the report must never fail closed
+        logger.debug("kernel witness unavailable", exc_info=True)
+
     sensors.sort(key=lambda s: (STATUS_ORDER.get(s["status"], 9), s["label"]))
     reporting = sum(1 for s in sensors if s["status"] == "fresh")
     not_fresh = [s for s in sensors if s["status"] != "fresh"]

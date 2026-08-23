@@ -30,6 +30,26 @@
     letter-spacing: 0.02em;
 }
 
+/* ── The witness strip: the product's core claim, or its withdrawal ─── */
+.lg-witness {
+    display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap;
+    padding: 0.7rem 1.1rem; border-radius: 9px; margin-bottom: 0.65rem;
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-left: 3px solid var(--lg-w-tone, #6b7785); font-size: 0.86rem;
+}
+.lg-witness[data-w="witnessing"] { --lg-w-tone: #3ad29f; }
+.lg-witness[data-w="gapped"]     { --lg-w-tone: #ffb038; }
+.lg-witness[data-w="stopped"]    { --lg-w-tone: #ff4d5e; }
+.lg-witness[data-w="idle"],
+.lg-witness[data-w="missing"]    { --lg-w-tone: #6b7785; }
+.lg-witness b { color: var(--text-primary); }
+.lg-witness span { color: var(--text-secondary); }
+.lg-witness .lg-w-mode {
+    margin-left: auto; font-size: 0.68rem; letter-spacing: 0.09em;
+    text-transform: uppercase; font-weight: 700; padding: 0.12rem 0.45rem;
+    border-radius: 3px; background: var(--bg-tertiary); color: var(--text-muted);
+}
+
 /* ── Coverage: what I couldn't see ──────────────────────────────────── */
 .lg-cov-toggle {
     width: 100%; text-align: left; font: inherit; cursor: pointer;
@@ -265,6 +285,10 @@
     </div>
     <p class="lg-scale-note" id="lg-scale-note"></p>
 
+    <div class="lg-witness" id="lg-witness" data-w="missing">
+        <b>Checking whether the kernel is watching…</b>
+    </div>
+
     <button type="button" class="lg-cov-toggle" id="lg-cov-toggle" aria-expanded="false" aria-controls="lg-cov-detail">
         Checking what AMOSKYS can currently see…
     </button>
@@ -442,6 +466,30 @@
     // The honest counterpart to any all-clear. A verdict computed over a sensor
     // that stopped reporting three days ago is a statement about missing data,
     // and this is where the page says so out loud.
+    // The claim on the box is "you can't hide when it's watching". This strip
+    // is where that is either backed by a live kernel stream or withdrawn in
+    // the same sentence. Polling cannot see a process that starts and exits
+    // between samples; the kernel can — so the difference is worth stating
+    // above everything else on the page.
+    async function loadWitness() {
+        const el = document.getElementById('lg-witness');
+        try {
+            const res = await fetch('/dashboard/api/kernel', { credentials: 'same-origin' });
+            const k = await res.json();
+            const h = k.health || {};
+            el.dataset.w = h.status || 'missing';
+            var mode = h.enforce_mode === true ? 'enforcing'
+                     : h.enforce_mode === false ? 'monitoring' : '';
+            el.innerHTML = '<b>' + esc(h.headline || '') + '</b>' +
+                '<span>' + esc(h.detail || '') + '</span>' +
+                (mode ? '<span class="lg-w-mode">' + esc(mode) + '</span>' : '');
+        } catch (err) {
+            el.dataset.w = 'missing';
+            el.innerHTML = '<b>Could not reach the kernel witness.</b>' +
+                '<span>Treat everything below as sampled, not witnessed.</span>';
+        }
+    }
+
     async function loadCoverage() {
         const btn = document.getElementById('lg-cov-toggle');
         const box = document.getElementById('lg-cov-detail');
@@ -514,6 +562,11 @@
                 const flags = [];
                 if (r.requires_investigation) { flags.push('<span class="hot">needs investigation</span>'); }
                 if (r.threat_intel_match) { flags.push('<span class="hot">threat-intel hit</span>'); }
+                if (r.provenance) {
+                    flags.push(r.provenance === 'kernel-witnessed'
+                        ? '<span class="hot">kernel-witnessed</span>'
+                        : 'sampled');
+                }
                 if (r.classification) { flags.push(esc(r.classification)); }
                 if (r.risk !== null && r.risk !== undefined) { flags.push('risk ' + esc(r.risk)); }
                 return '<div class="lg-ev-row">' +
@@ -752,6 +805,7 @@
     });
 
     load();
+    loadWitness();
     loadCoverage();
     loadActionLog();
     setInterval(load, 60000);

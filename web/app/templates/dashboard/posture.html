@@ -205,16 +205,26 @@ const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
 const POSTURE_API   = '/dashboard/api/posture/summary?hours=24' + _devQ;
 const TIMELINE_API  = '/dashboard/api/posture/timeline?hours=24&limit=50' + _devQ;
 
+// Domain links stay on this device when we have one; the bare routes
+// teleport to the fleet-primary device.
+const _devBase = _deviceId ? '/dashboard/device/' + encodeURIComponent(_deviceId) : '/dashboard';
+
 const DOMAIN_META = {
-    process:      { icon: '\u2699\uFE0F', name: 'Processes',    link: '/dashboard/processes' },
-    network:      { icon: '\uD83C\uDF10', name: 'Network',      link: '/dashboard/network' },
-    dns:          { icon: '\uD83D\uDD0D', name: 'DNS',          link: '/dashboard/dns' },
-    auth:         { icon: '\uD83D\uDD11', name: 'Auth',         link: '/dashboard/auth' },
-    files:        { icon: '\uD83D\uDCC1', name: 'Files',        link: '/dashboard/file-integrity' },
-    persistence:  { icon: '\uD83D\uDD17', name: 'Persistence',  link: '/dashboard/persistence' },
-    peripherals:  { icon: '\uD83D\uDD0C', name: 'Peripherals',  link: '/dashboard/peripherals' },
-    observations: { icon: '\uD83D\uDCCB', name: 'Logs & Obs',   link: '/dashboard/observations' },
+    process:      { icon: '\u2699\uFE0F', name: 'Processes',    link: _devBase + '/processes' },
+    network:      { icon: '\uD83C\uDF10', name: 'Network',      link: _devBase + '/network' },
+    dns:          { icon: '\uD83D\uDD0D', name: 'DNS',          link: _devBase + '/dns' },
+    auth:         { icon: '\uD83D\uDD11', name: 'Auth',         link: _devBase + '/auth' },
+    files:        { icon: '\uD83D\uDCC1', name: 'Files',        link: _devBase + '/file-integrity' },
+    persistence:  { icon: '\uD83D\uDD17', name: 'Persistence',  link: _devBase + '/persistence' },
+    peripherals:  { icon: '\uD83D\uDD0C', name: 'Peripherals',  link: _devBase + '/peripherals' },
+    observations: { icon: '\uD83D\uDCCB', name: 'Logs & Obs',   link: _devBase + '/observations' },
 };
+
+// Rewrite the static quick-links footer to the same device-scoped targets.
+document.querySelectorAll('.quick-link').forEach(function(a) {
+    var m = (a.getAttribute('href') || '').match(/^\/dashboard\/([a-z-]+)$/);
+    if (m && _deviceId) a.setAttribute('href', _devBase + '/' + m[1]);
+});
 
 const DOMAIN_COLORS = {
     process: '#00d9ff', network: '#00ff88', dns: '#ffaa00', auth: '#ff3366',

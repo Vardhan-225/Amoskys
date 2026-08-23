@@ -446,9 +446,9 @@
         // Honest links to the deeper, fleet-wide engines (real pages)
         html += '<div class="dd-panel"><div class="dd-label" style="margin-bottom:11px;">Go deeper</div>'
             + '<div class="dd-nav-grid">'
-            + navCard('Cortex', 'Fleet posture, NEXUS scoring pipeline, constellation', '/dashboard/cortex')
-            + navCard('Observatory', 'Per-agent health, probes and domain telemetry', '/dashboard/observatory')
-            + navCard('Intelligence', 'SOMA baselines, probe calibration, INADS scoring', '/dashboard/intelligence')
+            + navCard('Cortex', 'Fleet posture, NEXUS scoring pipeline, constellation', '/dashboard/device/' + encodeURIComponent(deviceId) + '/cortex')
+            + navCard('Observatory', 'Per-agent health, probes and domain telemetry', '/dashboard/device/' + encodeURIComponent(deviceId) + '/observatory')
+            + navCard('Intelligence', 'SOMA baselines, probe calibration, INADS scoring', '/dashboard/soma')
             + navCard('IGRIS', 'Ask the analyst, run hunts, investigate this device', '/dashboard/igris')
             + '</div></div>';
 

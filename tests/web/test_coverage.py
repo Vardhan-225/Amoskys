@@ -51,6 +51,11 @@ def store(tmp_path, monkeypatch):
     db.commit()
     db.close()
     monkeypatch.setattr(coverage.insight_service, "resolve_db_path", lambda: str(path))
+    # The kernel witness resolves its own store, so an unpatched test would read
+    # whatever the developer's machine happens to be running — and the Sentinel
+    # IS running here, which made this test pass or fail by accident.
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(kernel, "_candidate_paths", lambda: [])
     return path
 
 
@@ -79,8 +84,10 @@ def test_a_table_absent_from_the_schema_is_reported_not_ignored(store):
 def test_headline_counts_only_fresh_sensors(store):
     report = coverage.report()
     assert report["reporting"] == 1
-    assert report["expected"] == len(coverage.SENSORS)
-    assert "1 of 7 sensors reporting" in report["headline"]
+    # The kernel witness is reported alongside the polling sensors, so the
+    # denominator is one greater than the polling list.
+    assert len(report["sensors"]) == len(coverage.SENSORS) + 1
+    assert f"1 of {len(report['sensors'])} sensors reporting" in report["headline"]
 
 
 def test_worst_sensors_are_listed_first(store):
@@ -104,6 +111,67 @@ def test_no_sensor_reporting_says_what_that_means(tmp_path, monkeypatch):
     db.commit()
     db.close()
     monkeypatch.setattr(coverage.insight_service, "resolve_db_path", lambda: str(path))
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(kernel, "_candidate_paths", lambda: [])
     report = coverage.report()
     assert report["reporting"] == 0
     assert "missing data" in report["detail"]
+
+
+# ── The kernel witness ────────────────────────────────────────────────────────
+def test_kernel_witness_is_reported_as_its_own_sensor(store, monkeypatch):
+    """Witnessing an execution and sampling for it afterwards are different
+    claims. The kernel row must never be folded into the polling sensors."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel,
+        "stream_health",
+        lambda *a, **k: {
+            "present": True,
+            "watching": True,
+            "status": "witnessing",
+            "dropped": 0,
+            "last_beat_age_seconds": 12,
+            "detail": "complete",
+        },
+    )
+    sensors = _by_label(coverage.report())
+    assert sensors["Kernel witness"]["status"] == "fresh"
+
+
+def test_dropped_events_are_reported_as_a_hole_not_a_freshness_colour(
+    store, monkeypatch
+):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel,
+        "stream_health",
+        lambda *a, **k: {
+            "present": True,
+            "watching": True,
+            "status": "gapped",
+            "dropped": 1234,
+            "last_beat_age_seconds": 8,
+            "detail": "holes",
+        },
+    )
+    row = _by_label(coverage.report())["Kernel witness"]
+    assert row["status"] == "stale"
+    assert "1,234 events dropped" in row["age_human"]
+
+
+def test_a_stopped_sentinel_is_dark_not_quiet(store, monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel,
+        "stream_health",
+        lambda *a, **k: {
+            "present": True,
+            "watching": False,
+            "status": "stopped",
+            "dropped": 0,
+            "last_beat_age_seconds": 4000,
+            "detail": "stopped",
+        },
+    )
+    assert _by_label(coverage.report())["Kernel witness"]["status"] == "dark"

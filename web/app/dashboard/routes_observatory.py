@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import jsonify, request
+
 from amoskys.observability.blindness import (
     list_blindness_events,
     summarize_blindness_events,

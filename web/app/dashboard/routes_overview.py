@@ -103,7 +103,11 @@ def _compute_posture(critical: int, high: int, medium: int = 0) -> dict:
     elif critical == 0:
         score, label, color = min(35, 8 + high * 4), "Guarded", "#ffb038"
     elif critical <= 5:
-        score, label, color = min(70, 40 + critical * 6 + high * 2), "Needs Attention", "#ffb038"
+        score, label, color = (
+            min(70, 40 + critical * 6 + high * 2),
+            "Needs Attention",
+            "#ffb038",
+        )
     else:
         score, label, color = min(100, 75 + critical * 3), "Critical", "#ff4d5e"
     return {"score": score, "label": label, "color": color}

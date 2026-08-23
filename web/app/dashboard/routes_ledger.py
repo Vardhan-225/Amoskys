@@ -25,7 +25,7 @@ import logging
 from flask import jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
-from . import actions, coverage, dashboard_bp, ledger
+from . import actions, coverage, dashboard_bp, kernel, ledger
 from . import verdict as verdict_mod
 from . import verdict_store
 from .org_scope import get_allowed_device_ids
@@ -86,6 +86,25 @@ def _forward_upstream(item: dict, verdict: str) -> tuple[str, str]:
     status is one of: applied · unavailable · error · nothing_to_label
     """
     from ..api import reliability as rel
+
+    # A kernel-witnessed binary carries its judgement to a different store:
+    # esf_binary_ledger.verdict, whose NULL was built to mean "nobody has looked
+    # at this yet" rather than "cleared". This press is what closes that gap.
+    cdhash = item.get("cdhash")
+    if cdhash:
+        binary_verdict = "benign" if verdict == verdict_store.MINE else "suspicious"
+        written = kernel.record_binary_verdict(
+            cdhash, binary_verdict, note=f"marked via ledger by {verdict}"
+        )
+        if written.get("written"):
+            return (
+                "applied",
+                f"recorded on the binary ledger as {binary_verdict} — this "
+                "cdhash is now reviewed, wherever it runs from next",
+            )
+        return "unavailable", written.get(
+            "detail", "The binary ledger did not accept it."
+        )
 
     # Label writeback matches security_events.id, not the event_id hash — a
     # mismatch here is silent (0 rows updated) and would make the button lie.
@@ -471,3 +490,14 @@ def api_coverage():
         ),
         200,
     )
+
+
+@dashboard_bp.route("/api/kernel")
+@require_login
+def api_kernel():
+    """Is the kernel witnessing, and what has never run here before?
+
+    The product's claim is that you cannot hide from it. This endpoint is where
+    that claim is either backed by a live exec stream or honestly withdrawn.
+    """
+    return jsonify(kernel.summary_for_ledger()), 200

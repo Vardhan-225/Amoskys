@@ -46,29 +46,82 @@ OWNER_ADMIN_BINARIES = ("ssh", "scp", "sftp", "curl", "git", "rsync", "wget", "g
 # The owner's developer tools. On a dev machine these constantly spawn processes,
 # make outbound connections and check for updates — that is not an intrusion.
 OWNER_DEV_PROCS = (
-    "python", "python3", "claude", "codex", "node", "ruby", "go", "cargo",
-    "rustc", "java", "deno", "bun", "npm", "pip", "brew", "docker", "code",
+    "python",
+    "python3",
+    "claude",
+    "codex",
+    "node",
+    "ruby",
+    "go",
+    "cargo",
+    "rustc",
+    "java",
+    "deno",
+    "bun",
+    "npm",
+    "pip",
+    "brew",
+    "docker",
+    "code",
 )
 
 # Apple/macOS system daemons. Their beaconing/telemetry is the OS working.
 APPLE_SYSTEM_PROCS = (
-    "mdnsresponder", "sharingd", "dataaccessd", "featureaccessagent", "apsd",
-    "cloudd", "nsurlsessiond", "webkit", "mdworker", "mds", "spotlight",
-    "softwareupdated", "trustd", "syspolicyd", "akd", "identityservicesd",
-    "commcenter", "rapportd", "networkserviceproxy", "bluetoothd", "coreauthd",
+    "mdnsresponder",
+    "sharingd",
+    "dataaccessd",
+    "featureaccessagent",
+    "apsd",
+    "cloudd",
+    "nsurlsessiond",
+    "webkit",
+    "mdworker",
+    "mds",
+    "spotlight",
+    "softwareupdated",
+    "trustd",
+    "syspolicyd",
+    "akd",
+    "identityservicesd",
+    "commcenter",
+    "rapportd",
+    "networkserviceproxy",
+    "bluetoothd",
+    "coreauthd",
 )
 
 # Apple/OS system binary path prefixes -> expected system activity.
 SYSTEM_PATH_PREFIXES = (
-    "/System/", "/usr/libexec/", "/usr/sbin/", "/usr/bin/",
-    "/Library/Apple/", "/opt/homebrew/", "/sbin/", "/Applications/",
+    "/System/",
+    "/usr/libexec/",
+    "/usr/sbin/",
+    "/usr/bin/",
+    "/Library/Apple/",
+    "/opt/homebrew/",
+    "/sbin/",
+    "/Applications/",
 )
 
 # Telemetry / update / CDN endpoints that legitimately beacon.
 KNOWN_TELEMETRY = (
-    "datadoghq", "apple.com", "icloud", "gstatic", "googleapis", "google.com",
-    "cloudflare", "github", "githubusercontent", "mozilla", "sentry", "segment",
-    "amazonaws", "cloudfront", "fastly", "akamai", "microsoft", "office",
+    "datadoghq",
+    "apple.com",
+    "icloud",
+    "gstatic",
+    "googleapis",
+    "google.com",
+    "cloudflare",
+    "github",
+    "githubusercontent",
+    "mozilla",
+    "sentry",
+    "segment",
+    "amazonaws",
+    "cloudfront",
+    "fastly",
+    "akamai",
+    "microsoft",
+    "office",
 )
 
 # Categories that are scary enough that we NEVER auto-suppress them — even if
@@ -106,7 +159,9 @@ def _proc_ctx(desc: str) -> str:
 # ── Redaction: never ship a secret-shaped value or a private path to a client ─
 _RE_TMP = re.compile(r"/private/(?:tmp|var)/\S+")
 _RE_SSHKEY = re.compile(r"(\.ssh/)[^\s'\"/]+")
-_RE_USERHOST = re.compile(r"\b([a-z_][a-z0-9_-]*)@(?:\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9.-]+)")
+_RE_USERHOST = re.compile(
+    r"\b([a-z_][a-z0-9_-]*)@(?:\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9.-]+)"
+)
 _RE_HOME = re.compile(r"/Users/[^/\s'\"]+")
 _RE_TOKEN = re.compile(r"\b[A-Za-z0-9+/_\-]{32,}\b")
 
@@ -117,15 +172,16 @@ def _redact(s: str | None) -> str | None:
     if not s:
         return s
     s = _RE_TMP.sub("/private/…", s)
-    s = _RE_HOME.sub("~", s)              # /Users/<user>/… -> ~/…
-    s = _RE_SSHKEY.sub(r"\1[key]", s)     # ~/.ssh/amoskys-deploy -> ~/.ssh/[key]
+    s = _RE_HOME.sub("~", s)  # /Users/<user>/… -> ~/…
+    s = _RE_SSHKEY.sub(r"\1[key]", s)  # ~/.ssh/amoskys-deploy -> ~/.ssh/[key]
     s = _RE_USERHOST.sub(r"\1@[host]", s)  # ubuntu@1.2.3.4 -> ubuntu@[host]
     s = _RE_TOKEN.sub("[token]", s)
     return s
 
+
 # Bands (risk-oriented: LOW score = safe). Research-backed 3-band model.
-BAND_ACT = 65      # >= -> act now (red)
-BAND_LOOK = 25     # >= -> worth a look (amber);  < -> calm (green)
+BAND_ACT = 65  # >= -> act now (red)
+BAND_LOOK = 25  # >= -> worth a look (amber);  < -> calm (green)
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -151,11 +207,12 @@ def _scope_sql(allowed_device_ids: list[str] | None, conj: str) -> tuple[str, tu
 def resolve_db_path() -> str | None:
     """Find the fleet_cache.db regardless of tier (server / local dev)."""
     from pathlib import Path
+
     candidates = [
         os.getenv("AMOSKYS_FLEET_CACHE", ""),
         os.getenv("CC_DB_PATH", ""),
-        "/opt/amoskys/data/fleet_cache.db",         # presentation server
-        "data/fleet_cache.db",                       # relative to WorkingDirectory
+        "/opt/amoskys/data/fleet_cache.db",  # presentation server
+        "data/fleet_cache.db",  # relative to WorkingDirectory
         str(Path(__file__).resolve().parents[3] / "data" / "fleet_cache.db"),
         str(Path(__file__).resolve().parents[3] / "server" / "fleet.db"),
     ]
@@ -167,14 +224,26 @@ def resolve_db_path() -> str | None:
 
 def _error_stub(kind: str, message: str, headline: str, sub: str) -> dict:
     return {
-        "error": kind, "message": message,
+        "error": kind,
+        "message": message,
         # band 'unknown', never 'calm': a store we could not read is not an
         # all-clear, and painting it green is how "blind" became "healthy".
-        "verdict": {"active_risk": 0, "band": "unknown", "headline": headline, "tone": "unknown",
-                    "live_count": 0, "suppressed_count": 0, "requires_investigation": 0,
-                    "top_factors": [], "sub_line": sub},
-        "incidents": [], "globe": {"device": {"lat": 0, "lon": 0}, "destinations": []},
-        "domains": [], "timeline": [], "classes": {},
+        "verdict": {
+            "active_risk": 0,
+            "band": "unknown",
+            "headline": headline,
+            "tone": "unknown",
+            "live_count": 0,
+            "suppressed_count": 0,
+            "requires_investigation": 0,
+            "top_factors": [],
+            "sub_line": sub,
+        },
+        "incidents": [],
+        "globe": {"device": {"lat": 0, "lon": 0}, "destinations": []},
+        "domains": [],
+        "timeline": [],
+        "classes": {},
         "totals": {"security_events": 0, "flows": 0, "destinations": 0},
         "device": {"name": "—", "id": "—", "events": 0},
     }
@@ -189,8 +258,11 @@ _CACHE: dict = {}
 _TTL_SECONDS = 45.0
 
 
-def get_model(force: bool = False, allowed_device_ids: list[str] | None = None,
-              cache_key: str = "admin") -> dict:
+def get_model(
+    force: bool = False,
+    allowed_device_ids: list[str] | None = None,
+    cache_key: str = "admin",
+) -> dict:
     """Cached model for the API. Never raises: returns an honest error stub so
     the dashboard degrades gracefully instead of 500-ing."""
     import time
@@ -201,8 +273,12 @@ def get_model(force: bool = False, allowed_device_ids: list[str] | None = None,
         return entry["model"]
     path = resolve_db_path()
     if not path:
-        return _error_stub("no_data", "Fleet telemetry store not found.",
-                           "No data yet", "Waiting for the first telemetry to arrive.")
+        return _error_stub(
+            "no_data",
+            "Fleet telemetry store not found.",
+            "No data yet",
+            "Waiting for the first telemetry to arrive.",
+        )
     try:
         model = build_model(path, allowed_device_ids=allowed_device_ids)
         _CACHE[cache_key] = {"at": now, "model": model, "path": path}
@@ -300,14 +376,22 @@ def classify_expected(ev: dict) -> str | None:
 
     # 1) Owner's own deploy/admin: ssh/scp/rsync/git are admin tools; curl/wget
     #    to a known host is the deploy workflow.
-    if cat in ("execute_to_exfil", "full_kill_chain", "lolbin_execution",
-               "c2_beacon_suspect", "pid_network_anomaly", "long_lived_connection"):
+    if cat in (
+        "execute_to_exfil",
+        "full_kill_chain",
+        "lolbin_execution",
+        "c2_beacon_suspect",
+        "pid_network_anomaly",
+        "long_lived_connection",
+    ):
         for b in ("ssh", "scp", "sftp", "rsync", "git"):
             if re.search(rf"\b{b}\b", desc_low):
                 return f"Owner admin/deploy — {b} session (admin tooling)"
         for b in ("curl", "wget"):
             if re.search(rf"\b{b}\b", desc_low) and (
-                "/.ssh/" in desc_low or "amoskys" in desc_low or "ubuntu@" in desc_low
+                "/.ssh/" in desc_low
+                or "amoskys" in desc_low
+                or "ubuntu@" in desc_low
                 or any(t in desc_low for t in KNOWN_TELEMETRY)
             ):
                 return f"Owner admin/deploy — {b} to a known host"
@@ -337,7 +421,9 @@ def classify_expected(ev: dict) -> str | None:
     return None
 
 
-def load_events(db: sqlite3.Connection, allowed_device_ids: list[str] | None = None) -> list[dict]:
+def load_events(
+    db: sqlite3.Connection, allowed_device_ids: list[str] | None = None
+) -> list[dict]:
     scope, scope_p = _scope_sql(allowed_device_ids, " WHERE ")
     rows = db.execute(
         """SELECT id AS row_id, timestamp_ns, timestamp_dt, device_id, event_category, event_action,
@@ -374,18 +460,22 @@ def compute_verdict(events: list[dict]) -> dict:
     suppressed = [e for e in events if e["expected_reason"]]
 
     # Only genuinely-flagged, non-suppressed events are candidates.
-    candidates = [e for e in live if (e.get("final_classification") in ("suspicious", "malicious"))]
+    candidates = [
+        e
+        for e in live
+        if (e.get("final_classification") in ("suspicious", "malicious"))
+    ]
 
     contributors = []
     categories = set()
     for e in candidates:
         risk = e.get("risk_score") or 0.0
         conf = e.get("confidence") or 0.0
-        weight = risk * (0.4 + 0.6 * conf)          # confidence-gated
+        weight = risk * (0.4 + 0.6 * conf)  # confidence-gated
         rarity = 0.0
         country = (e.get("geo_src_country") or "").upper()
         if country and country not in ("US", "", "GB", "IE", "NL"):
-            rarity = 0.15                             # foreign, non-home region
+            rarity = 0.15  # foreign, non-home region
         if e.get("threat_intel_match"):
             rarity += 0.5
         contribution = weight + rarity
@@ -434,11 +524,13 @@ def compute_verdict(events: list[dict]) -> dict:
         if label in seen_labels:
             continue
         seen_labels.add(label)
-        top_factors.append({
-            "label": label,
-            "detail": _redact((c[1].get("description") or "")[:80]),
-            "weight": round(c[0], 2),
-        })
+        top_factors.append(
+            {
+                "label": label,
+                "detail": _redact((c[1].get("description") or "")[:80]),
+                "weight": round(c[0], 2),
+            }
+        )
         if len(top_factors) >= 4:
             break
 
@@ -475,7 +567,13 @@ def _members(evs: list[dict], cap: int = 200) -> dict:
         "row_ids": [e.get("row_id") for e in evs[:cap] if e.get("row_id") is not None],
         "event_ids": [e.get("event_id") for e in evs[:cap] if e.get("event_id")],
         "device_ids": sorted({e.get("device_id") for e in evs if e.get("device_id")}),
-        "categories": sorted({(e.get("event_category") or "").lower() for e in evs if e.get("event_category")}),
+        "categories": sorted(
+            {
+                (e.get("event_category") or "").lower()
+                for e in evs
+                if e.get("event_category")
+            }
+        ),
         "evidence_count": len(evs),
     }
 
@@ -486,106 +584,173 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
     incidents = []
 
     # Story 1: owner deploy/admin session (the suppressed exec-to-exfil cluster).
-    admin = [e for e in events if e["expected_reason"] and "admin/deploy" in (e["expected_reason"] or "")]
+    admin = [
+        e
+        for e in events
+        if e["expected_reason"] and "admin/deploy" in (e["expected_reason"] or "")
+    ]
     if admin:
         cmds = []
         for e in admin[:6]:
-            m = re.search(r"\b(ssh|curl|scp|git|rsync|wget|sftp)\b", (e.get("description") or "").lower())
+            m = re.search(
+                r"\b(ssh|curl|scp|git|rsync|wget|sftp)\b",
+                (e.get("description") or "").lower(),
+            )
             if m:
                 cmds.append(m.group(1))
         toolset = ", ".join(sorted(set(cmds))) or "ssh/curl"
-        incidents.append({
-            "id": "inc-owner-deploy",
-            "title": f"Your deploy workflow ({toolset} to the AMOSKYS server)",
-            "verdict": "expected",
-            "verdict_label": "Expected activity",
-            "band": "calm",
-            "count": len(admin),
-            "mitre": sorted({t for e in admin for t in e["mitre"]}),
-            "why": (
-                "AMOSKYS saw ssh/curl launched by you, using your deploy key, to a host "
-                "you administer. A naive detector labels this 'exfiltration'. AMOSKYS "
-                "recognises it as your own recurring workflow and suppresses it."
-            ),
-            "first": admin[-1]["timestamp_dt"],
-            "last": admin[0]["timestamp_dt"],
-            "factors": ["Known deploy key", "Known destination host", "Recurring pattern", "Owner-initiated"],
-            **_members(admin),
-        })
+        incidents.append(
+            {
+                "id": "inc-owner-deploy",
+                "title": f"Your deploy workflow ({toolset} to the AMOSKYS server)",
+                "verdict": "expected",
+                "verdict_label": "Expected activity",
+                "band": "calm",
+                "count": len(admin),
+                "mitre": sorted({t for e in admin for t in e["mitre"]}),
+                "why": (
+                    "AMOSKYS saw ssh/curl launched by you, using your deploy key, to a host "
+                    "you administer. A naive detector labels this 'exfiltration'. AMOSKYS "
+                    "recognises it as your own recurring workflow and suppresses it."
+                ),
+                "first": admin[-1]["timestamp_dt"],
+                "last": admin[0]["timestamp_dt"],
+                "factors": [
+                    "Known deploy key",
+                    "Known destination host",
+                    "Recurring pattern",
+                    "Owner-initiated",
+                ],
+                **_members(admin),
+            }
+        )
 
     # Story 2: foreign / unattributed egress (the genuinely interesting signal).
     foreign = []
     for key, agg in flows_by_dest.items():
         country = (agg.get("country") or "").upper()
         org = agg.get("org") or ""
-        if country and country not in ("US", "GB", "IE", "NL", "") and not _is_known_good(org):
+        if (
+            country
+            and country not in ("US", "GB", "IE", "NL", "")
+            and not _is_known_good(org)
+        ):
             foreign.append(agg)
     foreign.sort(key=lambda a: -a["flows"])
     for agg in foreign[:3]:
-        incidents.append({
-            "id": f"inc-egress-{agg['country'].lower()}-{re.sub(r'[^a-z0-9]+', '', (agg['org'] or 'unknown').lower())[:10]}",
-            "title": f"Outbound to {agg.get('city') or agg['country']} — {agg.get('org') or 'unattributed'}",
-            "verdict": "look",
-            "verdict_label": "Worth a look",
-            "band": "amber",
-            "count": agg["flows"],
-            "mitre": ["T1071"],
-            "why": (
-                f"{agg['flows']} connection(s) to {agg.get('org') or 'an unattributed host'} in "
-                f"{agg.get('city') or ''} {agg['country']}. Low volume, foreign, not a service you "
-                "normally use. Probably benign (a website or CDN edge) — but AMOSKYS surfaces it "
-                "because it is genuinely off your baseline, unlike your deploy traffic."
-            ),
-            "first": None,
-            "last": None,
-            "factors": [f"{agg['country']} destination", "Not a known service", f"{agg.get('bytes', 0):,} bytes", "Off baseline"],
-            "dest": {"lat": agg["lat"], "lon": agg["lon"], "org": agg.get("org"), "country": agg["country"]},
-            **_members([]),
-        })
+        incidents.append(
+            {
+                "id": f"inc-egress-{agg['country'].lower()}-{re.sub(r'[^a-z0-9]+', '', (agg['org'] or 'unknown').lower())[:10]}",
+                "title": f"Outbound to {agg.get('city') or agg['country']} — {agg.get('org') or 'unattributed'}",
+                "verdict": "look",
+                "verdict_label": "Worth a look",
+                "band": "amber",
+                "count": agg["flows"],
+                "mitre": ["T1071"],
+                "why": (
+                    f"{agg['flows']} connection(s) to {agg.get('org') or 'an unattributed host'} in "
+                    f"{agg.get('city') or ''} {agg['country']}. Low volume, foreign, not a service you "
+                    "normally use. Probably benign (a website or CDN edge) — but AMOSKYS surfaces it "
+                    "because it is genuinely off your baseline, unlike your deploy traffic."
+                ),
+                "first": None,
+                "last": None,
+                "factors": [
+                    f"{agg['country']} destination",
+                    "Not a known service",
+                    f"{agg.get('bytes', 0):,} bytes",
+                    "Off baseline",
+                ],
+                "dest": {
+                    "lat": agg["lat"],
+                    "lon": agg["lon"],
+                    "org": agg.get("org"),
+                    "country": agg["country"],
+                },
+                **_members([]),
+            }
+        )
 
     # Story: high-signal categories we never auto-suppress (surface for confirm).
     high_signal = {
-        "browser_credential_theft": ("Browser credential access flagged", "T1555.003",
+        "browser_credential_theft": (
+            "Browser credential access flagged",
+            "T1555.003",
             "A probe saw a process touch browser credential storage. On a dev machine this is "
             "usually a password manager or the browser itself — but credential access is worth a "
-            "one-time confirmation, so AMOSKYS never hides it."),
-        "persistence_creation": ("New login item / LaunchAgent created", "T1543.001",
+            "one-time confirmation, so AMOSKYS never hides it.",
+        ),
+        "persistence_creation": (
+            "New login item / LaunchAgent created",
+            "T1543.001",
             "A new persistence entry appeared in ~/Library/LaunchAgents. Often a legitimate app "
-            "installing itself — confirm you recognise it."),
+            "installing itself — confirm you recognise it.",
+        ),
     }
     for cat, (title, tech, why) in high_signal.items():
-        hits = [e for e in events if (e.get("event_category") or "").lower() == cat and not e["expected_reason"]]
+        hits = [
+            e
+            for e in events
+            if (e.get("event_category") or "").lower() == cat
+            and not e["expected_reason"]
+        ]
         if hits:
-            incidents.append({
-                "id": f"inc-{cat.replace('_', '-')}",
-                "title": title, "verdict": "look", "verdict_label": "Confirm this",
-                "band": "amber", "count": len(hits), "mitre": [tech],
-                "why": why, "first": hits[-1]["timestamp_dt"], "last": hits[0]["timestamp_dt"],
-                "factors": ["High-signal category", "Not auto-suppressed", "Needs your confirmation"],
-                **_members(hits),
-            })
+            incidents.append(
+                {
+                    "id": f"inc-{cat.replace('_', '-')}",
+                    "title": title,
+                    "verdict": "look",
+                    "verdict_label": "Confirm this",
+                    "band": "amber",
+                    "count": len(hits),
+                    "mitre": [tech],
+                    "why": why,
+                    "first": hits[-1]["timestamp_dt"],
+                    "last": hits[0]["timestamp_dt"],
+                    "factors": [
+                        "High-signal category",
+                        "Not auto-suppressed",
+                        "Needs your confirmation",
+                    ],
+                    **_members(hits),
+                }
+            )
 
     # Story 3: DNS beaconing cluster (suspected periodic lookups).
-    beacon = [e for e in events if "beacon" in (e.get("event_category") or "").lower() and not e["expected_reason"]]
+    beacon = [
+        e
+        for e in events
+        if "beacon" in (e.get("event_category") or "").lower()
+        and not e["expected_reason"]
+    ]
     if beacon:
-        incidents.append({
-            "id": "inc-dns-beacon",
-            "title": f"Periodic DNS lookups flagged ({len(beacon)} events)",
-            "verdict": "look" if len(beacon) > 20 else "expected",
-            "verdict_label": "Worth a look" if len(beacon) > 20 else "Likely benign",
-            "band": "amber" if len(beacon) > 20 else "calm",
-            "count": len(beacon),
-            "mitre": sorted({t for e in beacon for t in e["mitre"]}) or ["T1071.004"],
-            "why": (
-                "Regular, evenly-spaced DNS lookups can indicate C2 beaconing — but the same "
-                "pattern is produced by software update checks, telemetry and push services. "
-                "Flagged for review, not auto-escalated."
-            ),
-            "first": beacon[-1]["timestamp_dt"],
-            "last": beacon[0]["timestamp_dt"],
-            "factors": ["Periodic interval", "No threat-intel match", "Needs destination review"],
-            **_members(beacon),
-        })
+        incidents.append(
+            {
+                "id": "inc-dns-beacon",
+                "title": f"Periodic DNS lookups flagged ({len(beacon)} events)",
+                "verdict": "look" if len(beacon) > 20 else "expected",
+                "verdict_label": (
+                    "Worth a look" if len(beacon) > 20 else "Likely benign"
+                ),
+                "band": "amber" if len(beacon) > 20 else "calm",
+                "count": len(beacon),
+                "mitre": sorted({t for e in beacon for t in e["mitre"]})
+                or ["T1071.004"],
+                "why": (
+                    "Regular, evenly-spaced DNS lookups can indicate C2 beaconing — but the same "
+                    "pattern is produced by software update checks, telemetry and push services. "
+                    "Flagged for review, not auto-escalated."
+                ),
+                "first": beacon[-1]["timestamp_dt"],
+                "last": beacon[0]["timestamp_dt"],
+                "factors": [
+                    "Periodic interval",
+                    "No threat-intel match",
+                    "Needs destination review",
+                ],
+                **_members(beacon),
+            }
+        )
 
     # Rank: act > look > calm, then by count.
     order = {"act": 0, "look": 1, "calm": 2}
@@ -594,8 +759,11 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
 
 
 # ── Globe: real geolocated flows -> arcs ─────────────────────────────────────
-def build_globe(db: sqlite3.Connection, device_id: str | None = None,
-                allowed_device_ids: list[str] | None = None):
+def build_globe(
+    db: sqlite3.Connection,
+    device_id: str | None = None,
+    allowed_device_ids: list[str] | None = None,
+):
     dev_and = " AND device_id = ?" if device_id else ""
     dev_p: tuple = (device_id,) if device_id else ()
     scope, scope_p = _scope_sql(allowed_device_ids, " AND ")
@@ -618,15 +786,22 @@ def build_globe(db: sqlite3.Connection, device_id: str | None = None,
         org = r["org"] or ""
         known = _is_known_good(org)
         country = (r["country"] or "").upper()
-        foreign = bool(country and country not in ("US", "GB", "IE", "NL", "") and not known)
+        foreign = bool(
+            country and country not in ("US", "GB", "IE", "NL", "") and not known
+        )
         band = "amber" if foreign else "calm"
         d = {
-            "lat": r["lat"], "lon": r["lon"],
-            "city": r["city"], "country": country,
-            "org": _asn_friendly(org), "org_raw": org,
-            "flows": r["flows"], "bytes": r["bytes"] or 0,
+            "lat": r["lat"],
+            "lon": r["lon"],
+            "city": r["city"],
+            "country": country,
+            "org": _asn_friendly(org),
+            "org_raw": org,
+            "flows": r["flows"],
+            "bytes": r["bytes"] or 0,
             "procs": (r["procs"] or "").split(",")[:4],
-            "band": band, "known_good": known,
+            "band": band,
+            "known_good": known,
         }
         dests.append(d)
         by_key[f"{r['lat']},{r['lon']},{org}"] = d
@@ -634,8 +809,11 @@ def build_globe(db: sqlite3.Connection, device_id: str | None = None,
 
 
 # ── Per-domain rollups (the nervous-system strip) ────────────────────────────
-def build_domains(db: sqlite3.Connection, events: list[dict],
-                  allowed_device_ids: list[str] | None = None) -> list[dict]:
+def build_domains(
+    db: sqlite3.Connection,
+    events: list[dict],
+    allowed_device_ids: list[str] | None = None,
+) -> list[dict]:
     where, where_p = _scope_sql(allowed_device_ids, " WHERE ")
     and_, and_p = _scope_sql(allowed_device_ids, " AND ")
 
@@ -646,23 +824,61 @@ def build_domains(db: sqlite3.Connection, events: list[dict],
             return 0
 
     suppressed = sum(1 for e in events if e["expected_reason"])
-    flagged = sum(1 for e in events if not e["expected_reason"] and (e.get("final_classification") in ("suspicious", "malicious")))
+    flagged = sum(
+        1
+        for e in events
+        if not e["expected_reason"]
+        and (e.get("final_classification") in ("suspicious", "malicious"))
+    )
     return [
-        {"key": "process", "label": "Processes", "count": count("SELECT COUNT(*) FROM process_events" + where, where_p),
-         "suspicious": count("SELECT COUNT(*) FROM process_events WHERE is_suspicious=1" + and_, and_p), "icon": "cpu"},
-        {"key": "network", "label": "Network", "count": count("SELECT COUNT(*) FROM flow_events" + where, where_p),
-         "suspicious": count("SELECT COUNT(*) FROM flow_events WHERE is_suspicious=1" + and_, and_p), "icon": "globe"},
-        {"key": "dns", "label": "DNS", "count": count("SELECT COUNT(*) FROM dns_events" + where, where_p),
-         "suspicious": count("SELECT COUNT(*) FROM dns_events WHERE is_beaconing=1" + and_, and_p), "icon": "dns"},
-        {"key": "security", "label": "Correlations", "count": len(events),
-         "suspicious": flagged, "icon": "shield"},
-        {"key": "suppressed", "label": "Auto-cleared", "count": suppressed,
-         "suspicious": 0, "icon": "filter"},
+        {
+            "key": "process",
+            "label": "Processes",
+            "count": count("SELECT COUNT(*) FROM process_events" + where, where_p),
+            "suspicious": count(
+                "SELECT COUNT(*) FROM process_events WHERE is_suspicious=1" + and_,
+                and_p,
+            ),
+            "icon": "cpu",
+        },
+        {
+            "key": "network",
+            "label": "Network",
+            "count": count("SELECT COUNT(*) FROM flow_events" + where, where_p),
+            "suspicious": count(
+                "SELECT COUNT(*) FROM flow_events WHERE is_suspicious=1" + and_, and_p
+            ),
+            "icon": "globe",
+        },
+        {
+            "key": "dns",
+            "label": "DNS",
+            "count": count("SELECT COUNT(*) FROM dns_events" + where, where_p),
+            "suspicious": count(
+                "SELECT COUNT(*) FROM dns_events WHERE is_beaconing=1" + and_, and_p
+            ),
+            "icon": "dns",
+        },
+        {
+            "key": "security",
+            "label": "Correlations",
+            "count": len(events),
+            "suspicious": flagged,
+            "icon": "shield",
+        },
+        {
+            "key": "suppressed",
+            "label": "Auto-cleared",
+            "count": suppressed,
+            "suspicious": 0,
+            "icon": "filter",
+        },
     ]
 
 
-def build_activity_timeline(db: sqlite3.Connection,
-                            allowed_device_ids: list[str] | None = None) -> list[dict]:
+def build_activity_timeline(
+    db: sqlite3.Connection, allowed_device_ids: list[str] | None = None
+) -> list[dict]:
     """Hourly event volume across domains for the sparkline/heartbeat."""
     where, where_p = _scope_sql(allowed_device_ids, " WHERE ")
     rows = db.execute(
@@ -715,13 +931,17 @@ def build_model(db_path: str, allowed_device_ids: list[str] | None = None) -> di
             "device": {
                 "id": device.get("device_id", "unknown"),
                 "name": _device_name(db, device.get("device_id", "")),
-                "lat": _HOME_LAT, "lon": _HOME_LON,  # owner home region (env-config)
+                "lat": _HOME_LAT,
+                "lon": _HOME_LON,  # owner home region (env-config)
                 "events": device.get("n", 0),
                 "latest": device.get("latest"),
             },
             "verdict": verdict,
             "incidents": incidents,
-            "globe": {"device": {"lat": _HOME_LAT, "lon": _HOME_LON}, "destinations": dests},
+            "globe": {
+                "device": {"lat": _HOME_LAT, "lon": _HOME_LON},
+                "destinations": dests,
+            },
             "domains": domains,
             "timeline": timeline,
             "classes": dict(classes),
@@ -744,8 +964,11 @@ def _exe_short(exe: str | None) -> str:
     return exe.rsplit("/", 1)[-1] if "/" in exe else exe
 
 
-def build_device_model(db_path: str, device_id: str | None = None,
-                       allowed_device_ids: list[str] | None = None) -> dict:
+def build_device_model(
+    db_path: str,
+    device_id: str | None = None,
+    allowed_device_ids: list[str] | None = None,
+) -> dict:
     """One device's whole nervous system: exposure vs active-risk, per-domain
     lanes, and a UNIFIED cross-domain event stream (process→network→dns→
     correlation) — the thing a single-domain tool cannot show."""
@@ -773,72 +996,128 @@ def build_device_model(db_path: str, device_id: str | None = None,
 
         # Exposure (posture) — honest: derived from the hygiene signals we DO see.
         posture_hits = sum(
-            1 for e in events
-            if (e.get("event_category") or "") in ("persistence_creation", "browser_credential_theft")
+            1
+            for e in events
+            if (e.get("event_category") or "")
+            in ("persistence_creation", "browser_credential_theft")
             and not e["expected_reason"]
         )
         exposure = {
             "band": "amber" if posture_hits else "calm",
             "label": f"{posture_hits} to review" if posture_hits else "Good",
-            "note": "login items & credential access" if posture_hits else "no open hygiene items seen",
+            "note": (
+                "login items & credential access"
+                if posture_hits
+                else "no open hygiene items seen"
+            ),
         }
 
         stream = []
 
         def add(ts, dom, band, title, detail, mitre=None):
-            stream.append({"ts": ts, "domain": dom, "band": band,
-                           "title": _redact(title), "detail": _redact(detail), "mitre": mitre or []})
+            stream.append(
+                {
+                    "ts": ts,
+                    "domain": dom,
+                    "band": band,
+                    "title": _redact(title),
+                    "detail": _redact(detail),
+                    "mitre": mitre or [],
+                }
+            )
 
         # security correlations — flagged (non-suppressed suspicious/malicious)
         # first, then recent for texture.
-        flagged_corr = [e for e in events if not e["expected_reason"]
-                        and e.get("final_classification") in ("suspicious", "malicious")]
+        flagged_corr = [
+            e
+            for e in events
+            if not e["expected_reason"]
+            and e.get("final_classification") in ("suspicious", "malicious")
+        ]
         recent_corr = [e for e in events if e not in flagged_corr][:16]
-        for e in (flagged_corr[:18] + recent_corr):
-            band = "calm" if e["expected_reason"] else (
-                "amber" if e.get("final_classification") in ("suspicious", "malicious") else "calm")
+        for e in flagged_corr[:18] + recent_corr:
+            band = (
+                "calm"
+                if e["expected_reason"]
+                else (
+                    "amber"
+                    if e.get("final_classification") in ("suspicious", "malicious")
+                    else "calm"
+                )
+            )
             title = (e.get("event_category") or "event").replace("_", " ")
             detail = e["expected_reason"] or (e.get("description") or "")[:110]
-            add(e.get("timestamp_dt"), "correlation", band, title, detail, e.get("mitre"))
+            add(
+                e.get("timestamp_dt"),
+                "correlation",
+                band,
+                title,
+                detail,
+                e.get("mitre"),
+            )
 
         # network — recent geolocated flows
         for r in db.execute(
             """SELECT timestamp_dt, dst_ip, dst_port, asn_dst_org, geo_dst_city, geo_dst_country,
                       process_name, (COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) b, is_suspicious
                FROM flow_events WHERE device_id=? AND geo_dst_latitude IS NOT NULL
-               ORDER BY timestamp_ns DESC LIMIT 22""", (device_id,)):
+               ORDER BY timestamp_ns DESC LIMIT 22""",
+            (device_id,),
+        ):
             org = r["asn_dst_org"] or ""
             known = _is_known_good(org)
             country = (r["geo_dst_country"] or "").upper()
-            foreign = bool(country and country not in ("US", "GB", "IE", "NL", "") and not known)
-            add(r["timestamp_dt"], "network", "amber" if (foreign or r["is_suspicious"]) else "calm",
+            foreign = bool(
+                country and country not in ("US", "GB", "IE", "NL", "") and not known
+            )
+            add(
+                r["timestamp_dt"],
+                "network",
+                "amber" if (foreign or r["is_suspicious"]) else "calm",
                 f"{r['process_name'] or 'conn'} → {_asn_friendly(org) or r['dst_ip']}",
-                f"{(r['geo_dst_city'] or '')} {country} · {r['b']:,} bytes · :{r['dst_port']}")
+                f"{(r['geo_dst_city'] or '')} {country} · {r['b']:,} bytes · :{r['dst_port']}",
+            )
 
         # dns — recent lookups, beaconing flagged
         for r in db.execute(
             """SELECT timestamp_dt, domain, process_name, is_beaconing, dga_score
-               FROM dns_events WHERE device_id=? ORDER BY timestamp_ns DESC LIMIT 16""", (device_id,)):
+               FROM dns_events WHERE device_id=? ORDER BY timestamp_ns DESC LIMIT 16""",
+            (device_id,),
+        ):
             beacon = bool(r["is_beaconing"])
             known = any(t in (r["domain"] or "").lower() for t in KNOWN_TELEMETRY)
-            add(r["timestamp_dt"], "dns", "amber" if (beacon and not known) else "calm",
+            add(
+                r["timestamp_dt"],
+                "dns",
+                "amber" if (beacon and not known) else "calm",
                 r["domain"] or "(lookup)",
-                f"{r['process_name'] or '—'}" + (" · periodic" if beacon else ""))
+                f"{r['process_name'] or '—'}" + (" · periodic" if beacon else ""),
+            )
 
         # process — recent spawns (highlight non-system / suspicious)
         for r in db.execute(
             """SELECT timestamp_dt, exe, username, is_suspicious, cpu_percent
-               FROM process_events WHERE device_id=? ORDER BY timestamp_ns DESC LIMIT 16""", (device_id,)):
+               FROM process_events WHERE device_id=? ORDER BY timestamp_ns DESC LIMIT 16""",
+            (device_id,),
+        ):
             exe = r["exe"] or ""
             sysproc = any(exe.startswith(p) for p in SYSTEM_PATH_PREFIXES)
-            add(r["timestamp_dt"], "process", "amber" if r["is_suspicious"] else "calm",
-                _exe_short(exe), ("system" if sysproc else "user") + f" · {r['username'] or '—'}")
+            add(
+                r["timestamp_dt"],
+                "process",
+                "amber" if r["is_suspicious"] else "calm",
+                _exe_short(exe),
+                ("system" if sysproc else "user") + f" · {r['username'] or '—'}",
+            )
 
         # Tell the moat: keep ALL flagged (amber/red) events, then fill with the
         # most recent calm ones for texture — never let recency bury the signal.
         amber = [s for s in stream if s["band"] in ("amber", "red")]
-        calm = sorted((s for s in stream if s["band"] == "calm"),
-                      key=lambda s: s["ts"] or "", reverse=True)
+        calm = sorted(
+            (s for s in stream if s["band"] == "calm"),
+            key=lambda s: s["ts"] or "",
+            reverse=True,
+        )
         stream = amber + calm[: max(0, 60 - len(amber))]
         stream.sort(key=lambda s: s["ts"] or "", reverse=True)
 
@@ -847,31 +1126,63 @@ def build_device_model(db_path: str, device_id: str | None = None,
                 return db.execute(q, (device_id,)).fetchone()[0]
             except sqlite3.Error:
                 return 0
+
         lanes = [
-            {"key": "process", "label": "Process", "icon": "cpu",
-             "count": c("SELECT COUNT(*) FROM process_events WHERE device_id=?"),
-             "flagged": c("SELECT COUNT(*) FROM process_events WHERE device_id=? AND is_suspicious=1")},
-            {"key": "network", "label": "Network", "icon": "globe",
-             "count": c("SELECT COUNT(*) FROM flow_events WHERE device_id=?"),
-             "flagged": c("SELECT COUNT(*) FROM flow_events WHERE device_id=? AND is_suspicious=1")},
-            {"key": "dns", "label": "DNS", "icon": "dns",
-             "count": c("SELECT COUNT(*) FROM dns_events WHERE device_id=?"),
-             "flagged": c("SELECT COUNT(*) FROM dns_events WHERE device_id=? AND is_beaconing=1")},
-            {"key": "correlation", "label": "Correlations", "icon": "shield",
-             "count": len(events),
-             "flagged": sum(1 for e in events if not e["expected_reason"]
-                            and e.get("final_classification") in ("suspicious", "malicious"))},
+            {
+                "key": "process",
+                "label": "Process",
+                "icon": "cpu",
+                "count": c("SELECT COUNT(*) FROM process_events WHERE device_id=?"),
+                "flagged": c(
+                    "SELECT COUNT(*) FROM process_events WHERE device_id=? AND is_suspicious=1"
+                ),
+            },
+            {
+                "key": "network",
+                "label": "Network",
+                "icon": "globe",
+                "count": c("SELECT COUNT(*) FROM flow_events WHERE device_id=?"),
+                "flagged": c(
+                    "SELECT COUNT(*) FROM flow_events WHERE device_id=? AND is_suspicious=1"
+                ),
+            },
+            {
+                "key": "dns",
+                "label": "DNS",
+                "icon": "dns",
+                "count": c("SELECT COUNT(*) FROM dns_events WHERE device_id=?"),
+                "flagged": c(
+                    "SELECT COUNT(*) FROM dns_events WHERE device_id=? AND is_beaconing=1"
+                ),
+            },
+            {
+                "key": "correlation",
+                "label": "Correlations",
+                "icon": "shield",
+                "count": len(events),
+                "flagged": sum(
+                    1
+                    for e in events
+                    if not e["expected_reason"]
+                    and e.get("final_classification") in ("suspicious", "malicious")
+                ),
+            },
         ]
 
         dests, by_key = build_globe(db, device_id=device_id)
         incidents = build_incidents(events, by_key)
         latest = db.execute(
-            "SELECT MAX(timestamp_dt) FROM security_events WHERE device_id=?", (device_id,)
+            "SELECT MAX(timestamp_dt) FROM security_events WHERE device_id=?",
+            (device_id,),
         ).fetchone()[0]
         return {
             "generated_at": latest,
-            "device": {"id": device_id, "name": _device_name(db, device_id),
-                       "events": len(events), "latest": latest},
+            "device": {
+                "id": device_id,
+                "name": _device_name(db, device_id),
+                "events": len(events),
+                "latest": latest,
+            },
             "verdict": verdict,
             "exposure": exposure,
             "lanes": lanes,
@@ -886,11 +1197,15 @@ def build_device_model(db_path: str, device_id: str | None = None,
 _DEV_CACHE: dict = {}
 
 
-def get_device_model(device_id: str | None = None, force: bool = False,
-                     allowed_device_ids: list[str] | None = None,
-                     cache_key: str = "admin") -> dict:
+def get_device_model(
+    device_id: str | None = None,
+    force: bool = False,
+    allowed_device_ids: list[str] | None = None,
+    cache_key: str = "admin",
+) -> dict:
     """Cached device model; degrades gracefully like get_model()."""
     import time
+
     now = time.time()
     key = (cache_key, device_id or "_default")
     entry = _DEV_CACHE.get(key)
@@ -898,21 +1213,36 @@ def get_device_model(device_id: str | None = None, force: bool = False,
         return entry["model"]
     path = resolve_db_path()
     if not path:
-        return {"error": "no_data", "device": {"name": "—", "id": "—", "events": 0},
-                "verdict": {"active_risk": 0, "band": "calm", "headline": "No data yet"},
-                "exposure": {"band": "calm", "label": "—", "note": ""},
-                "lanes": [], "stream": [], "incidents": []}
+        return {
+            "error": "no_data",
+            "device": {"name": "—", "id": "—", "events": 0},
+            "verdict": {"active_risk": 0, "band": "calm", "headline": "No data yet"},
+            "exposure": {"band": "calm", "label": "—", "note": ""},
+            "lanes": [],
+            "stream": [],
+            "incidents": [],
+        }
     try:
-        model = build_device_model(path, device_id,
-                                   allowed_device_ids=allowed_device_ids)
+        model = build_device_model(
+            path, device_id, allowed_device_ids=allowed_device_ids
+        )
         _DEV_CACHE[key] = {"at": now, "model": model}
         return model
     except sqlite3.Error as exc:
-        return {"error": "db_error", "message": str(exc),
-                "device": {"name": "—", "id": "—", "events": 0},
-                "verdict": {"active_risk": 0, "band": "calm", "headline": "Telemetry unavailable"},
-                "exposure": {"band": "calm", "label": "—", "note": ""},
-                "lanes": [], "stream": [], "incidents": []}
+        return {
+            "error": "db_error",
+            "message": str(exc),
+            "device": {"name": "—", "id": "—", "events": 0},
+            "verdict": {
+                "active_risk": 0,
+                "band": "calm",
+                "headline": "Telemetry unavailable",
+            },
+            "exposure": {"band": "calm", "label": "—", "note": ""},
+            "lanes": [],
+            "stream": [],
+            "incidents": [],
+        }
 
 
 if __name__ == "__main__":
@@ -926,7 +1256,9 @@ if __name__ == "__main__":
         f.write("window.AMOSKYS_DEVICE = ")
         json.dump(dev, f, default=str)
         f.write(";")
-    print(f"  device stream: {len(dev['stream'])} events · exposure {dev['exposure']['label']} · lanes {[l['flagged'] for l in dev['lanes']]}")
+    print(
+        f"  device stream: {len(dev['stream'])} events · exposure {dev['exposure']['label']} · lanes {[l['flagged'] for l in dev['lanes']]}"
+    )
     model = build_model(path)
     with open(out, "w") as f:
         json.dump(model, f, indent=2, default=str)
@@ -938,8 +1270,16 @@ if __name__ == "__main__":
         f.write(";")
     v = model["verdict"]
     print(f"✓ model → {out}")
-    print(f"  verdict: {v['headline']} ({v['band']}, active_risk={v['active_risk']}/100)")
-    print(f"  live={v['live_count']} suppressed={v['suppressed_count']} requires_investigation={v['requires_investigation']}")
-    print(f"  incidents: {len(model['incidents'])}  destinations: {model['totals']['destinations']}")
+    print(
+        f"  verdict: {v['headline']} ({v['band']}, active_risk={v['active_risk']}/100)"
+    )
+    print(
+        f"  live={v['live_count']} suppressed={v['suppressed_count']} requires_investigation={v['requires_investigation']}"
+    )
+    print(
+        f"  incidents: {len(model['incidents'])}  destinations: {model['totals']['destinations']}"
+    )
     for i in model["incidents"]:
-        print(f"    [{i['band']:5}] {i['verdict_label']:18} — {i['title']}  (x{i['count']})")
+        print(
+            f"    [{i['band']:5}] {i['verdict_label']:18} — {i['title']}  (x{i['count']})"
+        )

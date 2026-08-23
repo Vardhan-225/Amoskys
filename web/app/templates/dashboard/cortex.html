@@ -636,7 +636,7 @@
                 var ud = hits[0].object.userData;
                 if (ud && ud.agentId) {
                     var monitorId = ud.agentId;
-                    window.location.href = '/dashboard/fleet#monitor?agent=' + encodeURIComponent(monitorId);
+                    window.location.href = '/dashboard/agents#' + encodeURIComponent(monitorId);
                 }
             }
         });
@@ -711,7 +711,7 @@
                         var fg = fired ? '#' + pc.getHexString() : '#4a5580';
                         var label = p.name + ' ' + Math.round(p.precision * 100) + '%';
                         if (fired) label += ' \u00B7 ' + dets + ' det';
-                        probeHtml += '<a href="/dashboard/fleet#probes?probe=' + encodeURIComponent(p.id || p.name) +
+                        probeHtml += '<a href="/dashboard/probe-explorer#' + encodeURIComponent(p.id || p.name) +
                             '" class="probe-pip" style="background:' + bg + ';color:' + fg +
                             ';text-decoration:none;pointer-events:auto;cursor:pointer' +
                             (fired ? ';border:1px solid ' + fg : '') + '">' + label + '</a>';

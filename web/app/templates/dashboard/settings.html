@@ -34,7 +34,7 @@
         <h2 class="st-sec-title">Security</h2>
         <div class="st-row">
             <span class="st-label">Password</span>
-            <span class="st-value"><a href="/user/auth/forgot-password" class="st-action">Change password</a></span>
+            <span class="st-value"><a href="/auth/forgot-password" class="st-action">Change password</a></span>
         </div>
         <div class="st-row">
             <span class="st-label">Two-factor authentication</span>
@@ -56,14 +56,14 @@
                     <div class="st-card-desc">Manage all users, orgs, roles, and access</div>
                 </div>
             </a>
-            <a href="/dashboard/cortex" class="st-card">
+            <a href="/dashboard/command-center" class="st-card">
                 <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
                 <div class="st-card-info">
-                    <div class="st-card-name">Cortex</div>
+                    <div class="st-card-name">Command Center</div>
                     <div class="st-card-desc">Global threat overview and system health</div>
                 </div>
             </a>
-            <a href="/dashboard/fleet" class="st-card">
+            <a href="/dashboard/devices" class="st-card">
                 <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="6" height="5" rx="1"/><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="5" y="9" width="6" height="5" rx="1"/></svg>
                 <div class="st-card-info">
                     <div class="st-card-name">Fleet</div>
@@ -84,7 +84,7 @@
                     <div class="st-card-desc">Deep agent and probe analysis</div>
                 </div>
             </a>
-            <a href="/dashboard/intelligence" class="st-card">
+            <a href="/dashboard/soma" class="st-card">
                 <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 12l3-4 3 2 3-5 3 3"/></svg>
                 <div class="st-card-info">
                     <div class="st-card-name">Intelligence</div>
@@ -162,7 +162,7 @@
 
 <script nonce="{{ csp_nonce() }}">
 document.getElementById('st-logout').addEventListener('click', function() {
-    fetch('/user/auth/logout', { method: 'POST' }).then(function() {
+    fetch('/api/user/auth/logout', { method: 'POST' }).then(function() {
         window.location.href = '/';
     });
 });

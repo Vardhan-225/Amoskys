@@ -221,6 +221,7 @@
                 data.needs_attention = [];
             }
             await loadCanonicalVerdict();
+            await loadLedgerItems();
             if (canonicalVerdict) {
                 data.posture = verdictToPosture(canonicalVerdict.fleet);
                 data.verdict = canonicalVerdict.fleet;
@@ -266,6 +267,21 @@
             if (!r.ok) return null;
             canonicalVerdict = await r.json();
             return canonicalVerdict;
+        } catch (e) { return null; }
+    }
+
+    // The front door's most urgent block is the real queue, not a count of
+    // severities. It used to link to /dashboard/threats, whose fusion engine
+    // last ran 146 days ago — the most prominent call to action in the product
+    // pointed at a page that opens by disclaiming itself.
+    var ledgerItems = null;
+    async function loadLedgerItems() {
+        try {
+            var r = await fetch('/dashboard/api/ledger', { credentials: 'same-origin' });
+            if (!r.ok) return null;
+            var data = await r.json();
+            ledgerItems = data.needs_you || [];
+            return ledgerItems;
         } catch (e) { return null; }
     }
 
@@ -353,11 +369,24 @@
 
         // Needs Attention
         var attn = data.needs_attention || [];
-        if (attn.length === 0) {
-            if (ev.critical > 0) attn.push({ severity: 'critical', text: ev.critical + ' critical events', action: 'Review now', link: '/dashboard/threats' });
-            if (ev.high > 0) attn.push({ severity: 'high', text: ev.high + ' high-risk events', action: 'Investigate', link: '/dashboard/threats' });
+        if (ledgerItems && ledgerItems.length) {
+            // Real items, in the ledger's own words, linking to the one page
+            // where they can actually be answered.
+            attn = ledgerItems.slice(0, 5).map(function (it) {
+                return {
+                    severity: it.band === 'red' ? 'critical' : it.band === 'amber' ? 'high' : 'medium',
+                    text: it.title,
+                    action: it.verdict_label || 'Review',
+                    link: '/dashboard/ledger'
+                };
+            });
+        } else if (ledgerItems && ledgerItems.length === 0) {
+            attn = [];
+        } else if (attn.length === 0) {
+            if (ev.critical > 0) attn.push({ severity: 'critical', text: ev.critical + ' critical detections', action: 'Review now', link: '/dashboard/ledger' });
+            if (ev.high > 0) attn.push({ severity: 'high', text: ev.high + ' high-risk detections', action: 'Investigate', link: '/dashboard/ledger' });
             var offDev = d.filter(function(x) { return x.status !== 'online'; });
-            if (offDev.length > 0) attn.push({ severity: 'medium', text: offDev.length + ' device' + (offDev.length > 1 ? 's' : '') + ' offline', action: 'Check', link: '/dashboard/devices' });
+            if (offDev.length > 0) attn.push({ severity: 'medium', text: offDev.length + ' device' + (offDev.length > 1 ? 's' : '') + ' not reporting', action: 'Check', link: '/dashboard/devices' });
         }
         if (attn.length > 0) {
             html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Needs Attention</span>';
@@ -370,7 +399,19 @@
                     + '<div class="ov-attn-action">' + esc(a.action) + '</div>'
                     + '<div class="ov-attn-go">&#x203A;</div></a>';
             }
+            html += '<a href="/dashboard/ledger" class="ov-attn">'
+                + '<div class="ov-attn-dot medium"></div>'
+                + '<div class="ov-attn-text">Open the ledger to answer these</div>'
+                + '<div class="ov-attn-action">That\'s me / Not me</div>'
+                + '<div class="ov-attn-go">&#x203A;</div></a>';
             html += '</div>';
+        } else if (ledgerItems) {
+            html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Needs Attention</span></div>';
+            html += '<a href="/dashboard/ledger" class="ov-attn">'
+                + '<div class="ov-attn-dot medium"></div>'
+                + '<div class="ov-attn-text">Nothing is waiting on you. Everything AMOSKYS saw either matched your normal patterns or you have already answered it.</div>'
+                + '<div class="ov-attn-action">See what it cleared</div>'
+                + '<div class="ov-attn-go">&#x203A;</div></a></div>';
         }
 
         // Personal Devices

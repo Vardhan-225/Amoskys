@@ -135,11 +135,11 @@
                 fetch('/dashboard/api/investigation/' + incidentId + '/context'),
                 fetch('/dashboard/api/incidents/' + incidentId),
             ]);
-            var ctx = await ctxResp.json();
-            var incData = await incResp.json();
+            var ctx = ctxResp.ok || ctxResp.status === 404 ? await ctxResp.json().catch(function(){ return { status: 'error' }; }) : { status: 'error' };
+            var incData = incResp.ok || incResp.status === 404 ? await incResp.json().catch(function(){ return { status: 'error' }; }) : { status: 'error' };
 
             if (ctx.status === 'error' && incData.status === 'error') {
-                showError(ctx.message || 'Incident not found');
+                showNotFound(ctx.message);
                 return;
             }
 
@@ -155,6 +155,24 @@
         var el = document.getElementById('inv-error');
         el.style.display = 'block';
         el.textContent = msg;
+    }
+
+    function showNotFound(detail) {
+        document.getElementById('inv-loading').style.display = 'none';
+        var el = document.getElementById('inv-error');
+        el.style.display = 'block';
+        el.style.color = '#c8d6e5';
+        el.innerHTML =
+            '<div style="max-width:520px;margin:0 auto;background:#0f1628;border:1px solid #1e2a45;border-radius:12px;padding:32px;">'
+            + '<div style="font-size:2em;margin-bottom:12px;">&#x1F50D;</div>'
+            + '<div style="font-size:1.05em;font-weight:700;color:#fff;margin-bottom:10px;">Incident #' + esc(incidentId) + ' isn\'t available here</div>'
+            + '<div style="font-size:0.82em;color:#6b7a99;line-height:1.6;margin-bottom:20px;">'
+            + esc(detail || 'This tier has no record of that incident. Correlated incidents sync from the ops brain; resolved incidents may have been pruned.')
+            + '</div>'
+            + '<div style="display:flex;gap:8px;justify-content:center;">'
+            + '<a href="/dashboard/incidents-view" class="inv-action-btn inv-action-primary">Incident queue</a>'
+            + '<a href="/dashboard/threats" class="inv-action-btn inv-action-primary">Threats</a>'
+            + '</div></div>';
     }
 
     function render(incident, ctx) {

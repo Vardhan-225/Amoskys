@@ -288,3 +288,82 @@ def test_narrative_calm_still_accounts_for_what_was_suppressed():
 def test_narrative_names_a_single_device():
     line = verdict.narrative(_v("calm", 0, 5), device_names=["Akash's MacBook Air"])
     assert "Akash's MacBook Air" in line
+
+
+# ── Kernel novelty in the queue ──────────────────────────────────────────────
+def _novel(n, *, baseline_ready, trust="signed"):
+    return {
+        "available": True,
+        "baseline_ready": baseline_ready,
+        "known_binaries_total": 900 if baseline_ready else 58,
+        "note": (
+            None if baseline_ready else "Only 58 binaries have ever been recorded here"
+        ),
+        "novel": [
+            {
+                "cdhash": f"cd{i}",
+                "first_exe": f"/opt/thing{i}",
+                "trust": trust,
+                "age_minutes": 3,
+                "exec_count": 1,
+            }
+            for i in range(n)
+        ],
+    }
+
+
+def test_a_young_ledger_collapses_novelty_into_one_item(monkeypatch):
+    """Six "first time on this Mac" alarms on day one teaches people to ignore
+    the queue. The exec stream says its own baseline is not ready; the ledger
+    has to respect that."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel(6, baseline_ready=False)
+    )
+    items = ledger._kernel_items({})
+    assert len(items) == 1
+    assert items[0]["title"] == "6 programs ran here for the first time"
+    assert "no baseline yet" in items[0]["why"]
+
+
+def test_an_established_baseline_lists_binaries_individually(monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel(3, baseline_ready=True)
+    )
+    items = ledger._kernel_items({})
+    assert len(items) == 3
+    assert all(i["title"].startswith("First time on this Mac:") for i in items)
+
+
+def test_unsigned_first_runs_raise_the_band_even_while_learning(monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel,
+        "novel_binaries",
+        lambda *a, **k: _novel(2, baseline_ready=False, trust="unsigned"),
+    )
+    item = ledger._kernel_items({})[0]
+    assert item["band"] == "amber"
+    assert "unsigned" in item["why"]
+
+
+def test_signed_first_runs_do_not_manufacture_alarm(monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel,
+        "novel_binaries",
+        lambda *a, **k: _novel(2, baseline_ready=False, trust="signed"),
+    )
+    assert ledger._kernel_items({})[0]["band"] == "calm"
+
+
+def test_kernel_items_carry_their_provenance(monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel(1, baseline_ready=True)
+    )
+    item = ledger._kernel_items({})[0]
+    assert item["source"] == "kernel"
+    assert "kernel-witnessed" in item["factors"]
+    assert item["cdhash"] == "cd0"

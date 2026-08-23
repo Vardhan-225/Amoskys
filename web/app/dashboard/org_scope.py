@@ -13,6 +13,7 @@ Contract (see get_allowed_device_ids):
 Resolutions are cached 60s per org so a dashboard polling every few seconds
 does not hammer the command center.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,7 +54,9 @@ def _fetch_org_device_ids(org_id: str) -> list[str] | None:
             data = json.loads(rsp.read())
         return [d["device_id"] for d in data.get("devices", []) if d.get("device_id")]
     except Exception as e:
-        logger.debug("Failed to resolve devices for org %s from command center: %s", org_id, e)
+        logger.debug(
+            "Failed to resolve devices for org %s from command center: %s", org_id, e
+        )
         return None
 
 

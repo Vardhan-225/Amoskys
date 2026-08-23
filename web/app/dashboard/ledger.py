@@ -93,6 +93,148 @@ def _item_from_incident(inc: dict, user_verdicts: dict) -> dict:
     }
 
 
+def _kernel_items(user_verdicts: dict) -> list[dict]:
+    """Software that ran here for the first time, as ledger items.
+
+    This is the strongest signal the exec stream produces and it has no
+    equivalent anywhere else in the product: a cdhash that has never run on this
+    machine before is precise in a way a path-based rule cannot be. It is also
+    the one finding a person can genuinely adjudicate — "did you install this?"
+    — which is why it belongs in the queue with the same two buttons as
+    everything else.
+    """
+    try:
+        from . import kernel
+    except Exception:  # pragma: no cover - defensive import
+        return []
+    try:
+        report = kernel.novel_binaries()
+    except Exception:  # pragma: no cover
+        logger.debug("novel binary lookup failed", exc_info=True)
+        return []
+    if not report.get("available") or not report.get("novel"):
+        return []
+
+    # On a young ledger nearly everything is novel — the exec stream says so
+    # itself. Listing six "first time on this Mac" items on day one is the
+    # cry-wolf failure this product exists to avoid, so until a baseline
+    # exists they collapse into ONE item that is honest about why.
+    if not report.get("baseline_ready"):
+        rows = report["novel"]
+        names = ", ".join(
+            (r.get("first_exe") or "?").rsplit("/", 1)[-1] for r in rows[:4]
+        )
+        more = f" and {len(rows) - 4} more" if len(rows) > 4 else ""
+        untrusted = [
+            r
+            for r in rows
+            if (r.get("trust") or "") in ("unsigned", "signature-invalid")
+        ]
+        key = "binary:baseline"
+        decided = user_verdicts.get(key)
+        return [
+            {
+                "key": key,
+                "title": f"{len(rows)} programs ran here for the first time",
+                "why": (
+                    f"The kernel witnessed {names}{more} execute for the first "
+                    f"time. {report.get('note') or ''} These are listed together "
+                    "rather than as separate findings because a new install has "
+                    "no baseline yet — almost everything is new on day one, and "
+                    "treating that as six alarms would teach you to ignore them."
+                    + (
+                        f" {len(untrusted)} of them are unsigned, which is worth "
+                        "a look now rather than later."
+                        if untrusted
+                        else ""
+                    )
+                ),
+                "band": "amber" if untrusted else "calm",
+                "verdict_label": "Still learning your normal",
+                "factors": [
+                    f"{report.get('known_binaries_total', 0)} binaries known so far",
+                    "kernel-witnessed",
+                    "baseline not established",
+                ],
+                "mitre": [],
+                "count": len(rows),
+                "evidence_count": len(rows),
+                "event_ids": [],
+                "row_ids": [],
+                "has_evidence": False,
+                "device_ids": [],
+                "categories": ["esf_novel_binary"],
+                "first": None,
+                "last": None,
+                "recognised": bool(
+                    decided and decided["verdict"] == verdict_store.MINE
+                ),
+                "user_verdict": decided,
+                "source": "kernel",
+            }
+        ]
+
+    out = []
+    for row in report["novel"]:
+        cdhash = row.get("cdhash") or ""
+        key = f"binary:{cdhash[:32]}"
+        decided = user_verdicts.get(key)
+        trust = row.get("trust") or "unknown"
+        name = (row.get("first_exe") or "an unnamed binary").rsplit("/", 1)[-1]
+
+        # Trust decides urgency: an unsigned binary running for the first time
+        # is a different question from a signed one from a known vendor.
+        band = (
+            "amber" if trust in ("unsigned", "signature-invalid", "adhoc") else "calm"
+        )
+        if decided:
+            band = "calm" if decided["verdict"] == verdict_store.MINE else "amber"
+
+        signer = (
+            f", signed by {row['team_id']}"
+            if row.get("team_id")
+            else ", with no team identity"
+        )
+        caveat = f" {report['note']}" if report.get("note") else ""
+        out.append(
+            {
+                "key": key,
+                "title": f"First time on this Mac: {name}",
+                "why": (
+                    f"The kernel witnessed {name} execute for the first time "
+                    f"{row.get('age_minutes', 0)} minutes ago. Its code signature "
+                    f"reads as {trust}{signer}. Identity is tracked by code hash, "
+                    f"so moving or renaming it does not make it new again.{caveat}"
+                ),
+                "band": band,
+                "verdict_label": "Did you install this?",
+                "factors": [
+                    f"signature: {trust}",
+                    f"first seen {row.get('age_minutes', 0)}m ago",
+                    f"{row.get('exec_count', 1)} run(s)",
+                    "kernel-witnessed",
+                ],
+                "mitre": [],
+                "count": row.get("exec_count", 1),
+                "evidence_count": row.get("exec_count", 1),
+                "event_ids": [],
+                "row_ids": [],
+                "has_evidence": False,
+                "device_ids": [],
+                "categories": ["esf_novel_binary"],
+                "cdhash": cdhash,
+                "first": None,
+                "last": None,
+                "recognised": bool(
+                    decided and decided["verdict"] == verdict_store.MINE
+                ),
+                "user_verdict": decided,
+                "source": "kernel",
+            }
+        )
+    return out
+
+
 def build(
     allowed_device_ids: list[str] | None = None,
     cache_key: str = "admin",
@@ -126,6 +268,7 @@ def build(
     items = [
         _item_from_incident(i, user_verdicts) for i in (model.get("incidents") or [])
     ]
+    items.extend(_kernel_items(user_verdicts))
 
     needs_you = [i for i in items if not i["recognised"]]
     recognised = [i for i in items if i["recognised"]]
@@ -206,9 +349,27 @@ def evidence_for(
                 "requires_investigation": bool(row.get("requires_investigation")),
                 "threat_intel_match": bool(row.get("threat_intel_match")),
                 "mitre": insight_service._j(row.get("mitre_techniques"), []),
+                # Grade of evidence. A poll sample and a kernel observation are
+                # not the same claim, and a row that does not say which it is
+                # invites the reader to assume the stronger one.
+                "provenance": _provenance(row),
             }
         )
     return out
+
+
+_KERNEL_SOURCES = ("esf", "sentinel", "kernel")
+
+
+def _provenance(row: dict) -> str:
+    """ "kernel-witnessed" only when the evidence actually came from the kernel."""
+    haystack = " ".join(
+        str(row.get(field) or "").lower()
+        for field in ("description", "event_category", "tier")
+    )
+    if any(marker in haystack for marker in _KERNEL_SOURCES):
+        return "kernel-witnessed"
+    return "sampled"
 
 
 def find_item(

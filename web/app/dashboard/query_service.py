@@ -452,7 +452,9 @@ class DashboardQueryService:
                     COUNT(*) AS count
                 FROM process_events{dw}
                 GROUP BY user_type
-                """.format(dw=dev_where),
+                """.format(
+                    dw=dev_where
+                ),
                 dev_p,
             ).fetchall()
             # Derive process_category from exe path
@@ -472,7 +474,9 @@ class DashboardQueryService:
                     COUNT(*) AS count
                 FROM process_events{dw}
                 GROUP BY process_category
-                """.format(dw=dev_where),
+                """.format(
+                    dw=dev_where
+                ),
                 dev_p,
             ).fetchall()
             top_rows = conn.execute(
@@ -483,14 +487,18 @@ class DashboardQueryService:
                 GROUP BY exe
                 ORDER BY count DESC
                 LIMIT 10
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p,
             ).fetchall()
             time_range = conn.execute(
                 """
                 SELECT MIN(timestamp_dt) AS start, MAX(timestamp_dt) AS end
                 FROM process_events{dw}
-                """.format(dw=dev_where),
+                """.format(
+                    dw=dev_where
+                ),
                 dev_p,
             ).fetchone()
 
@@ -528,7 +536,9 @@ class DashboardQueryService:
                 GROUP BY exe
                 ORDER BY count DESC
                 LIMIT ?
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p + (limit,),
             ).fetchall()
             total = conn.execute(
@@ -693,7 +703,9 @@ class DashboardQueryService:
                 {dw}
                 ORDER BY timestamp_ns DESC
                 LIMIT ?
-                """.format(dw=dev_where),
+                """.format(
+                    dw=dev_where
+                ),
                 dev_p + (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
@@ -725,7 +737,9 @@ class DashboardQueryService:
                 GROUP BY peripheral_device_id
                 HAVING connection_status = 'CONNECTED'
                 ORDER BY last_seen_ns DESC
-                """.format(dw=dev_where),
+                """.format(
+                    dw=dev_where
+                ),
                 dev_p,
             ).fetchall()
         now = datetime.now(timezone.utc)
@@ -763,7 +777,9 @@ class DashboardQueryService:
                 FROM peripheral_events
                 WHERE device_type IS NOT NULL{da}
                 GROUP BY device_type
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p,
             ).fetchall()
             status_rows = conn.execute(
@@ -772,7 +788,9 @@ class DashboardQueryService:
                 FROM peripheral_events
                 WHERE connection_status IS NOT NULL{da}
                 GROUP BY connection_status
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p,
             ).fetchall()
             unauthorized_count = conn.execute(
@@ -780,7 +798,9 @@ class DashboardQueryService:
                 SELECT COUNT(DISTINCT peripheral_device_id) AS count
                 FROM peripheral_events
                 WHERE is_authorized = 0{da}
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p,
             ).fetchone()["count"]
             high_risk_count = conn.execute(
@@ -788,7 +808,9 @@ class DashboardQueryService:
                 SELECT COUNT(DISTINCT peripheral_device_id) AS count
                 FROM peripheral_events
                 WHERE risk_score > 0.7{da}
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 dev_p,
             ).fetchone()["count"]
             one_hour_ago = int((time.time() - 3600) * 1e9)
@@ -797,7 +819,9 @@ class DashboardQueryService:
                 SELECT COUNT(*) AS count
                 FROM peripheral_events
                 WHERE timestamp_ns > ? AND connection_status = 'CONNECTED'{da}
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 (one_hour_ago,) + dev_p,
             ).fetchone()["count"]
             time_range = conn.execute(
@@ -840,7 +864,9 @@ class DashboardQueryService:
                 FROM peripheral_events
                 WHERE timestamp_ns > ?{da}
                 ORDER BY timestamp_ns DESC
-                """.format(da=dev_and),
+                """.format(
+                    da=dev_and
+                ),
                 (cutoff_time,) + dev_p,
             ).fetchall()
         now = datetime.now(timezone.utc)
