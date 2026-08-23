@@ -323,17 +323,22 @@ def test_a_young_ledger_collapses_novelty_into_one_item(monkeypatch):
     items = ledger._kernel_items({})
     assert len(items) == 1
     assert items[0]["title"] == "6 programs ran here for the first time"
-    assert "no baseline yet" in items[0]["why"]
+    assert items[0]["verdict_label"] == "Still learning your normal"
+    assert "grouped for that reason" in items[0]["why"]
 
 
-def test_an_established_baseline_lists_binaries_individually(monkeypatch):
+def test_an_established_baseline_still_groups_vouched_software(monkeypatch):
+    """Superseded expectation: this used to assert one item per binary. Listing
+    every signed first-run separately is exactly what buried the real findings
+    when the baseline crossed its threshold on the live machine."""
     kernel = importlib.import_module("app.dashboard.kernel")
     monkeypatch.setattr(
         kernel, "novel_binaries", lambda *a, **k: _novel(3, baseline_ready=True)
     )
     items = ledger._kernel_items({})
-    assert len(items) == 3
-    assert all(i["title"].startswith("First time on this Mac:") for i in items)
+    assert len(items) == 1
+    assert items[0]["title"].startswith("3 programs")
+    assert items[0]["verdict_label"] == "Routine software"
 
 
 def test_unsigned_first_runs_raise_the_band_even_while_learning(monkeypatch):
@@ -359,11 +364,64 @@ def test_signed_first_runs_do_not_manufacture_alarm(monkeypatch):
 
 
 def test_kernel_items_carry_their_provenance(monkeypatch):
+    """Only an individually-listed binary carries a cdhash — the grouped item
+    stands for many, so it identifies none."""
     kernel = importlib.import_module("app.dashboard.kernel")
     monkeypatch.setattr(
-        kernel, "novel_binaries", lambda *a, **k: _novel(1, baseline_ready=True)
+        kernel,
+        "novel_binaries",
+        lambda *a, **k: _novel(1, baseline_ready=True, trust="unsigned"),
     )
     item = ledger._kernel_items({})[0]
     assert item["source"] == "kernel"
     assert "kernel-witnessed" in item["factors"]
     assert item["cdhash"] == "cd0"
+
+
+def test_signed_first_runs_are_one_question_not_seventeen(monkeypatch):
+    """Measured live: 17 novel binaries (12 signed, 5 ad-hoc, 0 unsigned) became
+    17 separate "did you install this?" items and buried three real findings.
+    A valid signature already answers where software came from."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    rows = _novel(17, baseline_ready=True, trust="signed")
+    monkeypatch.setattr(kernel, "novel_binaries", lambda *a, **k: rows)
+    items = ledger._kernel_items({})
+    assert len(items) == 1
+    assert items[0]["band"] == "calm"
+    assert "17 programs" in items[0]["title"]
+    assert items[0]["verdict_label"] == "Routine software"
+
+
+def test_an_unvouched_binary_still_gets_its_own_question(monkeypatch):
+    kernel = importlib.import_module("app.dashboard.kernel")
+    mixed = _novel(3, baseline_ready=True, trust="signed")
+    mixed["novel"].append(
+        {
+            "cdhash": "evil",
+            "first_exe": "/tmp/.hidden/impl",
+            "trust": "unsigned",
+            "age_minutes": 2,
+            "exec_count": 1,
+        }
+    )
+    monkeypatch.setattr(kernel, "novel_binaries", lambda *a, **k: mixed)
+    items = ledger._kernel_items({})
+    titles = [i["title"] for i in items]
+    assert any("impl" in t for t in titles), titles
+    assert any("3 programs" in t for t in titles), titles
+    unsigned = [i for i in items if "impl" in i["title"]][0]
+    assert unsigned["band"] == "amber"
+    assert "nothing vouches for where it came from" in unsigned["why"]
+
+
+def test_crossing_the_baseline_threshold_does_not_multiply_the_queue(monkeypatch):
+    """One item before the baseline, one item after — the threshold must not
+    turn a single question into twenty overnight."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    for ready in (False, True):
+        monkeypatch.setattr(
+            kernel,
+            "novel_binaries",
+            lambda *a, r=ready, **k: _novel(20, baseline_ready=r),
+        )
+        assert len(ledger._kernel_items({})) == 1, f"baseline_ready={ready}"

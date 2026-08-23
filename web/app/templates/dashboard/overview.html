@@ -2,7 +2,12 @@
 {% block title %}AMOSKYS — Dashboard{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/globe.gl@2"></script>
+<!-- Self-hosted, like command.html. Loading globe.gl from a CDN raced the
+     100ms initGlobe timer: when jsdelivr was slow, `typeof Globe` was still
+     undefined at T+100ms, initGlobe returned early and never retried, and the
+     home page rendered a 520px empty void where the globe should be. A CDN was
+     also the cause of a previous outage on this exact page. -->
+<script src="/static/vendor/globe.gl.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -20,7 +25,22 @@
 .ov { max-width: 1600px; margin: 0 auto; padding: 0 0 60px; }
 
 /* ── Globe Section (full-width hero) ── */
+/* Sits inside .ov-content now, below the answer — a card in the flow rather
+   than a full-bleed hero. */
+/* The answer header: verdict on the left, the four counts on the right. */
+.ov-answer {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; flex-wrap: wrap; padding: 20px 24px 0;
+}
+.ov-answer .ov-posture-badge { position: static; }
+.ov-answer .ov-globe-metrics { position: static; }
+
 .ov-globe-section {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(0,217,255,0.08);
+    margin-bottom: 20px;
+
     position: relative; width: 100%; background: #030712;
     border-bottom: 1px solid rgba(0,217,255,0.1);
 }
@@ -294,56 +314,34 @@
         var html = '';
 
         /* ═══ GLOBE SECTION (full width) ═══ */
-        html += '<div class="ov-globe-section">';
-        html += '<div class="ov-globe-container" id="ov-globe-container"></div>';
-        html += '<div class="ov-globe-overlay">';
 
-        // Posture badge — top-left
+        /* ═══ THE VERDICT — the first thing on the page ═══
+           This used to be an overlay floating on the globe, so moving the map
+           below the fold took the answer with it. It is the answer, so it leads. */
+        var vc = (data.verdict && data.verdict.counts) || null;
+        var seen = vc ? (vc.live + vc.suppressed) : ev.total_events;
+        var critTrend = trend(ev.critical, prev.critical || 0, true);
+        html += '<div class="ov-answer">';
         html += '<div class="ov-posture-badge">';
         html += '<div class="ov-pb-label" style="color:' + p.color + '">' + esc(p.label) + '</div>';
         html += '<div class="ov-pb-score" style="color:' + p.color + '">'
              + (p.score === null ? 'no reading' : 'risk ' + p.score + ' / 100') + '</div>';
-        var vc = (data.verdict && data.verdict.counts) || null;
-        var seen = vc ? (vc.live + vc.suppressed) : ev.total_events;
         html += '<div class="ov-pb-events">' + fmtNum(seen) + ' security events assessed'
              + (p.age ? ' &middot; as of ' + esc(p.age) : '') + '</div>';
         html += '</div>';
-
-        // Metrics — top-right
-        var critTrend = trend(ev.critical, prev.critical || 0, true);
         html += '<div class="ov-globe-metrics">';
         html += gMetric(f.online + '/' + f.total_devices, 'Devices', false, '');
         html += gMetric(ev.critical, 'Critical', ev.critical > 0, critTrend);
         html += gMetric(data.signals ? data.signals.active : 0, 'Signals', false, '');
         html += gMetric(mitre.unique_techniques, 'MITRE T-IDs', false, '');
         html += '</div>';
-
-        // Controls — bottom-left
-        html += '<div class="ov-globe-controls">';
-        html += '<button class="ov-gc-btn active" id="gc-all">All</button>';
-        html += '<button class="ov-gc-btn" id="gc-threats">Threats</button>';
-        html += '<button class="ov-gc-btn" id="gc-rotate">Rotate</button>';
-        // Device filter dropdown (admin sees all, user sees only theirs)
-        if (d.length > 1) {
-            html += '<select id="gc-device" class="ov-gc-btn" style="appearance:none;padding-right:20px;background-image:url(\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6%22 fill=%22%236b7a99%22/></svg>\');background-repeat:no-repeat;background-position:right 6px center;">';
-            html += '<option value="">All Devices</option>';
-            for (var di = 0; di < d.length; di++) {
-                html += '<option value="' + esc(d[di].device_id) + '">' + esc(d[di].hostname) + '</option>';
-            }
-            html += '</select>';
-        }
         html += '</div>';
 
-        // Legend — bottom-right
-        html += '<div class="ov-globe-legend">';
-        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00ff88"></span>Clean</span>';
-        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#ff3366"></span>Threat</span>';
-        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00d9ff"></span>Device</span>';
-        html += '</div>';
-
-        html += '</div>'; // overlay
-        html += '</div>'; // globe section
-
+        /* ═══ ANSWER FIRST ═══
+           The verdict and what needs you come before the map. The globe is
+           context, not an answer: leading with 520px of it pushed the only
+           actionable content below the fold, and a front door should open
+           with "is anything wrong, and is it me". */
         /* ═══ NLP SUMMARY ═══ */
         html += '<div class="ov-nlp" id="ov-nlp">';
         // ONE sentence, from the same verdict as the number above it. The old
@@ -399,9 +397,17 @@
                     + '<div class="ov-attn-action">' + esc(a.action) + '</div>'
                     + '<div class="ov-attn-go">&#x203A;</div></a>';
             }
+            // Say how many are not shown. A list silently capped at five reads
+            // as "there are five", which is the same class of quiet lie the
+            // rest of this page was rewritten to stop telling.
+            var hidden = attn.length - Math.min(5, attn.length);
             html += '<a href="/dashboard/ledger" class="ov-attn">'
                 + '<div class="ov-attn-dot medium"></div>'
-                + '<div class="ov-attn-text">Open the ledger to answer these</div>'
+                + '<div class="ov-attn-text">'
+                + (hidden > 0
+                    ? 'Open the ledger &mdash; ' + hidden + ' more waiting'
+                    : 'Open the ledger to answer these')
+                + '</div>'
                 + '<div class="ov-attn-action">That\'s me / Not me</div>'
                 + '<div class="ov-attn-go">&#x203A;</div></a>';
             html += '</div>';
@@ -413,6 +419,37 @@
                 + '<div class="ov-attn-action">See what it cleared</div>'
                 + '<div class="ov-attn-go">&#x203A;</div></a></div>';
         }
+
+        /* ═══ THE MAP — context, below the answer ═══ */
+        html += '<div class="ov-globe-section">';
+        html += '<div class="ov-globe-container" id="ov-globe-container"></div>';
+        html += '<div class="ov-globe-overlay">';
+
+        // Controls — bottom-left
+        html += '<div class="ov-globe-controls">';
+        html += '<button class="ov-gc-btn active" id="gc-all">All</button>';
+        html += '<button class="ov-gc-btn" id="gc-threats">Threats</button>';
+        html += '<button class="ov-gc-btn" id="gc-rotate">Rotate</button>';
+        // Device filter dropdown (admin sees all, user sees only theirs)
+        if (d.length > 1) {
+            html += '<select id="gc-device" class="ov-gc-btn" style="appearance:none;padding-right:20px;background-image:url(\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6%22 fill=%22%236b7a99%22/></svg>\');background-repeat:no-repeat;background-position:right 6px center;">';
+            html += '<option value="">All Devices</option>';
+            for (var di = 0; di < d.length; di++) {
+                html += '<option value="' + esc(d[di].device_id) + '">' + esc(d[di].hostname) + '</option>';
+            }
+            html += '</select>';
+        }
+        html += '</div>';
+
+        // Legend — bottom-right
+        html += '<div class="ov-globe-legend">';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00ff88"></span>Clean</span>';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#ff3366"></span>Threat</span>';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00d9ff"></span>Device</span>';
+        html += '</div>';
+
+        html += '</div>'; // overlay
+        html += '</div>'; // globe section
 
         // Personal Devices
         html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Personal Devices</span>';
@@ -481,14 +518,36 @@
 
         document.getElementById('ov-root').innerHTML = html;
 
-        // Init globe after DOM
-        setTimeout(initGlobe, 100);
+        // Init globe after DOM. Retry rather than fire once: a single 100ms
+        // timer means any delay in the library becomes a permanently empty
+        // globe with no error and no second chance.
+        scheduleGlobeInit();
 
         // Bind globe controls
         setTimeout(bindControls, 200);
     }
 
     /* ── Globe ── */
+    function scheduleGlobeInit(attempt) {
+        attempt = attempt || 0;
+        if (globe) { return; }
+        if (typeof Globe !== 'undefined') { initGlobe(); return; }
+        if (attempt > 40) {   // ~8s
+            var c = document.getElementById('ov-globe-container');
+            if (c && !c.children.length) {
+                // Say so rather than leave a silent void. An empty rectangle
+                // reads as "nothing is happening in the world", which is a
+                // claim this page is not entitled to make.
+                c.innerHTML = '<div style="display:grid;place-items:center;height:100%;'
+                    + 'color:#6b7a99;font-size:0.85em;text-align:center;padding:2rem;">'
+                    + 'The map could not load.<br>Your data is unaffected — '
+                    + 'the verdict and the ledger below are current.</div>';
+            }
+            return;
+        }
+        setTimeout(function () { scheduleGlobeInit(attempt + 1); }, 200);
+    }
+
     function initGlobe() {
         var container = document.getElementById('ov-globe-container');
         if (!container || typeof Globe === 'undefined' || globe) return;
@@ -503,9 +562,9 @@
 
         globe = Globe()(container)
             .backgroundColor('rgba(0,0,0,0)')
-            .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg')
-            .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
+            .globeImageUrl('/static/vendor/globe/earth-dark.jpg')
+            .bumpImageUrl('/static/vendor/globe/earth-topology.png')
+            .backgroundImageUrl('/static/vendor/globe/night-sky.png')
             .showAtmosphere(true)
             .atmosphereColor('#0099cc')
             .atmosphereAltitude(0.22)
