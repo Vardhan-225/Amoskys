@@ -40,6 +40,13 @@ class ObservationMixin:
         # Event-driven / sentinel agents
         "network_sentinel": "_insert_generic_observation",
         "realtime_sensor": "_insert_generic_observation",
+        # correlation had NO router at all. _wal_quality rejects any OBSERVATION
+        # whose _domain is absent from this table with
+        # CONTRACT_UNKNOWN_OBSERVATION_DOMAIN, so every event this agent
+        # produced would have been discarded on arrival — a sensor wired at the
+        # collector and severed at the router, which reads as "enabled" from
+        # both ends.
+        "correlation": "_insert_generic_observation",
     }
 
     # Receipt ledger: domain -> destination table name
@@ -50,7 +57,13 @@ class ObservationMixin:
         "auth": "audit_events",
         "filesystem": "fim_events",
         "persistence": "persistence_events",
-        "peripheral": "observation_events",
+        # Corrected: the router is _insert_peripheral_observation, which writes
+        # peripheral_events. The ledger claimed observation_events, so every
+        # receipt for this domain recorded a destination the data never reached
+        # — and a receipt ledger that disagrees with the write is worse than no
+        # ledger, because reconciliation built on it silently confirms the
+        # wrong thing.
+        "peripheral": "peripheral_events",
         "applog": "observation_events",
         "db_activity": "observation_events",
         "discovery": "observation_events",
@@ -58,6 +71,7 @@ class ObservationMixin:
         "internet_activity": "observation_events",
         "security_monitor": "observation_events",
         "unified_log": "observation_events",
+        "correlation": "observation_events",
         "infostealer": "observation_events",
         "quarantine": "observation_events",
         "provenance": "observation_events",
