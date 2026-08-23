@@ -612,8 +612,21 @@
                         + '</div>';
                 } else {
                     var nc = d.threat ? '#ff6688' : '#c8d8e8';
-                    el.innerHTML = '<div style="font-size:0.58rem;font-weight:600;color:' + nc + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + esc((d.asnOrg || '').split(/[\s,]/)[0]) + '</div>'
-                        + '<div style="font-size:0.48rem;color:#7a9ab8;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + esc(d.country || '') + ' &middot; ' + fmtBytes(d.bytes || 0) + '</div>';
+                    var members = d.members || [];
+                    var lead = esc((members[0] ? members[0].asnOrg : d.asnOrg || '').split(/[\s,]/)[0]);
+                    // A cluster names itself as one rather than stacking its
+                    // members on top of each other.
+                    var title = members.length > 1
+                        ? lead + ' <span style="color:#7a9ab8;font-weight:500;">+' + (members.length - 1) + '</span>'
+                        : lead;
+                    var sub = members.length > 1
+                        ? members.slice(1, 4).map(function (m) {
+                              return esc((m.asnOrg || '').split(/[\s,]/)[0]);
+                          }).join(', ') + (members.length > 4 ? ' +' + (members.length - 4) : '')
+                        : esc(d.country || '') + ' &middot; ' + fmtBytes(d.bytes || 0);
+                    el.innerHTML = '<div style="font-size:0.58rem;font-weight:600;color:' + nc + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + title + '</div>'
+                        + '<div style="font-size:0.48rem;color:#7a9ab8;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + sub + '</div>'
+;
                 }
                 return el;
             })
@@ -723,6 +736,8 @@
             });
         });
 
+        var destLabels = [];
+
         // Flow arcs — each drawn from its OWN device's marker
         points.forEach(function(p) {
             if (!p.lat || !p.lon) return;
@@ -759,11 +774,128 @@
             pts.push({ lat: p.lat, lng: p.lon, color: isThreat ? '#ff3366' : 'rgba(0,255,136,0.6)', alt: 0.01, radius: Math.max(0.2, Math.min(0.6, volRatio * 0.8)) });
             if (isThreat) rings.push({ lat: p.lat, lng: p.lon, threat: true });
             if (volRatio > 0.05 || isThreat) {
-                labels.push({ lat: p.lat, lng: p.lon, isDevice: false, asnOrg: p.asn_org, country: p.country, city: p.city, bytes: bytes, threat: isThreat });
+                destLabels.push({ lat: p.lat, lng: p.lon, isDevice: false, asnOrg: p.asn_org, country: p.country, city: p.city, bytes: bytes, threat: isThreat });
             }
         });
 
+        // Labels had no collision handling: every destination above a volume
+        // threshold got one at its exact coordinates, and the major clouds all
+        // sit within a few degrees of each other, so "Anthropic", "Google" and
+        // "Amazon.com" landed on top of one another and on the device cards —
+        // an unreadable pile in the middle of the map.
+        labels = labels.concat(cullLabels(destLabels, labels));
+
         globe.arcsData(arcs).pointsData(pts).ringsData(rings).htmlElementsData(labels);
+    }
+
+    /* ── Label collision control ────────────────────────────────────────
+       Three passes, cheapest first:
+         1. merge destinations belonging to the same organisation, since one
+            company's traffic arriving on five IPs is one fact, not five;
+         2. drop any destination label sitting on top of a device card — a
+            device is always the more important of the two;
+         3. keep only the largest label within any angular neighbourhood, and
+            cap the total. Culled destinations keep their point and their arc;
+            they simply stop shouting their name over someone else's.
+       Angular distance is used rather than screen distance because the globe
+       rotates: a cull computed once in screen space would be wrong a second
+       later, whereas neighbours on the sphere stay neighbours. */
+    var LABEL_CLUSTER_DEG = 9;          // orgs closer than this share one label
+    var LABEL_DEVICE_CLEARANCE_DEG = 7; // a cluster this close to a device shifts
+    var LABEL_MAX_LABELS = 7;
+
+    function angularDistance(a, b) {
+        // Small-angle planar approximation corrected for latitude — accurate
+        // enough for "will these two overlap on screen".
+        var dLat = (a.lat || 0) - (b.lat || 0);
+        var meanLat = ((a.lat || 0) + (b.lat || 0)) / 2 * Math.PI / 180;
+        var dLng = ((a.lng || 0) - (b.lng || 0)) * Math.cos(meanLat);
+        return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+
+    /* ── Label placement ────────────────────────────────────────────────
+       There was no collision handling: every destination above a volume
+       threshold got a label at its exact coordinates, and the major clouds sit
+       within a few degrees of each other, so Anthropic / Google / Amazon landed
+       on top of one another and over the device cards.
+
+       Two rejected fixes, and why: dropping the overlaps throws away which
+       companies your machine talks to, and NUDGING them apart moved a name
+       1,500 km from the arc it belongs to — a label over Colorado for traffic
+       landing in California is a new lie in place of an old mess.
+
+       So crowded destinations become ONE label that says it is a cluster and
+       names its members. That is honest (they really are in the same place),
+       complete (nothing is dropped), and readable. */
+    function cullLabels(dests, deviceLabels) {
+        if (!dests || !dests.length) return [];
+
+        // 1. One entry per organisation, anchored at its heaviest location.
+        //    One company arriving on five IPs is one fact, not five.
+        var byOrg = {};
+        dests.forEach(function (d) {
+            var key = (d.asnOrg || 'unknown').toLowerCase().split(/[\s,]/)[0];
+            var prev = byOrg[key];
+            if (!prev) {
+                byOrg[key] = Object.assign({}, d, { anchorBytes: d.bytes || 0 });
+                return;
+            }
+            prev.bytes = (prev.bytes || 0) + (d.bytes || 0);
+            prev.threat = prev.threat || d.threat;
+            if ((d.bytes || 0) > (prev.anchorBytes || 0)) {
+                prev.lat = d.lat; prev.lng = d.lng;
+                prev.city = d.city; prev.country = d.country;
+                prev.anchorBytes = d.bytes || 0;
+            }
+        });
+        var orgs = Object.keys(byOrg).map(function (k) { return byOrg[k]; });
+
+        // A threat is always worth naming first; otherwise the loudest wins.
+        orgs.sort(function (a, b) {
+            if (!!b.threat !== !!a.threat) return b.threat ? 1 : -1;
+            return (b.bytes || 0) - (a.bytes || 0);
+        });
+
+        // 2. Greedy clustering around the heaviest members.
+        var clusters = [];
+        orgs.forEach(function (o) {
+            for (var i = 0; i < clusters.length; i++) {
+                if (angularDistance(o, clusters[i]) < LABEL_CLUSTER_DEG) {
+                    clusters[i].members.push(o);
+                    clusters[i].bytes += (o.bytes || 0);
+                    clusters[i].threat = clusters[i].threat || o.threat;
+                    return;
+                }
+            }
+            clusters.push({
+                lat: o.lat, lng: o.lng, isDevice: false,
+                asnOrg: o.asnOrg, country: o.country, city: o.city,
+                bytes: o.bytes || 0, threat: !!o.threat, members: [o],
+            });
+        });
+
+        // 3. A cluster sitting on a device card shifts just far enough to clear
+        //    it — a few degrees, never across a continent.
+        clusters.forEach(function (c) {
+            for (var i = 0; i < deviceLabels.length; i++) {
+                var dev = deviceLabels[i];
+                var dist = angularDistance(c, dev);
+                if (dist >= LABEL_DEVICE_CLEARANCE_DEG) continue;
+                var dLat = (c.lat || 0) - (dev.lat || 0);
+                var dLng = (c.lng || 0) - (dev.lng || 0);
+                var mag = Math.sqrt(dLat * dLat + dLng * dLng) || 1;
+                var push = LABEL_DEVICE_CLEARANCE_DEG - dist + 1;
+                c.lat = Math.max(-82, Math.min(82, c.lat + (dLat / mag) * push));
+                c.lng = c.lng + (dLng / mag) * push;
+                c.nudged = true;
+            }
+        });
+
+        clusters.sort(function (a, b) {
+            if (!!b.threat !== !!a.threat) return b.threat ? 1 : -1;
+            return (b.bytes || 0) - (a.bytes || 0);
+        });
+        return clusters.slice(0, LABEL_MAX_LABELS);
     }
 
     function bindControls() {
