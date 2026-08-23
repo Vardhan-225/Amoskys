@@ -195,3 +195,49 @@ def test_prune_bounds_events_but_preserves_novelty(collector, store):
     hist = store.esf_binary_history(cdhash="OLD")
     assert hist["executions"] == []
     assert hist["ledger"] is not None, "novelty baseline must survive retention"
+
+
+# ── timestamp integrity ──────────────────────────────────────────────────
+def test_boot_relative_timestamp_is_rejected_not_stored(collector, store):
+    """mach_absolute_time() counts from BOOT, not the epoch.
+
+    The Sentinel's first working build emitted it raw: ~2.4e14 on a machine up
+    three days, against ~1.8e18 for a real epoch value. Stored unchecked it is
+    quietly catastrophic — and the failure mode is not a wrong chart, it is
+    retention deleting the entire evidence table on its first pass.
+    """
+    boot_relative = 235_043_373_641_458
+    collector.ingest([_exec(boot_relative, 100, 1, "/bin/ls", "aaa")])
+    assert collector.bad_timestamps == 1
+    tl = store.esf_timeline(start_ns=0, end_ns=time.time_ns() + 10**12)
+    assert tl["returned"] == 1, "the exec itself must still be kept"
+    assert tl["events"][0]["timestamp_ns"] > 1_577_836_800_000_000_000
+
+
+def test_retention_never_deletes_undateable_rows(collector, store):
+    """Retention must not become the thing that destroys the evidence.
+
+    A row whose timestamp is below the epoch floor is 'older' than every
+    possible cutoff. Without a lower bound on the DELETE, one bad clock wipes
+    the table.
+    """
+    conn_store = store
+    # Insert a boot-relative row directly, bypassing collector normalisation,
+    # to simulate rows written before the source was fixed.
+    conn_store.execute(
+        "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash) "
+        "VALUES (?, ?, ?, ?)",
+        (235_043_373_641_458, "d", "/bin/legacy", "LEGACY"),
+    )
+    collector.retention_days = 14
+    collector.prune()
+    rows = conn_store.esf_binary_history(cdhash="LEGACY")["executions"]
+    assert len(rows) == 1, "undateable evidence must survive retention"
+
+
+def test_plausible_timestamps_still_prune(collector, store):
+    old = time.time_ns() - 30 * 86400 * 10**9
+    collector.ingest([_exec(old, 100, 1, "/bin/old", "OLDER")])
+    collector.retention_days = 14
+    collector.prune()
+    assert store.esf_binary_history(cdhash="OLDER")["executions"] == []

@@ -47,6 +47,20 @@ EVENT_SOURCE = "esf_auth_exec"
 BATCH_MAX = 256
 BATCH_MAX_AGE_S = 2.0
 
+# Sanity bounds for an epoch-nanosecond timestamp: 2020-01-01 .. 2100-01-01.
+# The Sentinel's first working build emitted raw mach_absolute_time(), which
+# counts from BOOT — about 2.4e14 on a machine up for three days, versus 1.8e18
+# for a real epoch value. Stored unchecked that is quietly catastrophic: window
+# queries match nothing, correlation with other telemetry is impossible, and
+# retention compares it against an epoch cutoff, finds every row older than the
+# window, and deletes the entire evidence table on its first pass.
+#
+# Checked here as well as fixed at the source, because the cost of being wrong
+# is silent destruction of evidence and the cost of the check is two integer
+# comparisons.
+_TS_MIN_NS = 1_577_836_800_000_000_000   # 2020-01-01
+_TS_MAX_NS = 4_102_444_800_000_000_000   # 2100-01-01
+
 
 class ESFStreamCollector:
     """Parse Sentinel NDJSON and write forensic rows."""
@@ -57,6 +71,7 @@ class ESFStreamCollector:
         self.retention_days = retention_days
         self.parsed = 0
         self.malformed = 0
+        self.bad_timestamps = 0
         self.heartbeats = 0
         self.dropped_reported = 0
         self._batch: list = []
@@ -98,11 +113,38 @@ class ESFStreamCollector:
         return rec.get("type") == "heartbeat"
 
     # ── normalisation ─────────────────────────────────────────────────────
+    def _timestamp_ns(self, rec: Dict[str, Any], now_ns: int) -> int:
+        """Validate the event timestamp, falling back to ingest time.
+
+        Substitutes ingest time rather than dropping the event: a record with a
+        questionable clock still carries a real exec — the binary, its hash,
+        its parent — and discarding all of that over one bad field would lose
+        more evidence than it protects. The substitution is COUNTED and logged
+        so the timeline is known to be approximate rather than silently wrong.
+        """
+        raw = rec.get("t")
+        try:
+            ts = int(raw)
+        except (TypeError, ValueError):
+            ts = 0
+        if _TS_MIN_NS <= ts <= _TS_MAX_NS:
+            return ts
+        self.bad_timestamps += 1
+        if self.bad_timestamps <= 3 or self.bad_timestamps % 1000 == 0:
+            logger.warning(
+                "ESF timestamp %r is not plausible epoch-ns (%d so far). Using "
+                "ingest time instead. A boot-relative value here means the "
+                "Sentinel is emitting raw mach_absolute_time; the timeline for "
+                "these rows is approximate.",
+                raw, self.bad_timestamps,
+            )
+        return now_ns
+
     def to_row(self, rec: Dict[str, Any], now_ns: int) -> Dict[str, Any]:
         """Map a Sentinel record onto the esf_exec_events schema."""
         argv = rec.get("argv")
         return {
-            "timestamp_ns": int(rec.get("t") or now_ns),
+            "timestamp_ns": self._timestamp_ns(rec, now_ns),
             "device_id": self.device_id,
             "exe": rec.get("exe") or "",
             "argv": json.dumps(argv) if isinstance(argv, list) else None,
@@ -220,9 +262,9 @@ class ESFStreamCollector:
                 "(timestamp_ns, device_id, dropped, enforce_mode, collector_lag_ns) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
-                    int(rec.get("t") or now_ns), self.device_id, dropped,
+                    self._timestamp_ns(rec, now_ns), self.device_id, dropped,
                     bool(rec.get("enforce")),
-                    now_ns - int(rec.get("t") or now_ns),
+                    now_ns - self._timestamp_ns(rec, now_ns),
                 ),
             )
         except Exception:
@@ -241,8 +283,15 @@ class ESFStreamCollector:
         removed = 0
         for table in ("esf_exec_events", "esf_stream_health"):
             try:
+                # The lower bound is not redundant. Without it, any row whose
+                # timestamp is below the epoch floor — a boot-relative mach
+                # value, a zero, a corrupted field — is "older" than every
+                # cutoff and gets deleted on the first prune. Retention must
+                # never be the thing that destroys the evidence it is meant to
+                # bound. Rows it cannot date are KEPT and stay visible.
                 cur = self.store.execute(
-                    f"DELETE FROM {table} WHERE timestamp_ns < ?", (cutoff,)
+                    f"DELETE FROM {table} WHERE timestamp_ns < ? AND timestamp_ns >= ?",
+                    (cutoff, _TS_MIN_NS),
                 )
                 removed += getattr(cur, "rowcount", 0) or 0
             except Exception:
@@ -254,6 +303,7 @@ class ESFStreamCollector:
             "parsed": self.parsed,
             "malformed": self.malformed,
             "heartbeats": self.heartbeats,
+            "bad_timestamps": self.bad_timestamps,
             "dropped_reported": self.dropped_reported,
             "pending": len(self._batch),
         }

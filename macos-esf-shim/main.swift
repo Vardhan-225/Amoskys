@@ -116,9 +116,16 @@ func shouldDeny(path: String, csFlags: UInt32, isPlatform: Bool, cdhash: String)
 //     get reused; the code directory hash is what actually identifies a
 //     binary. It is emitted on every record so a binary can be tracked across
 //     renames, moves, and reinstalls.
+// ORDER IS LOAD-BEARING. In main.swift — and ONLY in main.swift — top-level
+// globals are initialised SEQUENTIALLY as statements, not lazily on first use
+// as they are in every other Swift file. EMIT_BUFFER_MAX was declared AFTER
+// the semaphore that consumes it, so it read as 0, the semaphore was created
+// with zero permits, and wait(timeout: .now()) failed for every event. The
+// Sentinel attached to the kernel, decided correctly, and emitted absolutely
+// nothing.
+let EMIT_BUFFER_MAX = 4096
 let emitQueue = DispatchQueue(label: "com.amoskys.sentinel.emit", qos: .utility)
 let emitSem = DispatchSemaphore(value: EMIT_BUFFER_MAX)
-let EMIT_BUFFER_MAX = 4096
 let dropCounter = ManagedAtomicCounter()
 
 final class ManagedAtomicCounter {
@@ -145,6 +152,25 @@ func jsonEscape(_ s: String) -> String {
         }
     }
     return out
+}
+
+/// Write bypassing the admission gate.
+///
+/// Reserved for STREAM-HEALTH records. The first version of this file routed
+/// heartbeats through emit(), which meant the drop counter travelled through
+/// the very buffer whose exhaustion it existed to report: when the semaphore
+/// was starved, every event was dropped AND so was every notice that events
+/// were being dropped. The whole "never drop silently" guarantee evaporated
+/// precisely when it was needed.
+///
+/// A health signal must never depend on the mechanism it reports on. This
+/// path can block, which is acceptable ONLY because it is called from the
+/// heartbeat timer and at startup — never from the ES callback, and never
+/// from the exec decision path.
+func emitDirect(_ line: String) {
+    emitQueue.async {
+        FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    }
 }
 
 func emit(_ line: String) {
@@ -191,11 +217,17 @@ func startHeartbeat() {
     timer.schedule(deadline: .now() + 30, repeating: 30)
     timer.setEventHandler {
         let dropped = dropCounter.snapshotAndReset()
-        let ts = machToNanos(mach_absolute_time())
-        emit("{\"v\":1,\"t\":\(ts),\"type\":\"heartbeat\",\"dropped\":\(dropped),\"enforce\":\(ENFORCE)}")
+        let ts = machToEpochNanos(mach_absolute_time())
+        emitDirect("{\"v\":1,\"t\":\(ts),\"type\":\"heartbeat\",\"dropped\":\(dropped),\"enforce\":\(ENFORCE)}")
     }
     timer.resume()
     heartbeatTimer = timer
+    // Emitted at once, not after the first 30s interval. A reader must be able
+    // to tell "the stream is alive and quiet" from "the stream is dead" within
+    // seconds of startup, and an empty file says nothing at all. This record
+    // also carries the buffer size, which is what would have made the
+    // zero-permit semaphore bug obvious on sight instead of invisible.
+    emitDirect("{\"v\":1,\"t\":\(machToEpochNanos(mach_absolute_time())),\"type\":\"sentinel_start\",\"enforce\":\(ENFORCE),\"buffer\":\(EMIT_BUFFER_MAX)}")
 }
 var heartbeatTimer: DispatchSourceTimer?
 
@@ -257,7 +289,7 @@ func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
     let epid = Int32(bitPattern: atok.val.5)
     let euid = atok.val.1
     let parentPid = target.pointee.ppid
-    let eventTs = machToNanos(m.mach_time)
+    let eventTs = machToEpochNanos(m.mach_time)
 
     // Retain; decide async; guarantee a response before the deadline (fail-open).
     es_retain_message(msg)
@@ -299,6 +331,29 @@ func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
     }
 }
 
+/// Nanoseconds between the UNIX epoch and this machine's boot.
+///
+/// mach_absolute_time() counts from BOOT, not from the epoch, so a raw mach
+/// value is ~2.7 days on a machine that has been up 2.7 days. Emitting that as
+/// a timestamp silently corrupts everything downstream: time-window queries
+/// match nothing, correlation with other telemetry is impossible, and — worst
+/// — retention compares a boot-relative value against an epoch cutoff, finds
+/// every row "older" than the window, and deletes the entire evidence table on
+/// its first pass.
+///
+/// Captured once at startup: the offset is fixed for the life of the process,
+/// and sampling it per event would add jitter for no benefit.
+let bootEpochOffsetNs: UInt64 = {
+    let nowEpochNs = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+    let uptimeNs = machToNanos(mach_absolute_time())
+    return nowEpochNs > uptimeNs ? nowEpochNs - uptimeNs : 0
+}()
+
+@inline(__always)
+func machToEpochNanos(_ mach: UInt64) -> UInt64 {
+    return bootEpochOffsetNs + machToNanos(mach)
+}
+
 func machToNanos(_ mach: UInt64) -> UInt64 {
     var tb = mach_timebase_info_data_t()
     mach_timebase_info(&tb)
@@ -322,6 +377,17 @@ func run() {
     var events = [ES_EVENT_TYPE_AUTH_EXEC]
     guard es_subscribe(client, &events, UInt32(events.count)) == ES_RETURN_SUCCESS else {
         FileHandle.standardError.write(Data("es_subscribe failed\n".utf8)); exit(1)
+    }
+    // Refuse to run blind. A zero-permit semaphore silently discards 100% of
+    // events while the Sentinel looks perfectly healthy — attached to the
+    // kernel, deciding correctly, emitting nothing. That is the exact failure
+    // this whole subsystem exists to make impossible, so it is checked rather
+    // than assumed.
+    guard EMIT_BUFFER_MAX > 0 else {
+        FileHandle.standardError.write(Data(
+            ("amoskys-sentinel: FATAL — emit buffer is 0, every event would "
+             + "be dropped silently. Refusing to run blind.\n").utf8))
+        exit(2)
     }
     startHeartbeat()
     FileHandle.standardError.write(Data(
