@@ -163,3 +163,106 @@ def test_exec_events_still_route_to_their_own_table(collector, store):
         "team_id": "", "decision": "allow", "reason": "platform"})])
     assert store.db.execute("SELECT COUNT(*) FROM esf_exec_events").fetchone()[0] == 1
     assert store.db.execute("SELECT COUNT(*) FROM esf_kernel_events").fetchone()[0] == 0
+
+
+# ── baseline maturity ────────────────────────────────────────────────────
+def _mixin_store(store):
+    from amoskys.storage._ts_esf_forensics import ESFForensicsMixin
+
+    class S(ESFForensicsMixin):
+        _read_pool = store._read_pool
+        db = store.db
+
+        def _execute(self, sql, args=()):
+            return store.db.execute(sql, args)
+
+        def _commit(self):
+            store.db.commit()
+
+    return S()
+
+
+def test_young_baseline_declares_itself_untrustworthy(store):
+    """Novelty is worth nothing on a young ledger.
+
+    At 14.8 hours the real ESF corpus was marking 30% of executions novel,
+    against 0.5% for a polling corpus that had seen 30,000. A detector that
+    reports "3 novel binaries" without saying which regime it is in invites
+    action on noise.
+    """
+    s = _mixin_store(store)
+    now = time.time_ns()
+    for i in range(50):
+        store.db.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash) "
+            "VALUES (?,?,?,?)",
+            (now - (50 - i) * 10**9 * 60, "d", f"/bin/x{i}", f"H{i}"))
+    store.db.commit()
+    m = s.esf_baseline_maturity()
+    assert m["mature"] is False
+    assert m["maturity"] < 0.05
+    assert "young" in m["note"] and "Do not act on novelty alone" in m["note"]
+
+
+def test_mature_baseline_says_so(store):
+    s = _mixin_store(store)
+    now = time.time_ns()
+    rows = [(now - (5100 - i) * 10**9, "d", f"/bin/x{i%400}", f"H{i%400}")
+            for i in range(5100)]
+    store.db.executemany(
+        "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash) "
+        "VALUES (?,?,?,?)", rows)
+    store.db.commit()
+    m = s.esf_baseline_maturity()
+    assert m["mature"] is True and m["maturity"] == 1.0
+    assert "reflects the machine" in m["note"]
+
+
+# ── transitions are not novelty-gated ────────────────────────────────────
+def test_the_first_ever_signature_invalidation_scores_high(store, collector):
+    """p = 1/1 would give 0 bits, which is exactly backwards.
+
+    The rarest event in the system must not score zero because it is also the
+    only one observed. The prior floor holds until there is enough history for
+    a measured rate to be trustworthy.
+    """
+    s = _mixin_store(store)
+    collector.ingest([_ev("cs_invalidated")])
+    r = s.esf_transition_alerts(hours=24)
+    assert r["count"] == 1
+    a = r["alerts"][0]
+    assert a["bits"] >= 20.0, "a lone cs_invalidated must not score 0 bits"
+    assert a["rate_basis"] == "prior_floor"
+
+
+def test_transitions_rank_by_severity_not_recency(store, collector):
+    s = _mixin_store(store)
+    now = time.time_ns()
+    collector.ingest([
+        _ev("cs_invalidated", t=now - 10**10),
+        _ev("unmount", t=now),
+    ])
+    r = s.esf_transition_alerts(hours=24)
+    assert r["alerts"][0]["kind"] == "cs_invalidated", (
+        "the older but far rarer event must rank first")
+
+
+def test_quiet_transitions_do_not_self_certify(store):
+    """Zero could mean nothing happened, or that the Sentinel is running a
+    build with no such subscription. The result must not imply the first."""
+    s = _mixin_store(store)
+    r = s.esf_transition_alerts(hours=24)
+    assert r["count"] == 0
+    assert "subscriptions" in r["note"]
+
+
+def test_alert_surface_keeps_the_two_halves_apart(store, collector):
+    """Merging them would let a 6-bit novelty finding on a 13%-built baseline
+    sit beside a 20-bit signature invalidation as an equal claim."""
+    s = _mixin_store(store)
+    collector.ingest([_ev("cs_invalidated")])
+    surface = s.esf_alert_surface(hours=24)
+    assert "novelty_gated" in surface and "transitions" in surface
+    assert surface["novelty_gated"]["trustworthy"] is False
+    assert surface["novelty_gated"]["caveat"] is not None
+    assert surface["transitions"]["count"] == 1

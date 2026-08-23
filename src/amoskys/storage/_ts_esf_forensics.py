@@ -498,3 +498,173 @@ class ESFForensicsMixin:
                     ),
                 }
         return None
+
+    # ── 7. Baseline maturity ──────────────────────────────────────────────
+    #
+    # Marginal novelty below which a corpus has learned enough for "first time
+    # seen" to mean something. Derived from this machine's own polling corpus,
+    # which flattened at n≈5,000 execs: below that, novelty is dominated by the
+    # corpus being young rather than by anything happening.
+    _NOVELTY_MATURE_THRESHOLD = 0.02
+    _NOVELTY_MATURE_N = 5000
+
+    def esf_baseline_maturity(self) -> Dict[str, Any]:
+        """How much should anyone trust the novelty signal right now?
+
+        Novelty is the strongest axis this system has, and it is worth NOTHING
+        on a young ledger — at 14.8 hours the ESF corpus was still marking 30%
+        of executions novel, against 0.5% for the polling corpus that had seen
+        30,000. A detector that reports "3 novel binaries" without saying which
+        of those two regimes it is in invites the reader to act on noise.
+
+        So the maturity is reported alongside every verdict rather than left
+        for someone to infer. This is the same discipline as the completeness
+        note on esf_timeline and the corpus check on threat intel: a signal
+        that cannot yet be meaningful must say so itself.
+        """
+        with self._read_pool.connection() as db:
+            n = db.execute("SELECT COUNT(*) FROM esf_exec_events").fetchone()[0]
+            distinct = db.execute(
+                "SELECT COUNT(*) FROM esf_binary_ledger").fetchone()[0]
+            span = db.execute(
+                "SELECT (MAX(timestamp_ns) - MIN(timestamp_ns)) / 1e9 "
+                "FROM esf_exec_events").fetchone()[0] or 0.0
+
+        rate_per_day = (n / (span / 86400.0)) if span > 3600 else 0.0
+        fraction = min(1.0, n / float(self._NOVELTY_MATURE_N))
+        remaining = max(0, self._NOVELTY_MATURE_N - n)
+        eta_days = (remaining / rate_per_day) if rate_per_day > 0 else None
+
+        return {
+            "execs_observed": n,
+            "distinct_binaries": distinct,
+            "execs_needed": self._NOVELTY_MATURE_N,
+            "maturity": round(fraction, 3),
+            "mature": n >= self._NOVELTY_MATURE_N,
+            "observed_hours": round(span / 3600.0, 1),
+            "execs_per_day": round(rate_per_day),
+            "eta_days": round(eta_days, 1) if eta_days is not None else None,
+            "note": self._maturity_note(n, fraction, eta_days),
+        }
+
+    def _maturity_note(self, n: int, fraction: float, eta_days) -> str:
+        """The warning must never get WEAKER as the corpus gets younger.
+
+        The first version put the caveat inside the branch that had an ETA, so
+        a corpus under an hour old — the least trustworthy state possible —
+        fell through to a bare "rate unknown" and lost the warning entirely.
+        Exactly backwards, and the kind of inversion that only shows up when
+        something asserts on the message rather than the number.
+        """
+        if n >= self._NOVELTY_MATURE_N:
+            return "Baseline is mature: novelty reflects the machine, not the corpus."
+        head = (
+            f"Baseline is {100*fraction:.0f}% built ({n:,} of "
+            f"{self._NOVELTY_MATURE_N:,} execs). Novelty is still dominated by "
+            f"the ledger being young — nearly everything looks new because "
+            f"nearly everything IS new here. Do not act on novelty alone"
+        )
+        if eta_days is not None:
+            return head + f" for another {eta_days:.1f} days."
+        return head + " until the corpus has grown; too little history to estimate how long."
+
+    # ── 8. Transitions: rarity that is intrinsic, not learned ─────────────
+    #
+    # Weight per transition kind. These are NOT gated on novelty, because their
+    # rarity does not have to be learned from this machine — it is a property of
+    # the event. A running process's code signature going invalid is not
+    # "unusual here", it is unusual anywhere, and waiting four days for a
+    # baseline before reporting one would be indefensible.
+    #
+    # Bits are a floor on surprisal, set from what the event means rather than
+    # from a frequency this ledger has not yet observed. They are replaced by
+    # measured rates once there are enough observations to compute one.
+    _TRANSITION_WEIGHT = {
+        "cs_invalidated": 20.0,  # running code modified in place
+        "kextload":       16.0,  # kernel extension load
+        "setuid":         10.0,  # privilege change
+        "setgid":          9.0,
+        "mount":           8.0,  # volume / disk image attach
+        "unmount":         6.0,
+    }
+
+    def esf_transition_alerts(self, *, hours: int = 24, limit: int = 200
+                              ) -> Dict[str, Any]:
+        """Kernel transitions, with measured rates once they exist."""
+        cutoff = time.time_ns() - hours * 3600 * 1_000_000_000
+        with self._read_pool.connection() as db:
+            db.row_factory = __import__("sqlite3").Row
+            rows = [dict(r) for r in db.execute(
+                "SELECT * FROM esf_kernel_events WHERE timestamp_ns >= ? "
+                "ORDER BY timestamp_ns DESC LIMIT ?", (cutoff, limit))]
+            totals = {k: n for k, n in db.execute(
+                "SELECT kind, COUNT(*) FROM esf_kernel_events GROUP BY kind")}
+            grand = sum(totals.values())
+            kdrops = db.execute(
+                "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
+                "WHERE timestamp_ns >= ?", (cutoff,)).fetchone()[0]
+
+        for r in rows:
+            if r.get("detail"):
+                try:
+                    r["detail"] = json.loads(r["detail"])
+                except ValueError:
+                    pass
+            kind = r.get("kind")
+            prior = self._TRANSITION_WEIGHT.get(kind, 12.0)
+            observed = totals.get(kind, 0)
+            if grand and observed:
+                measured = -math.log2(observed / grand)
+                # The floor holds until there is enough history for a measured
+                # rate to be trustworthy. Otherwise the FIRST cs_invalidated
+                # ever seen would score 0 bits — p = 1/1 — which is precisely
+                # backwards for the rarest event in the system.
+                r["bits"] = round(max(prior, measured) if grand < 500 else measured, 1)
+                r["rate_basis"] = "prior_floor" if grand < 500 else "measured"
+            else:
+                r["bits"] = prior
+                r["rate_basis"] = "prior_floor"
+
+        rows.sort(key=lambda r: (-r["bits"], -r["timestamp_ns"]))
+        return {
+            "alerts": rows,
+            "count": len(rows),
+            "by_kind": totals,
+            "kernel_dropped_in_window": kdrops,
+            "complete": kdrops == 0,
+            "note": (
+                "No transition events recorded. Either nothing happened, or the "
+                "Sentinel is running a build that does not subscribe to them — "
+                "check sentinel_start.subscriptions before reading this as quiet."
+                if not rows and not grand else
+                f"{len(rows)} transitions in {hours}h across {len(totals)} kinds."
+            ),
+        }
+
+    def esf_alert_surface(self, *, hours: int = 24) -> Dict[str, Any]:
+        """Everything ESF has to say, with the trust level of each half stated.
+
+        Two halves with genuinely different epistemics, kept apart on purpose:
+
+          novelty-gated   strong, but worthless until the ledger matures, and
+                          the maturity is reported so nobody has to guess
+          transitions     immediately meaningful, because the rarity is a
+                          property of the event rather than of this machine
+
+        Merging them into one ranked list would let a 6-bit novelty finding on
+        a 13%-built baseline sit next to a 20-bit signature invalidation as
+        though they were the same kind of claim.
+        """
+        maturity = self.esf_baseline_maturity()
+        composite = self.esf_composite_alerts(hours=hours)
+        transitions = self.esf_transition_alerts(hours=hours)
+        return {
+            "baseline": maturity,
+            "novelty_gated": {
+                **composite,
+                "trustworthy": maturity["mature"],
+                "caveat": None if maturity["mature"] else maturity["note"],
+            },
+            "transitions": transitions,
+            "complete": composite.get("complete", True) and transitions["complete"],
+        }
