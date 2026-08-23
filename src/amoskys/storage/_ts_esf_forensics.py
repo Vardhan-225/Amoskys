@@ -409,3 +409,76 @@ class ESFForensicsMixin:
         )
         self._commit()
         return True
+
+    # ── 6. Hybrid ancestry ────────────────────────────────────────────────
+    def esf_resolve_parent(self, *, ppid: int, before_ns: int,
+                           device_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Find a parent using ESF first, then the polling sensor.
+
+        MEASURED PROBLEM: only 7.5% of ESF execs have their parent in the ESF
+        stream. This is structural, not a bug — the Sentinel starts at some
+        point in time, while the processes that launch everything (the
+        analyzer, the collector, launchd) have been running for hours or since
+        boot. Their exec events happened before anyone was watching and are
+        permanently unavailable.
+
+        That ceiling breaks the probe-tool rule, which needs ancestry to tell
+        "our unified-log sensor ran `log`" from "someone read your system log":
+        807 identical-looking invocations, one bit of context deciding all of
+        them.
+
+        The polling sensor has exactly the complementary weakness and strength.
+        It cannot see a short-lived process and reports a binary's CURRENT
+        signature rather than the authorised one — but it samples LONG-LIVED
+        processes reliably, which is precisely the population ESF misses. So
+        each covers the other's blind spot:
+
+            ESF      pre-exec truth, cdhash, short-lived processes
+            polling  long-lived processes, survives Sentinel restarts
+
+        The source is always returned, because a polling-derived parent is a
+        WEAKER claim: it was sampled, not witnessed, and the caller must be
+        able to weigh it accordingly rather than have the two silently blend.
+        """
+        import sqlite3 as _sq
+        with self._read_pool.connection() as db:
+            db.row_factory = _sq.Row
+            args = [ppid, before_ns]
+            dev = ""
+            if device_id:
+                dev = "AND device_id = ?"
+                args.append(device_id)
+            row = db.execute(
+                f"SELECT * FROM esf_exec_events WHERE pid = ? AND timestamp_ns <= ? {dev} "
+                "ORDER BY timestamp_ns DESC LIMIT 1", args).fetchone()
+            if row:
+                out = _row_to_exec(row)
+                out["source"] = "esf"
+                out["witnessed"] = True
+                return out
+
+            row = db.execute(
+                f"SELECT pid, ppid, exe, cmdline, name, username FROM process_events "
+                f"WHERE pid = ? AND timestamp_ns <= ? {dev} "
+                "ORDER BY timestamp_ns DESC LIMIT 1", args).fetchone()
+            if row:
+                d = dict(row)
+                argv = d.get("cmdline")
+                if argv:
+                    try:
+                        argv = json.loads(argv)
+                    except (ValueError, TypeError):
+                        argv = [argv]
+                return {
+                    "pid": d.get("pid"), "ppid": d.get("ppid"),
+                    "exe": d.get("exe"), "argv": argv,
+                    "cdhash": None,          # polling cannot supply this
+                    "source": "polling",
+                    "witnessed": False,
+                    "note": (
+                        "Sampled by the polling sensor, not witnessed at exec. "
+                        "No cdhash is available, so identity from this row is "
+                        "positional and weaker than a kernel observation."
+                    ),
+                }
+        return None
