@@ -134,9 +134,17 @@ def _load_agents() -> List[Dict[str, Any]]:
     # On an EDR a sensor that silently fails to load is a blind spot that
     # reports as health. The reconciliation below makes that impossible.
     requested: list = []
+    # Package names, tracked separately from registered names because the two
+    # legitimately differ (network -> "flow", process -> "proc"). Comparing
+    # registered names against directory names would report those two as
+    # unwired forever and train the operator to ignore the warning.
+    _requested_packages: set = set()
 
     def _try_load(module_path: str, class_name: str, name: str, interval: float):
         requested.append(name)
+        parts = module_path.split(".")
+        if len(parts) >= 2:
+            _requested_packages.add(parts[-2])
         try:
             import importlib
 
@@ -318,6 +326,37 @@ def _load_agents() -> List[Dict[str, Any]]:
     # way to know: the only prior signal was a count with nothing to compare it
     # against. This is deliberately not fatal — 17 working sensors are worth
     # more than none — but it can never again be silent.
+    # WIRED 2026-08-23. These three packages existed, imported cleanly, and
+    # produced valid telemetry on the first call — and had never been requested
+    # by the collector, so they had NEVER RUN. fim_events and peripheral_events
+    # held zero rows for the lifetime of the database: file integrity
+    # monitoring and USB device monitoring were absent capabilities that read
+    # as present ones, because the code was right there.
+    #
+    # Intervals are deliberately at the SLOW end of the existing range (60s,
+    # matching persistence and discovery, against 2s for realtime_sensor).
+    # Unbounded telemetry from this collector filled the SSD to 99% and
+    # panicked the kernel six times in 2026-08; three new producers earn their
+    # volume before they get a faster cadence, not before.
+    _try_load(
+        "amoskys.agents.os.macos.filesystem.agent",
+        "MacOSFileAgent",
+        "filesystem",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.peripheral.agent",
+        "MacOSPeripheralAgent",
+        "peripheral",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.correlation.agent",
+        "MacOSCorrelationAgent",
+        "correlation",
+        60.0,
+    )
+
     loaded_names = {a["name"] for a in agents}
     missing = [n for n in requested if n not in loaded_names]
     if missing:
@@ -331,8 +370,60 @@ def _load_agents() -> List[Dict[str, Any]]:
         )
     else:
         logger.info(
-            "All %d registered sensors loaded — no blind spots", len(requested)
+            "All %d registered sensors loaded", len(requested)
         )
+
+    # SECOND RECONCILIATION: what exists on disk but was never ASKED FOR.
+    #
+    # The check above compares requested against loaded, which cannot see an
+    # agent that was never requested in the first place — and it announced
+    # "All 18 registered sensors loaded — no blind spots" while THREE agent
+    # packages sat on disk, wired to nothing:
+    #
+    #     correlation   3,021 lines      never requested
+    #     filesystem    2,300 lines      never requested -> fim_events: 0 rows EVER
+    #     peripheral    1,387 lines      never requested -> peripheral_events: 0 rows EVER
+    #
+    # File integrity monitoring and USB device monitoring have never produced a
+    # single event on this machine, and the blind-spot detector reported no
+    # blind spots. It had the exact flaw it was written to catch, one level up:
+    # a subtraction can only find what someone remembered to put in the
+    # minuend.
+    #
+    # Names are aliased on purpose in some cases (network -> "flow",
+    # process -> "proc"), so the comparison is by MODULE PATH, which cannot
+    # drift from the package that actually exists.
+    try:
+        import os as _os
+
+        agents_dir = _os.path.join(
+            _os.path.dirname(_os.path.abspath(__file__)),
+            "agents", "os", "macos",
+        )
+        on_disk = {
+            d for d in _os.listdir(agents_dir)
+            if _os.path.isdir(_os.path.join(agents_dir, d))
+            and not d.startswith("__")
+            and _os.path.exists(_os.path.join(agents_dir, d, "agent.py"))
+        }
+        # esf is deliberately out of this registry: it is fed by the Sentinel's
+        # own stream and collected separately, not polled on an interval.
+        unwired = sorted(on_disk - _requested_packages - {"esf"})
+        if unwired:
+            logger.error(
+                "UNWIRED AGENTS: %d agent package(s) exist but are never "
+                "requested by the collector, so they have NEVER run: %s. Code "
+                "that is present but unreachable is worse than absent code — "
+                "it reads as coverage.",
+                len(unwired), ", ".join(unwired),
+            )
+        else:
+            logger.info(
+                "Sensor registry complete: %d packages on disk, all wired",
+                len(on_disk),
+            )
+    except Exception:
+        logger.warning("Could not reconcile agents on disk", exc_info=True)
 
     return agents
 
