@@ -175,3 +175,13 @@ def test_a_stopped_sentinel_is_dark_not_quiet(store, monkeypatch):
         },
     )
     assert _by_label(coverage.report())["Kernel witness"]["status"] == "dark"
+
+
+def test_a_missing_blindness_ledger_is_not_reported_as_healthy(store):
+    """list_blindness_events() returns [] both when the ledger is EMPTY and when
+    the table is absent, and summarize() calls [] "healthy". On a synced fleet
+    cache the table is simply missing — so the panel whose whole job is to
+    report unseen gaps was reporting a missing ledger as a clean one."""
+    report = coverage.report()
+    assert report["blindness"]["status"] == "unknown"
+    assert "not evidence" in report["blindness"]["message"]

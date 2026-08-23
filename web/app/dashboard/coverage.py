@@ -95,19 +95,45 @@ def _latest_epoch(db: sqlite3.Connection, table: str, scope: str, params: tuple)
         return None, "absent"
 
 
+_LEDGER_UNKNOWN = {
+    "status": "unknown",
+    "active_count": 0,
+    "events": [],
+    "by_sensor": {},
+    "message": "The blindness ledger could not be read on this tier — "
+    "absence of recorded gaps is not evidence there were none.",
+}
+
+
 def _blindness(db: sqlite3.Connection, device_id: str | None) -> dict:
+    """Active blindness events, or an honest "cannot tell".
+
+    ``list_blindness_events`` returns [] both when the ledger is EMPTY and when
+    the table does not exist, and ``summarize_blindness_events([])`` calls that
+    "healthy — No active blindness events". On a synced fleet cache the table is
+    simply absent, so the panel whose entire job is to report unseen gaps was
+    itself reporting a missing ledger as a clean one. Check for the table before
+    trusting the summary.
+    """
     try:
         from amoskys.observability.blindness import (
+            BLINDNESS_TABLE,
             list_blindness_events,
             summarize_blindness_events,
         )
     except Exception:
-        return {"status": "unknown", "active_count": 0, "events": [], "by_sensor": {}}
+        return dict(_LEDGER_UNKNOWN)
     try:
+        present = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (BLINDNESS_TABLE,),
+        ).fetchone()
+        if not present:
+            return dict(_LEDGER_UNKNOWN)
         events = list_blindness_events(db, device_id=device_id, limit=50)
     except Exception:
         logger.debug("blindness ledger unreadable", exc_info=True)
-        return {"status": "unknown", "active_count": 0, "events": [], "by_sensor": {}}
+        return dict(_LEDGER_UNKNOWN)
     return summarize_blindness_events(events)
 
 

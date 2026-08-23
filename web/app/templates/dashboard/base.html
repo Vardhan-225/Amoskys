@@ -14,7 +14,11 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <!-- Loaded plainly, not with the media="print" onload="this.media='all'"
+         async trick: Talisman's CSP blocks inline on* handlers (a nonce cannot
+         authorise an attribute), so the handler never ran, media stayed "print",
+         and Inter has never actually applied on any dashboard page. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         /* ═══════════════════════════════════════════════════════════════════

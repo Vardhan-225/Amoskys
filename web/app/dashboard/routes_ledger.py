@@ -479,15 +479,19 @@ def api_actions_cancel(command_id):
 @dashboard_bp.route("/api/coverage")
 @require_login
 def api_coverage():
-    """What AMOSKYS could not see — the honest counterpart to any all-clear."""
+    """What AMOSKYS could not see — the honest counterpart to any all-clear.
+
+    ``device_id`` narrows the report, so it must be checked against the org
+    allowlist first: coverage.report() treats an explicit device_id as THE
+    scope, which would otherwise let any authenticated user read another
+    tenant's sensor coverage by guessing an id.
+    """
     allowed, _ = _scope()
+    device_id = request.args.get("device_id") or None
+    if device_id and allowed is not None and device_id not in allowed:
+        return jsonify({"error": "unknown device"}), 404
     return (
-        jsonify(
-            coverage.report(
-                allowed_device_ids=allowed,
-                device_id=request.args.get("device_id") or None,
-            )
-        ),
+        jsonify(coverage.report(allowed_device_ids=allowed, device_id=device_id)),
         200,
     )
 

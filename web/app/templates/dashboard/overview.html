@@ -457,7 +457,7 @@
             html += '<div class="ov-mt-grid">';
             (mitre.top || []).forEach(function(m) {
                 var t = m.technique || m; var c = m.count || '';
-                html += '<span class="ov-mt" title="' + mitreName(t) + '">' + esc(t) + (c ? ' <span>' + c + '</span>' : '') + '</span>';
+                html += '<span class="ov-mt" title="' + esc(mitreName(t)) + '">' + esc(t) + (c ? ' <span>' + esc(c) + '</span>' : '') + '</span>';
             });
             html += '</div>';
         } else { html += '<div style="color:#6b7a99;font-size:0.82em;">No detections</div>'; }
@@ -470,7 +470,7 @@
             for (var i = 0; i < Math.min(8, cats.length); i++) {
                 var c = cats[i], pct = Math.max(5, c.count / maxC * 100);
                 var clr = c.avg_risk >= 0.6 ? '#ff3366' : c.avg_risk >= 0.3 ? '#f0ad4e' : '#00d9ff';
-                html += '<div class="ov-act"><span class="ov-act-name">' + humanize(c.category) + '</span>'
+                html += '<div class="ov-act"><span class="ov-act-name">' + esc(humanize(c.category)) + '</span>'
                     + '<div class="ov-act-bar"><div class="ov-act-fill" style="width:' + pct + '%;background:' + clr + '"></div></div>'
                     + '<span class="ov-act-cnt">' + fmtNum(c.count) + '</span></div>';
             }
@@ -777,7 +777,15 @@
     }
     function fmtNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1) + 'K'; return String(n); }
     function fmtBytes(b) { if (b >= 1e12) return (b/1e12).toFixed(1) + ' TB'; if (b >= 1e9) return (b/1e9).toFixed(1) + ' GB'; if (b >= 1e6) return (b/1e6).toFixed(1) + ' MB'; if (b >= 1e3) return (b/1e3).toFixed(0) + ' KB'; return b + ' B'; }
-    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // Escapes the five characters that matter. The previous implementation used
+    // textContent -> innerHTML, which escapes & < > but NOT quotes — so every
+    // esc() call inside an HTML attribute was an attribute breakout waiting for
+    // a value with a quote in it, and these strings come from agent telemetry.
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
 })();
 </script>
 {% endblock %}

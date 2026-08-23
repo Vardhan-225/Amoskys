@@ -251,7 +251,7 @@
                 for (var j = 0; j < Math.min(4, cats.length); j++) {
                     var c = cats[j], pct = Math.max(3, c.count/maxC*100);
                     var clr = c.avg_risk >= 0.6 ? '#ff3366' : c.avg_risk >= 0.3 ? '#f0ad4e' : '#00d9ff';
-                    html += '<div class="dv-bar"><span class="dv-bar-lbl">' + humanize(c.category) + '</span>'
+                    html += '<div class="dv-bar"><span class="dv-bar-lbl">' + esc(humanize(c.category)) + '</span>'
                         + '<div class="dv-bar-bg"><div class="dv-bar-fill" style="width:' + pct + '%;background:' + clr + '"></div></div>'
                         + '<span class="dv-bar-cnt">' + c.count + '</span></div>';
                 }
@@ -263,7 +263,7 @@
             if (mitre.length > 0) {
                 for (var j = 0; j < Math.min(6, mitre.length); j++) {
                     var m = mitre[j];
-                    html += '<span class="dv-mt" title="' + mitreName(m.technique) + ' — ' + m.count + ' detections">'
+                    html += '<span class="dv-mt" title="' + esc(mitreName(m.technique) + ' — ' + m.count + ' detections') + '">'
                         + esc(m.technique) + ' <span class="dv-mt-cnt">' + m.count + '</span></span>';
                 }
             } else { html += '<span style="color:#555;font-size:0.78em;">No detections</span>'; }
@@ -392,7 +392,15 @@
     }
 
     function timeAgo(ep) { if(!ep)return'never';var s=Math.floor(Date.now()/1000-ep);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'; }
-    function esc(s) { if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML; }
+    // Escapes the five characters that matter. The previous implementation used
+    // textContent -> innerHTML, which escapes & < > but NOT quotes — so every
+    // esc() call inside an HTML attribute was an attribute breakout waiting for
+    // a value with a quote in it, and these strings come from agent telemetry.
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
 })();
 </script>
 {% endblock %}

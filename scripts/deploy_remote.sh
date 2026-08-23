@@ -81,6 +81,13 @@ else
     TARGET="$BRANCH"
 fi
 log_info "Resolving deploy target: $BRANCH -> $TARGET"
+
+# Remember what was running. Without this a failed health check leaves the box
+# on the new code with the service down and no way back except a human with SSH
+# — which is exactly the moment nobody wants to be reading a runbook.
+PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+log_info "Currently deployed: $PREVIOUS_COMMIT (rollback target if this fails)"
+
 git reset --hard "$TARGET"
 
 DEPLOYED_COMMIT=$(git rev-parse HEAD)
@@ -114,7 +121,12 @@ fi
 if [ "${SKIP_TESTS:-false}" != "true" ]; then
     log_info "Step 4/8: Running smoke tests..."
     pytest tests/integration/test_smoke_deploy.py -m smoke -q --tb=short || {
-        log_error "Smoke tests failed! Aborting deploy."
+        log_error "Smoke tests failed on the new code."
+        # The working tree is already on the new commit at this point, so
+        # aborting without restoring would leave the box on code that failed
+        # its own tests, whatever the service happens to still be serving.
+        git reset --hard "$PREVIOUS_COMMIT" && \
+            log_warn "Restored $PREVIOUS_COMMIT; service was never restarted."
         exit 1
     }
     log_info "✅ Smoke tests passed"
@@ -151,6 +163,31 @@ for i in $(seq 1 $HEALTH_RETRIES); do
     fi
 done
 
+rollback() {
+    local reason="$1"
+    log_error "$reason"
+    if [ -z "${PREVIOUS_COMMIT:-}" ]; then
+        log_error "No previous commit recorded — cannot roll back automatically."
+        return 1
+    fi
+    log_warn "Rolling back to $PREVIOUS_COMMIT"
+    git reset --hard "$PREVIOUS_COMMIT" || {
+        log_error "Rollback checkout FAILED. Manual intervention required."
+        return 1
+    }
+    # Dependencies may have moved forward; put them back before restarting.
+    source "$VENV_DIR/bin/activate" && pip install -e ".[all]" --quiet || \
+        log_warn "Dependency rollback failed — the service may still start."
+    sudo systemctl restart amoskys-web || true
+    sleep 5
+    if curl -fsS --max-time 5 "$HEALTH_URL" > /dev/null 2>&1; then
+        log_info "✅ Rolled back to $PREVIOUS_COMMIT and healthy again."
+        return 0
+    fi
+    log_error "Rolled back to $PREVIOUS_COMMIT but health check STILL fails."
+    return 1
+}
+
 if [ "$HEALTH_OK" = true ]; then
     log_info "✅ Health ping OK"
     
@@ -163,8 +200,9 @@ if [ "$HEALTH_OK" = true ]; then
     log_info "  Threat Level: $THREAT_LEVEL"
 else
     log_error "Health check failed after $HEALTH_RETRIES attempts!"
-    log_error "Service may have failed to start. Check logs:"
+    log_error "Service may have failed to start. Recent logs:"
     sudo journalctl -u amoskys-web --no-pager -n 30 || true
+    rollback "Deploy of $DEPLOYED_COMMIT did not come up healthy."
     exit 1
 fi
 

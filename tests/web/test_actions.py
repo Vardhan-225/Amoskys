@@ -187,3 +187,31 @@ def test_action_log_unavailable_is_not_reported_as_no_actions(live):
     payload, status = actions.ledger()
     assert payload["commands"] == []
     assert "not the same as 'no actions'" in payload["unavailable"]
+
+
+# ── The pinned CA must be found, and never silently skipped ──────────────────
+def test_ops_ca_resolves_from_the_package_not_the_cwd(monkeypatch, tmp_path):
+    """gunicorn runs with --chdir /opt/amoskys/web, where a relative
+    "deploy/certs/ops-ca.pem" does not exist. The old code let os.path.exists()
+    return False and then sent the operator bearer token with verify=False to a
+    bare IP — no hostname check to fall back on."""
+    monkeypatch.delenv("AMOSKYS_OPS_CA", raising=False)
+    monkeypatch.chdir(tmp_path)  # a CWD with no deploy/ directory
+    assert actions._DEFAULT_OPS_CA.is_absolute()
+    assert actions._ops_ca() == str(actions._DEFAULT_OPS_CA)
+
+
+def test_verify_never_returns_false(monkeypatch, tmp_path):
+    """False disables TLS verification entirely. If the pin is unavailable the
+    worst acceptable outcome is the system trust store, not no verification."""
+    monkeypatch.setenv("AMOSKYS_OPS_CA", str(tmp_path / "absent.pem"))
+    assert actions._verify() is not False
+
+
+def test_a_missing_pinned_ca_makes_the_surface_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setenv("AMOSKYS_RESPONSE_ENABLED", "1")
+    monkeypatch.setenv("CC_OPERATOR_KEY", "k")
+    monkeypatch.setenv("AMOSKYS_OPS_CA", str(tmp_path / "absent.pem"))
+    state = actions.availability()
+    assert state["available"] is False
+    assert "unverified channel" in state["reason"]

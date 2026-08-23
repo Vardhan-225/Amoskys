@@ -33,6 +33,7 @@ import ipaddress
 import logging
 import os
 import re
+from pathlib import Path
 
 import requests
 
@@ -157,6 +158,13 @@ def availability() -> dict:
             "available": False,
             "reason": "This server has no operator key, so it cannot ask the fleet "
             "backend to queue an action (CC_OPERATOR_KEY is not set).",
+        }
+    if not _ops_ca():
+        return {
+            "available": False,
+            "reason": "The pinned ops CA is missing on this server, so an action "
+            "could only be sent over an unverified channel. Refusing rather than "
+            "shipping the operator key to an unauthenticated peer.",
         }
     return {"available": True, "reason": None}
 
@@ -437,7 +445,27 @@ def cancel(command_id: str) -> tuple[dict, int]:
         return {"error": "ops_unreachable", "detail": "Nothing was changed."}, 502
 
 
+# Resolved from the package, not the CWD. gunicorn runs with --chdir
+# /opt/amoskys/web, where a relative "deploy/certs/..." resolves to a path that
+# does not exist — os.path.exists() then returned False and every ops call went
+# out with verify=False, carrying the operator bearer token to a bare IP with no
+# hostname check to fall back on. telemetry_bridge.py and routes_command_center
+# both already anchor this to the package root; this matches them.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_OPS_CA = _REPO_ROOT / "deploy" / "certs" / "ops-ca.pem"
+
+
+def _ops_ca() -> str | None:
+    ca = os.getenv("AMOSKYS_OPS_CA") or str(_DEFAULT_OPS_CA)
+    return ca if os.path.exists(ca) else None
+
+
 def _verify():
-    """Reuse the pinned-CA path the telemetry bridge already established."""
-    ca = os.getenv("AMOSKYS_OPS_CA", "deploy/certs/ops-ca.pem")
-    return ca if os.path.exists(ca) else False
+    """The pinned CA, or refuse — never a silent fallback to unverified TLS.
+
+    Callers must not reach this without availability() having passed, which
+    already requires the CA. Returning True here rather than False means that
+    if one ever does, requests falls back to the system trust store instead of
+    turning off verification entirely.
+    """
+    return _ops_ca() or True
