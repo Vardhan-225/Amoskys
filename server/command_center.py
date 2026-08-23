@@ -34,12 +34,14 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import os
 import secrets
 import sqlite3
 import time
+import uuid
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -457,6 +459,11 @@ def init_db():
             claimed_at REAL,
             completed_at REAL,
             result TEXT,
+            requested_by TEXT NOT NULL DEFAULT 'mcp',
+            reason TEXT NOT NULL DEFAULT '',
+            policy_decision TEXT NOT NULL DEFAULT 'allowed',
+            dedup_key TEXT NOT NULL DEFAULT '',
+            rollback_plan TEXT NOT NULL DEFAULT '{}',
             source TEXT NOT NULL DEFAULT 'mcp'
         );
         CREATE INDEX IF NOT EXISTS idx_commands_device_status
@@ -464,6 +471,24 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_commands_expires
             ON device_commands(expires_at);
     """
+    )
+    for col, ctype in (
+        ("requested_by", "TEXT NOT NULL DEFAULT 'mcp'"),
+        ("reason", "TEXT NOT NULL DEFAULT ''"),
+        ("policy_decision", "TEXT NOT NULL DEFAULT 'allowed'"),
+        ("dedup_key", "TEXT NOT NULL DEFAULT ''"),
+        ("rollback_plan", "TEXT NOT NULL DEFAULT '{}'"),
+        ("source", "TEXT NOT NULL DEFAULT 'mcp'"),
+    ):
+        try:
+            db.execute(f"ALTER TABLE device_commands ADD COLUMN {col} {ctype}")
+        except sqlite3.OperationalError:
+            pass
+    db.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_commands_policy_dedup
+            ON device_commands(device_id, command_type, policy_decision, dedup_key, created_at)
+        """
     )
 
     db.commit()
@@ -1889,6 +1914,228 @@ def _run_maintenance():
 
 
 # ── Command Queue API (MCP → Device) ──────────────────────────────
+
+
+# Commands the console may create. Deliberately a strict allowlist rather than
+# "whatever the device understands": the device's executor also handles agent
+# lifecycle and config pushes, and those are not response actions a web console
+# should be able to originate.
+CONSOLE_COMMAND_TYPES = {
+    "ISOLATE",
+    "UNISOLATE",
+    "KILL_PROCESS",
+    "BLOCK_IP",
+    "BLOCK_DOMAIN",
+    "QUARANTINE_FILE",
+    "COLLECT_NOW",
+}
+
+
+def require_operator_auth(f):
+    """Authenticate the console (presentation tier), not a device.
+
+    Devices authenticate with their own per-device API key; that key must never
+    be able to originate a response action against another machine. This is a
+    separate shared secret held only by the web tier.
+
+    If ``CC_OPERATOR_KEY`` is unset the endpoint returns 503, never 200: a
+    response API that silently accepts unauthenticated callers is worse than
+    one that is switched off.
+    """
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        expected = os.getenv("CC_OPERATOR_KEY", "")
+        if not expected:
+            return (
+                jsonify(
+                    {
+                        "error": "response_api_disabled",
+                        "detail": "CC_OPERATOR_KEY is not configured on this server.",
+                    }
+                ),
+                503,
+            )
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"error": "Missing Authorization header"}), 401
+        presented = auth.removeprefix("Bearer ")
+        if not hmac.compare_digest(presented, expected):
+            logger.warning("OPERATOR_AUTH_FAIL from %s", request.remote_addr)
+            return jsonify({"error": "Invalid operator key"}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/api/v1/devices/<device_id>/commands", methods=["POST"])
+@require_operator_auth
+def create_command(device_id):
+    """Queue a response action for a device.
+
+    The queue table, the device-side executor and the rollback/TTL/priority
+    columns all already existed — the only thing missing was a way for anything
+    other than the MCP process to put a row in. Every field that makes the
+    action auditable is required, not optional: an action without a reason and
+    a rollback plan is not one a person can undo or explain later.
+    """
+    data = request.get_json(silent=True) or {}
+    command_type = (data.get("command_type") or "").upper().strip()
+    reason = (data.get("reason") or "").strip()
+    requested_by = (data.get("requested_by") or "").strip()
+
+    if command_type not in CONSOLE_COMMAND_TYPES:
+        return (
+            jsonify(
+                {
+                    "error": "unsupported_command",
+                    "detail": f"{command_type or '(none)'} is not console-dispatchable.",
+                    "allowed": sorted(CONSOLE_COMMAND_TYPES),
+                }
+            ),
+            400,
+        )
+    if not reason:
+        return jsonify({"error": "reason required"}), 400
+    if not requested_by:
+        return jsonify({"error": "requested_by required"}), 400
+
+    db = get_db()
+    device = db.execute(
+        "SELECT device_id, hostname FROM devices WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if not device:
+        return jsonify({"error": f"Device {device_id} not found"}), 404
+
+    now = time.time()
+    ttl = max(60, min(int(data.get("ttl") or 600), 86400))
+    priority = max(1, min(int(data.get("priority") or 1), 9))
+    payload = data.get("payload") or {}
+    rollback = data.get("rollback") or {}
+    command_id = uuid.uuid4().hex[:16]
+
+    db.execute(
+        "INSERT INTO device_commands (id, device_id, command_type, payload, status, "
+        "priority, created_at, expires_at, result, requested_by, reason, "
+        "policy_decision, dedup_key, rollback_plan, source) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            command_id,
+            device_id,
+            command_type,
+            json.dumps(payload),
+            "pending",
+            priority,
+            now,
+            now + ttl,
+            json.dumps({"status": "pending"}),
+            requested_by,
+            reason,
+            "allowed:console",
+            "",
+            json.dumps(rollback),
+            "console",
+        ),
+    )
+    db.commit()
+    logger.info(
+        "COMMAND_QUEUED type=%s device=%s by=%s reason=%s",
+        command_type,
+        device_id,
+        requested_by,
+        reason[:120],
+    )
+    return (
+        jsonify(
+            {
+                "command_id": command_id,
+                "device_id": device_id,
+                "hostname": device["hostname"],
+                "command_type": command_type,
+                "status": "pending",
+                "expires_at": now + ttl,
+                "rollback": rollback,
+                "requested_by": requested_by,
+                "reason": reason,
+            }
+        ),
+        201,
+    )
+
+
+@app.route("/api/v1/commands", methods=["GET"])
+@require_operator_auth
+def list_commands():
+    """The action ledger — every command, who asked, why, and what happened."""
+    db = get_db()
+    limit = max(1, min(request.args.get("limit", 100, type=int), 500))
+    device_id = request.args.get("device_id") or None
+    params = []
+    where = ""
+    if device_id:
+        where = " WHERE device_id = ?"
+        params.append(device_id)
+    rows = db.execute(
+        "SELECT c.id, c.device_id, d.hostname, c.command_type, c.payload, c.status, "
+        "c.priority, c.created_at, c.expires_at, c.claimed_at, c.completed_at, "
+        "c.result, c.requested_by, c.reason, c.policy_decision, c.rollback_plan, c.source "
+        "FROM device_commands c LEFT JOIN devices d ON d.device_id = c.device_id"
+        + where
+        + " ORDER BY c.created_at DESC LIMIT ?",
+        (*params, limit),
+    ).fetchall()
+    out = []
+    for row in rows:
+        item = dict(row)
+        for field in ("payload", "result", "rollback_plan"):
+            try:
+                item[field] = json.loads(item[field] or "{}")
+            except (TypeError, ValueError):
+                item[field] = {}
+        out.append(item)
+    return jsonify({"commands": out, "count": len(out)})
+
+
+@app.route("/api/v1/commands/<command_id>/cancel", methods=["POST"])
+@require_operator_auth
+def cancel_command(command_id):
+    """Withdraw a command the device has not claimed yet.
+
+    Once claimed the device owns it; cancelling then would be a lie, so this
+    reports the real state instead of pretending.
+    """
+    db = get_db()
+    row = db.execute(
+        "SELECT status FROM device_commands WHERE id = ?", (command_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "unknown command"}), 404
+    if row["status"] != "pending":
+        # Say what actually happened. "The device already took it" is wrong for
+        # a command that was cancelled or expired, and a status message that
+        # guesses is how a console teaches people to distrust it.
+        detail = {
+            "claimed": "The device has already taken this command.",
+            "completed": "The device has already run this command.",
+            "cancelled": "This command was already cancelled.",
+            "expired": "This command expired before the device collected it.",
+        }.get(row["status"], f"This command is {row['status']}, not pending.")
+        return (
+            jsonify(
+                {
+                    "error": "not_cancellable",
+                    "status": row["status"],
+                    "detail": detail,
+                }
+            ),
+            409,
+        )
+    db.execute(
+        "UPDATE device_commands SET status = 'cancelled', completed_at = ? WHERE id = ?",
+        (time.time(), command_id),
+    )
+    db.commit()
+    return jsonify({"status": "cancelled", "command_id": command_id})
 
 
 @app.route("/api/v1/devices/<device_id>/commands", methods=["GET"])

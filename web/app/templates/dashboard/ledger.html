@@ -107,6 +107,65 @@
 .lg-ev-flags { color: var(--text-muted); font-size: 0.7rem; white-space: nowrap; }
 .lg-ev-flags .hot { color: #ff4d5e; }
 
+/* ── Act ────────────────────────────────────────────────────────────── */
+.lg-act { margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.9rem; }
+.lg-act-head { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.6rem; }
+.lg-act-off { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; max-width: 70ch; }
+.lg-action {
+    border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 0.8rem 0.95rem; margin-bottom: 0.6rem; background: var(--bg-tertiary);
+}
+.lg-action-top { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.lg-action-label { font-weight: 650; font-size: 0.92rem; color: var(--text-primary); }
+.lg-danger {
+    font-size: 0.64rem; letter-spacing: 0.09em; text-transform: uppercase;
+    font-weight: 700; padding: 0.12rem 0.42rem; border-radius: 3px;
+}
+.lg-danger.low     { background: rgba(58,210,159,0.13); color: #3ad29f; }
+.lg-danger.medium  { background: rgba(120,150,255,0.13); color: #9fb4ff; }
+.lg-danger.high    { background: rgba(255,176,56,0.14); color: #ffb038; }
+.lg-danger.extreme { background: rgba(255,77,94,0.15); color: #ff4d5e; }
+.lg-action-blurb { font-size: 0.84rem; color: var(--text-secondary); margin: 0.4rem 0 0; line-height: 1.5; max-width: 72ch; }
+.lg-rollback {
+    margin-top: 0.55rem; padding: 0.55rem 0.7rem; border-radius: 6px;
+    background: var(--bg-secondary); border-left: 2px solid var(--border-color);
+    font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+}
+.lg-rollback b { color: var(--text-primary); font-weight: 650; }
+.lg-rollback.irreversible { border-left-color: #ff4d5e; }
+.lg-rollback.manual { border-left-color: #ffb038; }
+.lg-rollback.automatic { border-left-color: #3ad29f; }
+.lg-rollback code {
+    display: block; margin-top: 0.35rem; padding: 0.35rem 0.5rem;
+    background: var(--bg-tertiary); border-radius: 4px;
+    font-family: var(--font-mono, monospace); font-size: 0.74rem;
+    color: var(--text-primary); overflow-x: auto; white-space: pre;
+}
+.lg-action-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.7rem; }
+.lg-action-form select, .lg-action-form input {
+    font: inherit; font-size: 0.82rem; padding: 0.36rem 0.55rem; border-radius: 6px;
+    background: var(--bg-secondary); color: var(--text-primary);
+    border: 1px solid var(--border-color); min-width: 0;
+}
+.lg-action-form input[type="text"] { flex: 1; min-width: 200px; }
+.lg-go { border-color: rgba(255,77,94,0.5); color: #ff4d5e; }
+.lg-go.confirming { background: rgba(255,77,94,0.14); }
+
+/* ── Action ledger ──────────────────────────────────────────────────── */
+.lg-cmd {
+    display: grid; grid-template-columns: 118px 1fr auto; gap: 0.9rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.82rem;
+}
+.lg-cmd:last-child { border-bottom: none; }
+.lg-cmd-when { font-family: var(--font-mono, monospace); font-size: 0.72rem; color: var(--text-muted); }
+.lg-cmd-what b { color: var(--text-primary); }
+.lg-cmd-why { color: var(--text-secondary); display: block; margin-top: 0.12rem; }
+.lg-cmd-status { font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 650; white-space: nowrap; }
+.lg-cmd-status.pending   { color: #ffb038; }
+.lg-cmd-status.claimed   { color: #9fb4ff; }
+.lg-cmd-status.completed { color: #3ad29f; }
+.lg-cmd-status.cancelled, .lg-cmd-status.expired { color: var(--text-muted); }
+
 /* ── Recognised group ───────────────────────────────────────────────── */
 .lg-recognised-toggle {
     width: 100%; text-align: left; font: inherit; cursor: pointer;
@@ -187,6 +246,12 @@
     <div id="lg-recognised-list"></div>
 
     <div class="lg-taught" id="lg-taught"></div>
+
+    <div class="lg-sec-head">
+        <h2>Action log</h2>
+        <span class="lg-count">everything AMOSKYS was asked to do, and what came back</span>
+    </div>
+    <div id="lg-actionlog"></div>
 </div>
 
 <div id="lg-toast" role="status" aria-live="polite"></div>
@@ -290,8 +355,10 @@
                     (item.has_evidence
                         ? '<button type="button" class="lg-btn" data-act="evidence">Show me the events</button>'
                         : '<span class="lg-btn-note">Built from flow aggregates — no individual rows to open.</span>') +
+                    '<button type="button" class="lg-btn" data-act="act">What can I do about it?</button>' +
                 '</div>' +
                 '<div class="lg-evidence" hidden></div>' +
+                '<div class="lg-act" hidden></div>' +
             '</div>' +
         '</article>';
     }
@@ -380,6 +447,163 @@
         }
     }
 
+    // ── Act ──────────────────────────────────────────────────────────────
+    // The rollback line is rendered from the server's own reversibility field,
+    // never inferred here: promising an undo that does not exist would make
+    // this exactly the kind of control the rest of this page was built to
+    // replace. Irreversible actions arm on the first press and fire on the
+    // second, so nothing destructive is one stray click away.
+    const DANGER_ORDER = { low: 0, medium: 1, high: 2, extreme: 3 };
+
+    function rollbackHTML(rb) {
+        var kind = rb.kind || 'manual';
+        var head = kind === 'automatic' ? 'Reversible from here'
+                 : kind === 'manual' ? 'Reversible, but by hand'
+                 : 'Cannot be undone';
+        return '<div class="lg-rollback ' + esc(kind) + '">' +
+            '<b>' + esc(head) + '.</b> ' + esc(rb.detail || '') +
+            (rb.shell ? '<code>' + esc(rb.shell) + '</code>' : '') +
+        '</div>';
+    }
+
+    function actionHTML(a, devices) {
+        var opts = (a.options || []).map(function (o) {
+            return '<option value="' + esc(o) + '">' + esc(o) + '</option>';
+        }).join('');
+        var deviceOpts = (devices || []).map(function (d) {
+            return '<option value="' + esc(d) + '">' + esc(d) + '</option>';
+        }).join('');
+        return '<div class="lg-action" data-command="' + esc(a.command_type) + '">' +
+            '<div class="lg-action-top">' +
+                '<span class="lg-action-label">' + esc(a.label) + '</span>' +
+                '<span class="lg-danger ' + esc(a.danger) + '">' + esc(a.danger) + '</span>' +
+            '</div>' +
+            '<p class="lg-action-blurb">' + esc(a.blurb) + '</p>' +
+            rollbackHTML(a.rollback || {}) +
+            '<div class="lg-action-form">' +
+                (deviceOpts ? '<select data-role="device">' + deviceOpts + '</select>' : '') +
+                (a.param ? '<select data-role="target">' + opts + '</select>' : '') +
+                '<input type="text" data-role="reason" placeholder="Why are you doing this? (stored with the action)">' +
+                '<button type="button" class="lg-btn lg-go" data-role="go">Do it</button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    async function showActions(article) {
+        const box = article.querySelector('.lg-act');
+        const key = article.dataset.key;
+        box.hidden = false;
+        box.innerHTML = '<div class="lg-act-head">What I can do about it</div>' +
+            '<div class="lg-act-off">Checking what this server is allowed to do…</div>';
+        try {
+            const res = await fetch('/dashboard/api/ledger/actions?key=' + encodeURIComponent(key),
+                { credentials: 'same-origin' });
+            const data = await res.json();
+            const avail = data.availability || {};
+            if (!avail.available) {
+                box.innerHTML = '<div class="lg-act-head">What I can do about it</div>' +
+                    '<div class="lg-act-off">' + esc(avail.reason || 'Not available.') + '</div>';
+                return;
+            }
+            const list = (data.actions || []).slice().sort(function (x, y) {
+                return DANGER_ORDER[x.danger] - DANGER_ORDER[y.danger];
+            });
+            box.innerHTML = '<div class="lg-act-head">What I can do about it</div>' +
+                (list.length
+                    ? list.map(function (a) { return actionHTML(a, a.devices); }).join('')
+                    : '<div class="lg-act-off">Nothing in this item names a process, address, domain or file to act on.</div>');
+        } catch (err) {
+            box.innerHTML = '<div class="lg-act-head">What I can do about it</div>' +
+                '<div class="lg-act-off">Could not load actions: ' + esc(String(err)) + '</div>';
+        }
+    }
+
+    async function runAction(actionEl, article) {
+        const go = actionEl.querySelector('[data-role="go"]');
+        const commandType = actionEl.dataset.command;
+        const reason = (actionEl.querySelector('[data-role="reason"]') || {}).value || '';
+        const target = (actionEl.querySelector('[data-role="target"]') || {}).value || null;
+        const device = (actionEl.querySelector('[data-role="device"]') || {}).value || '';
+
+        if (!reason.trim()) {
+            toast('Say why first.', 'The reason is stored on the action and is how you explain it later.', 'partial');
+            return;
+        }
+        if (!go.classList.contains('confirming')) {
+            go.classList.add('confirming');
+            go.textContent = 'Press again to confirm';
+            setTimeout(function () {
+                go.classList.remove('confirming');
+                go.textContent = 'Do it';
+            }, 6000);
+            return;
+        }
+
+        go.disabled = true;
+        go.textContent = 'Sending…';
+        try {
+            const res = await fetch('/dashboard/api/ledger/act', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    key: article.dataset.key,
+                    command_type: commandType,
+                    device_id: device,
+                    target: target,
+                    reason: reason
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                toast('Nothing was queued.', data.detail || data.error || ('HTTP ' + res.status), 'error');
+            } else {
+                toast('Queued for ' + esc(data.hostname || data.device_id || 'the device') + '.',
+                    commandType + ' — the device picks this up on its next poll. It is in the action log below.',
+                    'ok');
+                loadActionLog();
+            }
+        } catch (err) {
+            toast('Nothing was queued.', String(err), 'error');
+        } finally {
+            go.disabled = false;
+            go.classList.remove('confirming');
+            go.textContent = 'Do it';
+        }
+    }
+
+    async function loadActionLog() {
+        const el = document.getElementById('lg-actionlog');
+        if (!el) { return; }
+        try {
+            const res = await fetch('/dashboard/api/actions?limit=25', { credentials: 'same-origin' });
+            const data = await res.json();
+            const cmds = data.commands || [];
+            if (data.unavailable) {
+                el.innerHTML = '<div class="lg-act-off">' + esc(data.unavailable) + '</div>';
+                return;
+            }
+            if (!cmds.length) {
+                el.innerHTML = '<div class="lg-act-off">No actions have been taken.</div>';
+                return;
+            }
+            el.innerHTML = cmds.map(function (c) {
+                var when = c.created_at ? new Date(c.created_at * 1000).toLocaleString() : '';
+                var result = (c.result && (c.result.error || c.result.output)) || '';
+                return '<div class="lg-cmd">' +
+                    '<span class="lg-cmd-when">' + esc(when) + '</span>' +
+                    '<span class="lg-cmd-what"><b>' + esc(c.command_type) + '</b> on ' +
+                        esc(c.hostname || c.device_id) + ' · asked by ' + esc(c.requested_by || '?') +
+                        '<span class="lg-cmd-why">' + esc(c.reason || '') +
+                        (result ? ' — ' + esc(result) : '') + '</span></span>' +
+                    '<span class="lg-cmd-status ' + esc(c.status) + '">' + esc(c.status) + '</span>' +
+                '</div>';
+            }).join('');
+        } catch (err) {
+            el.innerHTML = '<div class="lg-act-off">Could not read the action log.</div>';
+        }
+    }
+
     async function decide(article, decision) {
         const key = article.dataset.key;
         const buttons = article.querySelectorAll('.lg-btn');
@@ -422,10 +646,16 @@
             head.setAttribute('aria-expanded', open ? 'true' : 'false');
             return;
         }
+        const go = ev.target.closest('[data-role="go"]');
+        if (go) {
+            runAction(go.closest('.lg-action'), go.closest('.lg-item'));
+            return;
+        }
         const btn = ev.target.closest('.lg-btn');
         if (btn && btn.dataset.act) {
             const article = btn.closest('.lg-item');
             if (btn.dataset.act === 'evidence') { showEvidence(article); }
+            else if (btn.dataset.act === 'act') { showActions(article); }
             else { decide(article, btn.dataset.act); }
         }
     });
@@ -436,6 +666,7 @@
     });
 
     load();
+    loadActionLog();
     setInterval(load, 60000);
 })();
 </script>

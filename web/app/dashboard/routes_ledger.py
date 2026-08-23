@@ -25,7 +25,7 @@ import logging
 from flask import jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
-from . import dashboard_bp, ledger
+from . import actions, dashboard_bp, ledger
 from . import verdict as verdict_mod
 from . import verdict_store
 from .org_scope import get_allowed_device_ids
@@ -321,3 +321,137 @@ def api_ledger_taught():
         ),
         200,
     )
+
+
+# ── Response actions ─────────────────────────────────────────────────────────
+# Dispatch is admin-only, gated by AMOSKYS_RESPONSE_ENABLED on this tier and by
+# CC_OPERATOR_KEY on the fleet backend. Both default to off. The analyst loop
+# cannot reach any of it: IGRIS proposes, a person presses.
+def _require_admin():
+    user = get_current_user()
+    _, is_admin = get_allowed_device_ids(user)
+    return is_admin, user
+
+
+@dashboard_bp.route("/api/ledger/actions")
+@require_login
+def api_ledger_actions():
+    """What could be done about one ledger item, and whether it can be done here."""
+    allowed, scope_key = _scope()
+    key = request.args.get("key") or ""
+    item = ledger.find_item(
+        key, allowed_device_ids=allowed, cache_key=scope_key, org_scope=scope_key
+    )
+    if item is None:
+        return jsonify({"error": "unknown item", "key": key}), 404
+
+    is_admin, _ = _require_admin()
+    state = actions.availability()
+    rows = ledger.evidence_for(item.get("event_ids") or [], allowed_device_ids=allowed)
+    proposed = actions.propose(item, rows) if (state["available"] and is_admin) else []
+
+    if not is_admin and state["available"]:
+        state = {
+            "available": False,
+            "reason": "Response actions are limited to administrators.",
+        }
+    return (
+        jsonify(
+            {
+                "key": key,
+                "availability": state,
+                "actions": proposed,
+                "targets": actions.derive_targets(rows),
+            }
+        ),
+        200,
+    )
+
+
+@dashboard_bp.route("/api/ledger/act", methods=["POST"])
+@require_login
+def api_ledger_act():
+    """Queue a response action. Requires an admin, a target seen in the evidence,
+    and a reason — all three are stored on the command."""
+    is_admin, user = _require_admin()
+    if not is_admin:
+        return (
+            jsonify(
+                {
+                    "error": "forbidden",
+                    "detail": "Response actions are limited to administrators.",
+                }
+            ),
+            403,
+        )
+
+    data = request.get_json(silent=True) or {}
+    key = (data.get("key") or "").strip()
+    command_type = (data.get("command_type") or "").strip().upper()
+    device_id = (data.get("device_id") or "").strip()
+    target = data.get("target")
+    reason = (data.get("reason") or "").strip()
+
+    allowed, scope_key = _scope()
+    item = ledger.find_item(
+        key, allowed_device_ids=allowed, cache_key=scope_key, org_scope=scope_key
+    )
+    if item is None:
+        return jsonify({"error": "unknown item", "key": key}), 404
+    if allowed is not None and device_id not in allowed:
+        return jsonify({"error": "unknown device"}), 404
+    if device_id not in (item.get("device_ids") or []):
+        return (
+            jsonify(
+                {
+                    "error": "device_not_in_item",
+                    "detail": "That device is not part of this item's evidence.",
+                }
+            ),
+            400,
+        )
+
+    rows = ledger.evidence_for(item.get("event_ids") or [], allowed_device_ids=allowed)
+    who = getattr(user, "email", None) or getattr(user, "username", None) or "unknown"
+    payload, status = actions.dispatch(
+        device_id=device_id,
+        command_type=command_type,
+        param_value=target,
+        reason=reason,
+        requested_by=f"console:{who}",
+        allowed_targets=actions.derive_targets(rows),
+    )
+    if status in (200, 201):
+        logger.info(
+            "ACTION_DISPATCHED type=%s device=%s by=%s item=%s",
+            command_type,
+            device_id,
+            who,
+            key,
+        )
+    return jsonify(payload), status
+
+
+@dashboard_bp.route("/api/actions")
+@require_login
+def api_actions_ledger():
+    """Every action ever taken: who asked, why, and what the device reported."""
+    is_admin, _ = _require_admin()
+    if not is_admin:
+        return jsonify({"commands": [], "unavailable": "Administrators only."}), 200
+    payload, status = actions.ledger(
+        limit=request.args.get("limit", 100, type=int),
+        device_id=request.args.get("device_id") or None,
+    )
+    return jsonify(payload), status
+
+
+@dashboard_bp.route("/api/actions/<command_id>/cancel", methods=["POST"])
+@require_login
+def api_actions_cancel(command_id):
+    """Withdraw a queued action the device has not claimed yet."""
+    is_admin, _ = _require_admin()
+    if not is_admin:
+        return jsonify({"error": "forbidden"}), 403
+    payload, status = actions.cancel(command_id)
+    return jsonify(payload), status
