@@ -79,6 +79,13 @@ echo "▸ compiled $BIN ($(stat -f%z "$BIN") bytes), links $(otool -L "$BIN" | g
 # ── 3. (re)assemble the bundle ────────────────────────────────────────────────
 mkdir -p "$BUNDLE/Contents/MacOS"
 cp -f "$BIN" "$BUNDLE/Contents/MacOS/$BIN"
+# Delete the bare build product immediately. Leaving it beside the bundle is
+# what created the GHOST TCC GRANT: this exact filename was granted Full Disk
+# Access, later replaced by the .app, and System Settings kept displaying the
+# entry ENABLED while it protected a file that no longer existed. The Sentinel
+# looked authorized for weeks while es_new_client() returned ERR_NOT_PERMITTED.
+# The bundle is the only artifact anything should ever point at.
+rm -f "$BIN"
 cp -f "$PROFILE" "$BUNDLE/Contents/embedded.provisionprofile"   # .provisionprofile, NOT .mobileprovision
 echo "▸ bundle assembled ($(find "$BUNDLE" -type f | wc -l | tr -d ' ') files)"
 
