@@ -412,7 +412,8 @@ class ESFForensicsMixin:
 
     # ── 6. Hybrid ancestry ────────────────────────────────────────────────
     def esf_resolve_parent(self, *, ppid: int, before_ns: int,
-                           device_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                           device_id: Optional[str] = None,
+                           allow_polling: bool = False) -> Optional[Dict[str, Any]]:
         """Find a parent using ESF first, then the polling sensor.
 
         MEASURED PROBLEM: only 7.5% of ESF execs have their parent in the ESF
@@ -439,6 +440,18 @@ class ESFForensicsMixin:
         The source is always returned, because a polling-derived parent is a
         WEAKER claim: it was sampled, not witnessed, and the caller must be
         able to weigh it accordingly rather than have the two silently blend.
+
+        DEFAULTS TO ESF-ONLY (allow_polling=False), and this is the important
+        part. Blending the two by default destroys the measurement that decides
+        whether ESF has earned the right to replace the polling sensor: once
+        every answer is a mixture, ESF's standalone coverage is unknowable, and
+        a permanent hybrid gets mistaken for a migration. The first version of
+        this method blended silently — it reported 85.3% ancestry coverage,
+        which was TRUE and also concealed that ESF alone supplied 2.0% of it.
+
+        Callers that genuinely want the fallback must ask for it, and the
+        parity harness (amoskys.evaluation.sensor_parity) measures each source
+        alone so the replacement decision rests on evidence.
         """
         import sqlite3 as _sq
         with self._read_pool.connection() as db:
@@ -456,6 +469,9 @@ class ESFForensicsMixin:
                 out["source"] = "esf"
                 out["witnessed"] = True
                 return out
+
+            if not allow_polling:
+                return None
 
             row = db.execute(
                 f"SELECT pid, ppid, exe, cmdline, name, username FROM process_events "
