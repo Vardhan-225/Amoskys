@@ -124,6 +124,9 @@ func shouldDeny(path: String, csFlags: UInt32, isPlatform: Bool, cdhash: String)
 // Sentinel attached to the kernel, decided correctly, and emitted absolutely
 // nothing.
 let EMIT_BUFFER_MAX = 4096
+// Reported in sentinel_start so a reader can tell which subscription set is
+// live without correlating against a build.
+var SUBSCRIBED_COUNT = 0
 let emitQueue = DispatchQueue(label: "com.amoskys.sentinel.emit", qos: .utility)
 let emitSem = DispatchSemaphore(value: EMIT_BUFFER_MAX)
 let dropCounter = ManagedAtomicCounter()
@@ -218,7 +221,14 @@ func startHeartbeat() {
     timer.setEventHandler {
         let dropped = dropCounter.snapshotAndReset()
         let ts = machToEpochNanos(mach_absolute_time())
-        emitDirect("{\"v\":1,\"t\":\(ts),\"type\":\"heartbeat\",\"dropped\":\(dropped),\"enforce\":\(ENFORCE)}")
+        // Two drop counters, deliberately separate. `dropped` is what OUR buffer
+        // discarded; `kernel_dropped` is what the KERNEL discarded before we ever
+        // saw it. Summing them would hide which half is failing, and they have
+        // completely different fixes — a bigger buffer versus a lighter
+        // subscription.
+        let kdrop = kernelDropCounter.snapshotAndReset()
+        emitDirect("{\"v\":1,\"t\":\(ts),\"type\":\"heartbeat\",\"dropped\":\(dropped),"
+            + "\"kernel_dropped\":\(kdrop),\"enforce\":\(ENFORCE)}")
     }
     timer.resume()
     heartbeatTimer = timer
@@ -227,7 +237,7 @@ func startHeartbeat() {
     // seconds of startup, and an empty file says nothing at all. This record
     // also carries the buffer size, which is what would have made the
     // zero-permit semaphore bug obvious on sight instead of invisible.
-    emitDirect("{\"v\":1,\"t\":\(machToEpochNanos(mach_absolute_time())),\"type\":\"sentinel_start\",\"enforce\":\(ENFORCE),\"buffer\":\(EMIT_BUFFER_MAX)}")
+    emitDirect("{\"v\":1,\"t\":\(machToEpochNanos(mach_absolute_time())),\"type\":\"sentinel_start\",\"enforce\":\(ENFORCE),\"buffer\":\(EMIT_BUFFER_MAX),\"subscriptions\":\(SUBSCRIBED_COUNT)}")
 }
 var heartbeatTimer: DispatchSourceTimer?
 
@@ -262,10 +272,162 @@ func teamIDOf(_ proc: UnsafePointer<es_process_t>) -> String {
     return tok(proc.pointee.team_id)
 }
 
+
+// ── Phase 1: sequence tracking ────────────────────────────────────────────────
+// Every ES message carries seq_num, a PER-CLIENT PER-EVENT-TYPE counter. When
+// the kernel drops events for this client, the sequence skips — so a gap is
+// authoritative proof of loss, from the kernel itself.
+//
+// This is strictly better than the drop counter already in this file, which can
+// only report events OUR OWN buffer discarded. A kernel-side drop was, until
+// now, completely invisible: the stream would simply be missing events with
+// nothing anywhere saying so. That is the exact failure this whole subsystem
+// exists to prevent, and it was sitting one layer below where anyone was
+// looking.
+//
+// Tracked per event type because the counters are per type: comparing a
+// NOTIFY_EXEC seq against a NOTIFY_SETUID seq would manufacture gaps out of
+// nothing and train the reader to ignore them.
+final class SequenceTracker {
+    private var last: [UInt32: UInt64] = [:]
+    private let lock = NSLock()
+
+    /// Returns how many events the KERNEL dropped before this one, or 0.
+    func check(eventType: UInt32, seq: UInt64) -> UInt64 {
+        lock.lock(); defer { lock.unlock() }
+        defer { last[eventType] = seq }
+        guard let prev = last[eventType] else { return 0 }   // first sighting
+        if seq <= prev { return 0 }                          // reorder or repeat
+        return seq - prev - 1
+    }
+}
+let seqTracker = SequenceTracker()
+let kernelDropCounter = ManagedAtomicCounter()
+
+// ── Phase 1: kernel-side muting ───────────────────────────────────────────────
+// Paths muted here are filtered INSIDE THE KERNEL: their events never cross
+// into userspace and cost nothing. That distinction is what makes high-volume
+// event types survivable at all — the alternative is sampling, which would
+// reintroduce exactly the shutter this migration exists to remove.
+//
+// Muted deliberately narrow for now. The events subscribed in Phase 2 are all
+// low-volume, so this is establishing the MECHANISM before the volume arrives,
+// not throttling anything today. Mute broadly first, unmute deliberately.
+let MUTE_PREFIXES = [
+    "/System/Volumes/Data/private/var/folders/",  // per-boot scratch
+    "/private/var/folders/",                       // ditto
+    "/System/Library/Caches/",
+]
+
+func applyMuting(_ client: OpaquePointer) -> Int {
+    var muted = 0
+    for prefix in MUTE_PREFIXES {
+        let ok = prefix.withCString { cstr in
+            es_mute_path(client, cstr, ES_MUTE_PATH_TYPE_TARGET_PREFIX) == ES_RETURN_SUCCESS
+        }
+        if ok { muted += 1 }
+        else {
+            FileHandle.standardError.write(Data(
+                "amoskys-sentinel: WARNING failed to mute \(prefix)\n".utf8))
+        }
+    }
+    return muted
+}
+
+
+// ── Phase 2: NOTIFY observers ─────────────────────────────────────────────────
+// These are TRANSITIONS, not states. No polling sensor produces them at any
+// interval, because there is nothing to sample: a signature going invalid, a
+// uid changing, a volume attaching are instants, and an instant either has a
+// witness or it does not.
+//
+// All NOTIFY, deliberately. Every AUTH subscription adds latency to the
+// operation it inspects and a slow handler stalls the machine; observation
+// costs nothing and is what these are for. Blocking is a later decision that
+// must be paid for with measured evidence.
+func handleNotify(_ msg: UnsafePointer<es_message_t>) {
+    let m = msg.pointee
+    let proc = m.process
+    let path = tok(proc.pointee.executable.pointee.path)
+    let atok = proc.pointee.audit_token
+    let pid = Int32(bitPattern: atok.val.5)
+    let euid = atok.val.1
+    let ts = machToEpochNanos(m.mach_time)
+    let cdhash = cdhashHex(proc)
+
+    var kind = ""
+    var detail = ""
+
+    switch m.event_type {
+    case ES_EVENT_TYPE_NOTIFY_SETUID:
+        kind = "setuid"
+        detail = "\"new_uid\":\(m.event.setuid.uid)"
+    case ES_EVENT_TYPE_NOTIFY_SETGID:
+        kind = "setgid"
+        detail = "\"new_gid\":\(m.event.setgid.gid)"
+    case ES_EVENT_TYPE_NOTIFY_KEXTLOAD:
+        kind = "kextload"
+        detail = "\"identifier\":\"\(jsonEscape(tok(m.event.kextload.identifier)))\""
+    case ES_EVENT_TYPE_NOTIFY_CS_INVALIDATED:
+        // The most alarming event in this set: a process that was validly
+        // signed when it started is no longer. Something modified running code.
+        kind = "cs_invalidated"
+        detail = "\"was_platform\":\(proc.pointee.is_platform_binary)"
+    case ES_EVENT_TYPE_NOTIFY_MOUNT:
+        kind = "mount"
+        let sf = m.event.mount.statfs.pointee
+        let onName = withUnsafePointer(to: sf.f_mntonname) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
+        }
+        let fromName = withUnsafePointer(to: sf.f_mntfromname) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
+        }
+        detail = "\"on\":\"\(jsonEscape(onName))\",\"from\":\"\(jsonEscape(fromName))\""
+    case ES_EVENT_TYPE_NOTIFY_UNMOUNT:
+        kind = "unmount"
+        let sf = m.event.unmount.statfs.pointee
+        let onName = withUnsafePointer(to: sf.f_mntonname) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
+        }
+        detail = "\"on\":\"\(jsonEscape(onName))\""
+    default:
+        kind = "notify_\(m.event_type.rawValue)"
+        detail = "\"unmapped\":true"
+    }
+
+    let line = "{\"v\":1,\"t\":\(ts),\"type\":\"\(kind)\","
+        + "\"pid\":\(pid),\"uid\":\(euid),"
+        + "\"exe\":\"\(jsonEscape(path))\",\"cdhash\":\"\(cdhash)\","
+        + "\"platform\":\(proc.pointee.is_platform_binary),\(detail)}"
+    emit(line)
+}
+
 func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
     let m = msg.pointee
+
+    // Kernel-side loss check, BEFORE anything else and for every event type.
+    // A gap here means the kernel discarded events for this client; nothing
+    // downstream can recover them, so the only correct response is to say so
+    // loudly and immediately.
+    let dropped = seqTracker.check(eventType: m.event_type.rawValue, seq: m.seq_num)
+    if dropped > 0 {
+        for _ in 0..<min(dropped, 1000) { _ = kernelDropCounter.increment() }
+        emitDirect("{\"v\":1,\"t\":\(machToEpochNanos(m.mach_time)),"
+            + "\"type\":\"kernel_drop\",\"event_type\":\(m.event_type.rawValue),"
+            + "\"dropped\":\(dropped),\"seq\":\(m.seq_num)}")
+    }
+
+    // NOTIFY events are observation only. They must NOT be answered with
+    // es_respond_auth_result — that call is for AUTH events, and the ES client
+    // is torn down for misuse. Routed here, emitted, done.
+    if m.action_type == ES_ACTION_TYPE_NOTIFY {
+        handleNotify(msg)
+        return
+    }
+
     guard m.event_type == ES_EVENT_TYPE_AUTH_EXEC else {
-        // Not ours — allow immediately, never hold the kernel.
+        // An AUTH event we did not subscribe for — allow immediately, never
+        // hold the kernel.
         es_respond_auth_result(client, msg, ES_AUTH_RESULT_ALLOW, false)
         return
     }
@@ -374,10 +536,44 @@ func run() {
         FileHandle.standardError.write(Data("amoskys-sentinel: \(msg)\n".utf8))
         exit(1)
     }
-    var events = [ES_EVENT_TYPE_AUTH_EXEC]
+    // Muting BEFORE subscribing. If a high-volume type were subscribed first,
+    // the window between the two calls is unfiltered — small today because
+    // everything here is low-volume, but the ordering is the habit that keeps
+    // Phase 4's file events survivable.
+    let mutedCount = applyMuting(client)
+
+    // PHASE 2 SUBSCRIPTION SET.
+    //
+    // AUTH_EXEC stays first and unchanged: it is the only blocking decision
+    // this Sentinel makes, it is already validated, and nothing below is
+    // allowed to disturb it.
+    //
+    // Everything after it is NOTIFY — pure observation, no kernel latency, no
+    // possibility of stalling the machine. Each one is a TRANSITION that no
+    // polling sensor can produce at any interval, because there is no state to
+    // sample: a signature going invalid, a uid changing, a kext loading, a
+    // volume attaching are instants. They either have a witness or they did
+    // not happen as far as the record is concerned.
+    //
+    // Chosen for being rare AND unambiguous: these fire tens of times a day,
+    // not thousands a second, so Phase 2 adds real coverage without adding the
+    // volume risk that filled this SSD to 99% in August.
+    var events: [es_event_type_t] = [
+        ES_EVENT_TYPE_AUTH_EXEC,            // existing, blocking, unchanged
+        ES_EVENT_TYPE_NOTIFY_SETUID,        // privilege change, at the instant
+        ES_EVENT_TYPE_NOTIFY_SETGID,
+        ES_EVENT_TYPE_NOTIFY_KEXTLOAD,      // kernel extension load
+        ES_EVENT_TYPE_NOTIFY_CS_INVALIDATED,// running code modified in place
+        ES_EVENT_TYPE_NOTIFY_MOUNT,         // volume / disk image attach
+        ES_EVENT_TYPE_NOTIFY_UNMOUNT,
+    ]
+    SUBSCRIBED_COUNT = events.count
     guard es_subscribe(client, &events, UInt32(events.count)) == ES_RETURN_SUCCESS else {
         FileHandle.standardError.write(Data("es_subscribe failed\n".utf8)); exit(1)
     }
+    FileHandle.standardError.write(Data(
+        ("amoskys-sentinel: subscribed to \(events.count) event types, "
+         + "\(mutedCount)/\(MUTE_PREFIXES.count) mute prefixes applied\n").utf8))
     // Refuse to run blind. A zero-permit semaphore silently discards 100% of
     // events while the Sentinel looks perfectly healthy — attached to the
     // kernel, deciding correctly, emitting nothing. That is the exact failure

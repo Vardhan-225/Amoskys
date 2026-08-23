@@ -73,6 +73,9 @@ class ESFStreamCollector:
         self.malformed = 0
         self.bad_timestamps = 0
         self.control_records = 0
+        self.kernel_events = 0
+        self.kernel_dropped = 0
+        self._batch_kernel: list = []
         self.heartbeats = 0
         self.dropped_reported = 0
         self._batch: list = []
@@ -109,6 +112,21 @@ class ESFStreamCollector:
             self.malformed += 1
             return None
         return rec
+
+    # Kernel TRANSITION events. These carry a "type" like control records do,
+    # so without this set they would all be swallowed by is_control() and
+    # silently discarded -- a whole new sensing capability wired at the kernel
+    # and thrown away at the parser, with the collector reporting healthy
+    # throughout.
+    KERNEL_EVENT_KINDS = frozenset({
+        "setuid", "setgid", "kextload", "cs_invalidated", "mount", "unmount",
+    })
+
+    def is_kernel_event(self, rec: Dict[str, Any]) -> bool:
+        kind = rec.get("type")
+        return bool(kind) and (
+            kind in self.KERNEL_EVENT_KINDS or str(kind).startswith("notify_")
+        )
 
     def is_control(self, rec: Dict[str, Any]) -> bool:
         """Any record carrying a "type" is control traffic, not an exec.
@@ -188,6 +206,28 @@ class ESFStreamCollector:
         if rec is None:
             return
         now_ns = time.time_ns()
+        if rec.get("type") == "kernel_drop":
+            # The kernel discarded events before we saw them. Loudest possible
+            # signal: nothing downstream can recover them, and the gap in the
+            # timeline is permanent.
+            self.kernel_dropped += int(rec.get("dropped") or 0)
+            self._write_kernel_drop(rec, now_ns)
+            logger.warning(
+                "KERNEL DROPPED %s event(s) of type %s before the Sentinel saw "
+                "them (seq=%s). This is loss inside the kernel, not our buffer "
+                "— a lighter subscription or tighter muting is the fix, not a "
+                "bigger queue.",
+                rec.get("dropped"), rec.get("event_type"), rec.get("seq"),
+            )
+            return
+
+        if self.is_kernel_event(rec):
+            self.kernel_events += 1
+            self._batch_kernel.append(self._kernel_row(rec, now_ns))
+            if len(self._batch_kernel) >= BATCH_MAX:
+                self.flush()
+            return
+
         if self.is_control(rec):
             if not self.is_heartbeat(rec):
                 # sentinel_start and any future control record: note it and
@@ -223,7 +263,61 @@ class ESFStreamCollector:
         self.flush()
 
     # ── persistence ───────────────────────────────────────────────────────
+    def _flush_kernel(self) -> None:
+        if not self._batch_kernel:
+            return
+        rows, self._batch_kernel = self._batch_kernel, []
+        cols = list(rows[0].keys())
+        sql = "INSERT INTO esf_kernel_events (%s) VALUES (%s)" % (
+            ", ".join(cols), ", ".join("?" for _ in cols))
+        try:
+            self.store._executemany(sql, [tuple(r[c] for c in cols) for r in rows])
+            self.store._commit()
+        except Exception:
+            logger.exception("kernel-event ingest failed for %d rows", len(rows))
+
+    def _kernel_row(self, rec: Dict[str, Any], now_ns: int) -> Dict[str, Any]:
+        """Normalise a transition event.
+
+        Kind-specific fields go to `detail` as JSON rather than to columns.
+        These events share almost nothing: a mount has filesystem names, a
+        setuid has a uid, a cs_invalidated has only the process. Forty sparse
+        columns would be mostly NULL, and every Phase-4 event type would need a
+        migration to add fields nothing else uses.
+        """
+        known = {"v", "t", "type", "pid", "uid", "exe", "cdhash", "platform"}
+        detail = {k: v for k, v in rec.items() if k not in known}
+        return {
+            "timestamp_ns": self._timestamp_ns(rec, now_ns),
+            "device_id": self.device_id,
+            "kind": rec.get("type"),
+            "pid": rec.get("pid"),
+            "euid": rec.get("uid"),
+            "exe": rec.get("exe"),
+            "cdhash": (rec.get("cdhash") or None) or None,
+            "is_platform": bool(rec.get("platform")),
+            "detail": json.dumps(detail) if detail else None,
+            "ingested_at_ns": now_ns,
+        }
+
+    def _write_kernel_drop(self, rec: Dict[str, Any], now_ns: int) -> None:
+        try:
+            self.store._execute(
+                "INSERT INTO esf_kernel_drops "
+                "(timestamp_ns, device_id, event_type, dropped, seq_num, ingested_at_ns) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    self._timestamp_ns(rec, now_ns), self.device_id,
+                    rec.get("event_type"), int(rec.get("dropped") or 0),
+                    rec.get("seq"), now_ns,
+                ),
+            )
+            self.store._commit()
+        except Exception:
+            logger.debug("kernel-drop write failed", exc_info=True)
+
     def flush(self) -> None:
+        self._flush_kernel()
         if not self._batch:
             self._batch_started = time.time()
             return
@@ -330,6 +424,8 @@ class ESFStreamCollector:
             "malformed": self.malformed,
             "heartbeats": self.heartbeats,
             "control_records": self.control_records,
+            "kernel_events": self.kernel_events,
+            "kernel_dropped": self.kernel_dropped,
             "bad_timestamps": self.bad_timestamps,
             "dropped_reported": self.dropped_reported,
             "pending": len(self._batch),
