@@ -242,3 +242,9 @@ webpreview-venv/
 
 # Apple signing vault — certs, keys, CSRs, profiles. NEVER commit.
 /signing/
+
+# Bare build product of macos-esf-shim/build_bundle.sh. This exact filename
+# became a GHOST TCC grant: it held Full Disk Access, was superseded by the
+# .app bundle, and System Settings kept showing the entry ENABLED while it
+# protected a deleted file. Only the .app should ever be granted.
+macos-esf-shim/amoskys-sentinel
