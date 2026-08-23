@@ -69,6 +69,20 @@ def _make_store(tmp_path, *, beats=(), execs=0, binaries=()):
                 verdict,
             ),
         )
+        db.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, signing_id, "
+            "is_signed, is_valid, is_adhoc, is_platform) VALUES (?,?,?,?,?,?,?,?)",
+            (
+                now - int(age_minutes * 60 * NS),
+                f"/tmp/{cdhash}",
+                cdhash,
+                f"id.{cdhash}",
+                signed,
+                1 if signed else 0,
+                adhoc,
+                platform,
+            ),
+        )
         # The ledger table carries no signing columns beyond platform/adhoc, so
         # the trust label for a ledger row is derived from what it does have.
         # _signed_ rows are marked valid here to isolate the ordering question.
@@ -152,13 +166,24 @@ def test_a_young_ledger_says_its_count_means_nothing_yet(store):
     assert "almost everything still looks new" in novel["note"]
 
 
-def test_least_trusted_binaries_sort_first(store, monkeypatch):
-    """An unsigned first-run outranks an ad-hoc one, which outranks a signed one.
+def test_trust_is_read_from_the_kernels_observation_not_the_ledger_row(store):
+    """The ledger carries only platform/adhoc. Reading it as if it carried
+    is_signed labelled Claude, Chrome's helper and Homebrew's Python "unsigned"
+    on the live machine — a confidently wrong claim about the user's own
+    software. Trust must come from the exec event."""
+    store(binaries=[("signedbin", 5, 1, 0, 0, None)])
+    assert kernel.novel_binaries()["novel"][0]["trust"] == "signed"
 
-    The ledger table stores platform/adhoc but not the full signing flags, so
-    the label is derived; this pins the ORDER, which is what decides what a
-    person is asked about first.
-    """
+
+def test_missing_flags_read_as_unknown_never_as_unsigned(store, monkeypatch):
+    """Not knowing and knowing-it-is-bad are different statements."""
+    assert kernel._trust({"is_signed": None}) == "unknown"
+    assert kernel._trust({"is_signed": 0}) == "unsigned"
+
+
+def test_least_trusted_binaries_sort_first(store):
+    """An unsigned first-run outranks an ad-hoc one, which outranks a signed
+    one. This is what decides which question a person is asked first."""
     store(
         binaries=[
             ("signed", 5, 1, 0, 0, None),
@@ -166,8 +191,6 @@ def test_least_trusted_binaries_sort_first(store, monkeypatch):
             ("adhoc", 5, 1, 1, 0, None),
         ]
     )
-    labels = {"signed": "signed", "unsigned": "unsigned", "adhoc": "adhoc"}
-    monkeypatch.setattr(kernel, "_trust", lambda row: labels[row["cdhash"]])
     order = [r["cdhash"] for r in kernel.novel_binaries()["novel"]]
     assert order.index("unsigned") < order.index("adhoc") < order.index("signed")
 
