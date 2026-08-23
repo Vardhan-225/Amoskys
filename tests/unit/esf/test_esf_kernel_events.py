@@ -266,3 +266,78 @@ def test_alert_surface_keeps_the_two_halves_apart(store, collector):
     assert surface["novelty_gated"]["trustworthy"] is False
     assert surface["novelty_gated"]["caveat"] is not None
     assert surface["transitions"]["count"] == 1
+
+
+# ── privilege anomalies ──────────────────────────────────────────────────
+def _priv(store, exe, platform=True, new_uid=501, t=None):
+    store.db.execute(
+        "INSERT INTO esf_kernel_events "
+        "(timestamp_ns, device_id, kind, pid, euid, exe, cdhash, is_platform, detail) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (t or time.time_ns(), "d", "setuid", 1, 501, exe, "H", platform,
+         json.dumps({"new_uid": new_uid})))
+    store.db.commit()
+
+
+def test_clean_baseline_produces_no_anomalies(store):
+    s = _mixin_store(store)
+    for _ in range(20):
+        _priv(store, "/usr/libexec/xpcproxy")
+    r = s.esf_privilege_anomalies(hours=24)
+    assert r["count"] == 0
+    assert r["known_actors"] == ["xpcproxy"]
+    assert r["root_transitions_ever"] is False
+
+
+def test_non_platform_privilege_change_is_flagged(store):
+    s = _mixin_store(store)
+    for _ in range(20):
+        _priv(store, "/usr/libexec/xpcproxy")
+    _priv(store, "/tmp/dropper", platform=False)
+    r = s.esf_privilege_anomalies(hours=24)
+    assert r["count"] == 1
+    assert "non-platform binary changing privilege" in r["anomalies"][0]["reasons"]
+
+
+def test_first_ever_root_transition_is_flagged(store):
+    s = _mixin_store(store)
+    for _ in range(20):
+        _priv(store, "/usr/libexec/xpcproxy", new_uid=501)
+    _priv(store, "/usr/libexec/xpcproxy", new_uid=0)
+    r = s.esf_privilege_anomalies(hours=24)
+    assert r["count"] == 1
+    assert any("uid 0" in x for x in r["anomalies"][0]["reasons"])
+
+
+def test_evidentiary_strength_grows_with_the_baseline(store):
+    """The core property: the same anomaly is worth MORE after more clean history.
+
+    A thing unseen in 22 observations is worth 4.5 bits. Unseen after 10,000,
+    it is worth 13.3 — nearly three times the evidence from one identical
+    event. A detector that scored it as a constant would throw that away.
+    """
+    s = _mixin_store(store)
+    for _ in range(20):
+        _priv(store, "/usr/libexec/xpcproxy")
+    small = s.esf_privilege_anomalies(hours=24)["bits_if_unseen"]
+    for _ in range(2000):
+        _priv(store, "/usr/libexec/xpcproxy")
+    large = s.esf_privilege_anomalies(hours=24)["bits_if_unseen"]
+    assert large > small + 5, (
+        f"a larger clean baseline must make an unseen event more surprising "
+        f"({small} -> {large})")
+
+
+def test_bits_are_bounded_not_infinite(store):
+    """Laplace, so an unseen event cannot outrank every real measurement forever."""
+    s = _mixin_store(store)
+    _priv(store, "/usr/libexec/xpcproxy")
+    b = s.esf_privilege_anomalies(hours=24)["bits_if_unseen"]
+    assert 0 < b < 64 and b == b  # finite, not inf/nan
+
+
+def test_empty_baseline_refuses_to_read_as_quiet(store):
+    s = _mixin_store(store)
+    r = s.esf_privilege_anomalies(hours=24)
+    assert r["count"] == 0
+    assert "subscriptions" in r["note"]

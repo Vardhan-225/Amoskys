@@ -75,8 +75,54 @@ refresh_threat_intel() {
     || echo "$(date -u +%FT%TZ) intel refresh FAILED (retry in ${INTEL_REFRESH_EVERY_S}s)" >> logs/intel_refresh.log
 }
 
+
+# ── Stale-code detection ────────────────────────────────────────────────────
+# Three separate debugging sessions today ended at the same cause: a worker was
+# running code older than the file on disk, and the only symptom was a table
+# that stayed empty. Every time, the trail ran backwards from "why is nothing
+# being produced" to "this process started before the change".
+#
+#   - the ESF collector ran 15h-old code and silently discarded every kernel
+#     transition event
+#   - the collector reported "All 18 sensors loaded" from a build that predated
+#     three newly wired agents
+#   - the Sentinel emitted boot-relative timestamps after they were fixed
+#
+# None of those raised an error. A process running stale code behaves
+# perfectly — it just behaves like the old version, which is indistinguishable
+# from a broken new one unless someone thinks to check.
+#
+# WARNS by default rather than restarting. An automatic restart on every source
+# change would cycle the pipeline during editing, and losing the running state
+# is a worse default than a loud line in the log. Set
+# AMOSKYS_RESTART_ON_CHANGE=1 to opt in.
+check_stale_code() {
+  local newest worker pid started
+  newest=$(find src -name '*.py' -newer "$STALE_STAMP" -print -quit 2>/dev/null)
+  [ -z "$newest" ] && return 0
+
+  for worker in amoskys.collector_main amoskys.analyzer_main amoskys.shipper amoskys.agents.os.macos.esf; do
+    pid=$(pgrep -f "$worker" | head -1) || continue
+    [ -z "$pid" ] && continue
+    # Process start (epoch) vs the stamp we last refreshed after a restart.
+    started=$(ps -o lstart= -p "$pid" 2>/dev/null | xargs -I{} date -j -f "%a %b %d %T %Y" {} +%s 2>/dev/null)
+    [ -z "$started" ] && continue
+    if [ "$started" -lt "$(stat -f %m "$STALE_STAMP" 2>/dev/null || echo 0)" ]; then
+      echo "$(date -u +%FT%TZ) STALE CODE: $worker (pid $pid) started before the current source. It is running an older build and will behave like it — silently." >> logs/supervisor.log
+      if [ "${AMOSKYS_RESTART_ON_CHANGE:-0}" = "1" ]; then
+        echo "$(date -u +%FT%TZ)   AMOSKYS_RESTART_ON_CHANGE=1 -> restarting $worker" >> logs/supervisor.log
+        pkill -f "$worker" 2>/dev/null
+      fi
+    fi
+  done
+  touch "$STALE_STAMP"
+}
+STALE_STAMP="$PWD/data/.code_stamp"
+[ -f "$STALE_STAMP" ] || touch "$STALE_STAMP"
+
 while true; do
   rotate_logs
+  check_stale_code
   refresh_threat_intel
   pgrep -f 'amoskys.collector_main' >/dev/null || nohup "$PY" -m amoskys.collector_main >> logs/collector.live.log 2>&1 &
   sleep 5

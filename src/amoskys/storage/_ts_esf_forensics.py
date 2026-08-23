@@ -668,3 +668,115 @@ class ESFForensicsMixin:
             "transitions": transitions,
             "complete": composite.get("complete", True) and transitions["complete"],
         }
+
+    # ── 9. Privilege-transition anomalies ─────────────────────────────────
+    def esf_privilege_anomalies(self, *, hours: int = 24) -> Dict[str, Any]:
+        """Deviations from this machine's own privilege-transition baseline.
+
+        Measured on first capture, and strikingly narrow: 22 transitions, 100%
+        platform binaries, exactly TWO distinct actors (xpcproxy, cron), target
+        ids {20, 501}, and not one transition to uid 0. Privilege changes on a
+        normal Mac are almost entirely XPC services dropping to the right user.
+
+        THE EVIDENTIARY STRENGTH OF "NEVER OBSERVED" GROWS WITH THE BASELINE,
+        and that is the property this method exists to make explicit. A thing
+        that has not happened in 22 observations is worth -log2(1/23) = 4.5
+        bits. The same thing after 10,000 clean observations is worth 13.3
+        bits — nearly three times the evidence, from the same single event.
+
+        So the score is not a constant per anomaly type. It is computed from
+        how much clean history backs it, and the history size is returned
+        alongside, because a reader who cannot see the denominator cannot tell
+        a strong claim from a young one. This is the same reason the composite
+        detector reports baseline maturity: an unqualified number invites
+        exactly the over-reading it should prevent.
+        """
+        cutoff = time.time_ns() - hours * 3600 * 1_000_000_000
+        with self._read_pool.connection() as db:
+            db.row_factory = __import__("sqlite3").Row
+            allrows = [dict(r) for r in db.execute(
+                "SELECT id, timestamp_ns, exe, is_platform, detail, kind, cdhash, "
+                "pid, euid FROM esf_kernel_events "
+                "WHERE kind IN ('setuid','setgid') ORDER BY timestamp_ns ASC")]
+
+        # PER-CANDIDATE BASELINE, and this is the whole correctness argument.
+        #
+        # "Has this ever happened before" is a question about the events BEFORE
+        # the one being judged. The first version answered it against the full
+        # history — which contains the candidate — so the first-ever transition
+        # to uid 0 set seen_root, the check then failed, and the event was
+        # never reported. Every later one was suppressed too, because the
+        # baseline had learned that root transitions are normal here from the
+        # single event that should have raised the alarm.
+        #
+        # A detector that admits its candidates into its own baseline
+        # immunises itself against exactly what it exists to catch, and does it
+        # silently: the output is an empty list, which looks identical to a
+        # clean machine.
+        #
+        # Correcting it by excluding the whole window was worse — early on the
+        # window IS the history, so everything became anomalous. Walking
+        # forward in time and growing the baseline as we go is the only shape
+        # that is right at both ends.
+        known_actors: set = set()
+        seen_root = False
+        seen_nonplatform = False
+        findings = []
+        prior_n = 0
+
+        for r in allrows:
+            try:
+                detail = json.loads(r.get("detail") or "{}")
+            except ValueError:
+                detail = {}
+            exe = r.get("exe") or ""
+            is_recent = r["timestamp_ns"] >= cutoff
+
+            if is_recent and prior_n > 0:
+                reasons = []
+                if not r.get("is_platform") and not seen_nonplatform:
+                    reasons.append("non-platform binary changing privilege")
+                if detail.get("new_uid") == 0 and not seen_root:
+                    reasons.append("transition to uid 0, never observed before")
+                if exe not in known_actors:
+                    reasons.append("actor outside the known set")
+                if reasons:
+                    # Laplace on the history that PRECEDED this event, so the
+                    # score reflects how much clean evidence backs the claim —
+                    # and grows as that evidence accumulates.
+                    r["detail"] = detail
+                    r["reasons"] = reasons
+                    r["bits"] = round(-math.log2(1.0 / (prior_n + 1)), 1)
+                    r["baseline_at_event"] = prior_n
+                    findings.append(r)
+
+            known_actors.add(exe)
+            if detail.get("new_uid") == 0:
+                seen_root = True
+            if not r.get("is_platform"):
+                seen_nonplatform = True
+            prior_n += 1
+
+        findings.sort(key=lambda x: -x["timestamp_ns"])
+        n = len(allrows)
+        never_bits = -math.log2(1.0 / (n + 1)) if n else 0.0
+
+        return {
+            "anomalies": findings,
+            "count": len(findings),
+            "baseline_observations": n,
+            "known_actors": sorted(a.rsplit("/", 1)[-1] for a in known_actors if a),
+            "root_transitions_ever": seen_root,
+            "bits_if_unseen": round(never_bits, 1),
+            "note": (
+                f"Baseline: {n} transitions from {len(known_actors)} actor(s), "
+                f"{'including' if seen_root else 'with NO'} transitions to uid 0. "
+                f"A never-before-seen privilege event is currently worth "
+                f"{never_bits:.1f} bits; that rises as the clean baseline grows, "
+                f"so this signal strengthens with time rather than decaying."
+                if n else
+                "No privilege transitions recorded at all. Either none occurred, "
+                "or the Sentinel is not subscribed to NOTIFY_SETUID — check "
+                "sentinel_start.subscriptions before reading this as quiet."
+            ),
+        }
