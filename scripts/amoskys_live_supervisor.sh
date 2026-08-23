@@ -4,6 +4,10 @@ cd "$HOME/Amoskys_recovered" || exit 1
 set -a; [ -f .env ] && . ./.env; set +a
 export PYTHONPATH="src:$PWD/amoskys-venv/lib/python3.13/site-packages"
 export AMOSKYS_DATA_DIR="$PWD/data" AMOSKYS_DATA="$PWD/data"
+# Exported so the WEB health check can count the corpus. Without it
+# _intel_corpus_size() returns None and the dashboard can only say
+# "unverified" — it cannot distinguish an armed feed from a dead one.
+export AMOSKYS_THREAT_INTEL_DB="$PWD/data/threat_intel.db"
 PY="$PWD/amoskys-venv/bin/python"
 mkdir -p logs
 
@@ -37,8 +41,43 @@ rotate_logs() {
   done
 }
 
+
+# ── Threat-intel refresh ────────────────────────────────────────────────────
+# Indicators carry a 72-HOUR expiry and the whole corpus shares one expires_at,
+# so the feed does not decay gradually — it falls off a cliff, all 3,203 rows
+# at the same instant. That already happened once: the corpus expired
+# 2026-07-01 and nothing refreshed it for 52 days, during which every flow was
+# stamped with a confident-looking threat_intel_match=False and the dashboard
+# reported the feed HEALTHY.
+#
+# Refreshed every 12h — a 6x margin against the 72h expiry, so the feed
+# survives three consecutive failed refreshes (laptop asleep, no network, feed
+# outage) before it can go unarmed.
+#
+# This performs an OUTBOUND FETCH to abuse.ch, Emerging Threats and URLhaus.
+# Set AMOSKYS_INTEL_AUTOREFRESH=0 to disable it and refresh by hand instead.
+INTEL_REFRESH_EVERY_S=${AMOSKYS_INTEL_REFRESH_EVERY_S:-43200}
+INTEL_STAMP="$PWD/data/.intel_refreshed"
+
+refresh_threat_intel() {
+  [ "${AMOSKYS_INTEL_AUTOREFRESH:-1}" = "1" ] || return 0
+  local now age
+  now=$(date +%s)
+  if [ -f "$INTEL_STAMP" ]; then
+    age=$(( now - $(stat -f %m "$INTEL_STAMP" 2>/dev/null || echo 0) ))
+    [ "$age" -lt "$INTEL_REFRESH_EVERY_S" ] && return 0
+  fi
+  # Stamp BEFORE fetching, not after: a feed host that hangs or 500s must not
+  # put this into a retry loop that hammers abuse.ch every 25 seconds.
+  touch "$INTEL_STAMP"
+  "$PY" scripts/update_threat_intel.py >> logs/intel_refresh.log 2>&1 \
+    && echo "$(date -u +%FT%TZ) intel refresh ok" >> logs/intel_refresh.log \
+    || echo "$(date -u +%FT%TZ) intel refresh FAILED (retry in ${INTEL_REFRESH_EVERY_S}s)" >> logs/intel_refresh.log
+}
+
 while true; do
   rotate_logs
+  refresh_threat_intel
   pgrep -f 'amoskys.collector_main' >/dev/null || nohup "$PY" -m amoskys.collector_main >> logs/collector.live.log 2>&1 &
   sleep 5
   pgrep -f 'amoskys.analyzer_main' >/dev/null || nohup "$PY" -m amoskys.analyzer_main >> logs/analyzer.live.log 2>&1 &
