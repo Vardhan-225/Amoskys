@@ -55,6 +55,12 @@ class AgentThread:
         self.status = "pending"
         self.cycle_count = 0
         self.last_error: Optional[str] = None
+        # Liveness, tracked per agent. A thread wedged INSIDE _run_one_cycle
+        # logs neither success nor failure, so the only evidence it is stuck is
+        # the absence of evidence — which nothing was watching for.
+        self.last_cycle_start: float = 0.0
+        self.last_cycle_end: float = 0.0
+        self.stall_reported: bool = False
 
     def start(self, shutdown_event: threading.Event) -> bool:
         """Initialize agent and start collection thread."""
@@ -88,7 +94,10 @@ class AgentThread:
         while not self.shutdown_event.is_set():
             try:
                 self.cycle_count += 1
+                self.last_cycle_start = time.time()
                 self.agent._run_one_cycle()
+                self.last_cycle_end = time.time()
+                self.stall_reported = False
             except Exception as e:
                 self.last_error = str(e)
                 logger.error(
@@ -108,6 +117,47 @@ class AgentThread:
                     "Agent %s shutdown failed: %s", getattr(self.agent, "name", "?"), e
                 )
 
+
+
+def _report_stalled_agents(agent_threads, logger) -> list:
+    """Name agents whose cycle has not returned in several intervals.
+
+    The collection loop already isolates and LOGS a cycle that raises. It
+    cannot say anything about a cycle that never returns: the thread simply
+    stops producing, and both the success line and the failure line go missing
+    together. Absence of output is indistinguishable from a quiet sensor, so a
+    wedged agent looks exactly like a healthy one with nothing to report.
+
+    This was not hypothetical. macos_filesystem started cleanly — setup
+    complete, 10 probes enabled, interval=60s — and then logged NOTHING for
+    three hours, roughly 180 missed cycles, while macos_peripheral (started in
+    the same second, same base class, same loop) cycled every 60s throughout.
+    No error was raised and none was logged, because none happened.
+
+    Threshold is 5 intervals: long enough that a slow cycle or a burst of lock
+    contention does not cry wolf, short enough that a genuinely stuck sensor is
+    named within minutes rather than discovered by noticing an empty table days
+    later.
+    """
+    stalled = []
+    now = time.time()
+    for at in agent_threads:
+        if at.status != "running" or not at.last_cycle_start:
+            continue
+        # A cycle that started and never ended, for more than 5 intervals.
+        in_flight = at.last_cycle_start > at.last_cycle_end
+        overdue_s = now - at.last_cycle_start
+        if in_flight and overdue_s > max(at.interval * 5, 60):
+            stalled.append((at.agent_name, overdue_s, at.cycle_count))
+    if stalled:
+        for name, overdue, count in stalled:
+            logger.error(
+                "AGENT STALLED: %s has been inside a single collection cycle "
+                "for %.0fs (%d cycles completed before it hung). It is emitting "
+                "neither results nor errors, which is why nothing else notices.",
+                name, overdue, count - 1,
+            )
+    return [s[0] for s in stalled]
 
 # ── Agent Registry ───────────────────────────────────────────────────────────
 
@@ -562,6 +612,13 @@ def main() -> int:
                     running,
                     len(agent_threads),
                 )
+
+        # The check above tests whether the THREAD is alive. A thread wedged
+        # inside _run_one_cycle is very much alive — it is simply not making
+        # progress — so it passes that check while producing nothing at all.
+        # Liveness and progress are different questions, and only one of them
+        # was being asked.
+        _report_stalled_agents(agent_threads, logger)
 
         _write_heartbeat(device_id, total_cycles, running, len(agent_threads))
 
