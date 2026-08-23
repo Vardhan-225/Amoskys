@@ -17,6 +17,12 @@ RuntimeDirectoryMode=755
 # Working directory and environment
 WorkingDirectory=/opt/amoskys
 Environment=FLASK_ENV=production
+# Without this the app boots with no SECRET_KEY, no API keys and no DB paths.
+# The live unit has carried it since the first deploy; the repo copy did not,
+# and deploy_remote.sh copies this file over /etc/systemd/system on every run —
+# so shipping the repo version as it stood would have silently stripped
+# production of its entire environment.
+EnvironmentFile=/opt/amoskys/.env
 Environment=PYTHONPATH=/opt/amoskys
 Environment=PYTHONUNBUFFERED=1
 
@@ -41,6 +47,10 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/opt/amoskys/web
+# ProtectSystem=strict makes the filesystem read-only except for these paths.
+# The live unit permits logs/; the repo copy did not, so log writes would have
+# started failing the moment this file replaced it.
+ReadWritePaths=/opt/amoskys/logs
 ReadWritePaths=/opt/amoskys/data
 ReadWritePaths=/var/log/amoskys
 ReadWritePaths=/tmp
