@@ -83,6 +83,25 @@ class LifecycleMixin:
                     raise
                 time.sleep(0.2 * (attempt + 1))
 
+    def _executemany(self, sql: str, seq):
+        """Batch twin of _execute, sharing its lock backoff.
+
+        _execute existed alone, so any caller with many rows either looped it
+        (paying per-row overhead on a hot path) or reached past it to
+        self.db.executemany and lost the retry entirely — silently discarding
+        the whole batch on the first "database is locked". That is exactly the
+        half-a-pair failure _execute's own docstring warns about, so the pair
+        is completed here rather than left for the next caller to rediscover.
+        """
+        for attempt in range(3):
+            try:
+                return self.db.executemany(sql, seq)
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if ("locked" not in msg and "busy" not in msg) or attempt == 2:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
+
     def _commit(self) -> None:
         """Commit unless in batch mode.
 

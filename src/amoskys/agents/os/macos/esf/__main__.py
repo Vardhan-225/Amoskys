@@ -89,7 +89,15 @@ def main() -> int:
                 offset = 0
             with open(stream, "r", errors="replace") as fh:
                 fh.seek(offset)
-                for line in fh:
+                # readline() rather than `for line in fh`: iterating a file
+                # object enables a read-ahead buffer and Python then refuses
+                # tell() with "telling position disabled by next() call". The
+                # offset is the whole point here — without it every restart
+                # re-ingests the file from the beginning.
+                while True:
+                    line = fh.readline()
+                    if not line:
+                        break
                     if not line.endswith("\n"):
                         break  # partial write; pick it up next pass
                     collector.ingest_line(line)

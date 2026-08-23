@@ -40,11 +40,23 @@ def store():
     conn.commit()
 
     class _Store(ESFForensicsMixin):
-        def execute(self, sql, args=()):
-            c = conn.execute(sql, args); conn.commit(); return c
+        # Mirrors TelemetryStore's ACTUAL interface: _execute / _executemany /
+        # _commit. The first version of this fixture invented execute() and
+        # executemany(), which TelemetryStore does not have — so every test
+        # here passed while the collector was broken in production, and the
+        # failure only appeared on the first live run. A mock is a claim about
+        # an interface; see test_esf_real_store_integration.py, which checks
+        # the claim.
+        db = conn
 
-        def executemany(self, sql, rows):
-            c = conn.executemany(sql, rows); conn.commit(); return c
+        def _execute(self, sql, args=()):
+            return conn.execute(sql, args)
+
+        def _executemany(self, sql, rows):
+            return conn.executemany(sql, rows)
+
+        def _commit(self):
+            conn.commit()
 
         class _P:
             @contextmanager
@@ -224,11 +236,12 @@ def test_retention_never_deletes_undateable_rows(collector, store):
     conn_store = store
     # Insert a boot-relative row directly, bypassing collector normalisation,
     # to simulate rows written before the source was fixed.
-    conn_store.execute(
+    conn_store._execute(
         "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash) "
         "VALUES (?, ?, ?, ?)",
         (235_043_373_641_458, "d", "/bin/legacy", "LEGACY"),
     )
+    conn_store._commit()
     collector.retention_days = 14
     collector.prune()
     rows = conn_store.esf_binary_history(cdhash="LEGACY")["executions"]

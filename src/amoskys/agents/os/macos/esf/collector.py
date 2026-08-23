@@ -72,6 +72,7 @@ class ESFStreamCollector:
         self.parsed = 0
         self.malformed = 0
         self.bad_timestamps = 0
+        self.control_records = 0
         self.heartbeats = 0
         self.dropped_reported = 0
         self._batch: list = []
@@ -108,6 +109,18 @@ class ESFStreamCollector:
             self.malformed += 1
             return None
         return rec
+
+    def is_control(self, rec: Dict[str, Any]) -> bool:
+        """Any record carrying a "type" is control traffic, not an exec.
+
+        Checked as a CLASS rather than by matching "heartbeat" specifically.
+        The narrower check let sentinel_start — added later, to prove liveness
+        at startup — fall through and be stored as an exec event: a row with no
+        binary, no pid and no cdhash, sitting in the evidence table as though
+        something had run. Every future control record would have done the
+        same. Exec records are exactly those with no "type" field.
+        """
+        return "type" in rec
 
     def is_heartbeat(self, rec: Dict[str, Any]) -> bool:
         return rec.get("type") == "heartbeat"
@@ -175,7 +188,13 @@ class ESFStreamCollector:
         if rec is None:
             return
         now_ns = time.time_ns()
-        if self.is_heartbeat(rec):
+        if self.is_control(rec):
+            if not self.is_heartbeat(rec):
+                # sentinel_start and any future control record: note it and
+                # move on. Not an exec, not an error, not evidence.
+                self.control_records += 1
+                logger.info("ESF control record: %s", rec.get("type"))
+                return
             self.heartbeats += 1
             dropped = int(rec.get("dropped") or 0)
             self.dropped_reported += dropped
@@ -216,8 +235,13 @@ class ESFStreamCollector:
             ", ".join("?" for _ in cols),
         )
         try:
-            self.store.executemany(sql, [tuple(r[c] for c in cols) for r in rows])
+            # _executemany / _execute, not raw db access: they carry the
+            # lock backoff that everything else in this store goes through.
+            # Reaching past them drops the whole batch on the first
+            # "database is locked".
+            self.store._executemany(sql, [tuple(r[c] for c in cols) for r in rows])
             self._update_ledger(rows)
+            self.store._commit()
         except Exception:
             logger.exception("ESF ingest failed for %d rows", len(rows))
 
@@ -234,7 +258,7 @@ class ESFStreamCollector:
             if not r["cdhash"]:
                 continue
             try:
-                self.store.execute(
+                self.store._execute(
                     """
                     INSERT INTO esf_binary_ledger
                         (cdhash, first_seen_ns, last_seen_ns, exec_count,
@@ -257,7 +281,7 @@ class ESFStreamCollector:
 
     def _write_health(self, rec, dropped: int, now_ns: int) -> None:
         try:
-            self.store.execute(
+            self.store._execute(
                 "INSERT INTO esf_stream_health "
                 "(timestamp_ns, device_id, dropped, enforce_mode, collector_lag_ns) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -267,6 +291,7 @@ class ESFStreamCollector:
                     now_ns - self._timestamp_ns(rec, now_ns),
                 ),
             )
+            self.store._commit()
         except Exception:
             logger.debug("stream-health write failed", exc_info=True)
 
@@ -289,10 +314,11 @@ class ESFStreamCollector:
                 # cutoff and gets deleted on the first prune. Retention must
                 # never be the thing that destroys the evidence it is meant to
                 # bound. Rows it cannot date are KEPT and stay visible.
-                cur = self.store.execute(
+                cur = self.store._execute(
                     f"DELETE FROM {table} WHERE timestamp_ns < ? AND timestamp_ns >= ?",
                     (cutoff, _TS_MIN_NS),
                 )
+                self.store._commit()
                 removed += getattr(cur, "rowcount", 0) or 0
             except Exception:
                 logger.debug("prune failed for %s", table, exc_info=True)
@@ -303,6 +329,7 @@ class ESFStreamCollector:
             "parsed": self.parsed,
             "malformed": self.malformed,
             "heartbeats": self.heartbeats,
+            "control_records": self.control_records,
             "bad_timestamps": self.bad_timestamps,
             "dropped_reported": self.dropped_reported,
             "pending": len(self._batch),
