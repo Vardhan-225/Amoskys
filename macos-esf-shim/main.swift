@@ -61,21 +61,42 @@ func shouldDeny(path: String, csFlags: UInt32, isPlatform: Bool, cdhash: String)
     let untrusted = !signed || adhoc || (signed && !valid)
 
     if untrusted {
-        let risky =
-            RISKY_SUBPATHS.contains(where: { path.contains($0) })
-            || RISKY_PREFIXES.contains(where: { path.hasPrefix($0) }) && path.contains("/Downloads/")
-        if risky { return (true, "unsigned binary from a download/temp location") }
+        // PRECEDENCE FIX. This previously read:
+        //
+        //   SUBPATHS.contains(...) || PREFIXES.hasPrefix(...) && path.contains("/Downloads/")
+        //
+        // and Swift binds && tighter than ||, so it evaluated as
+        //   SUBPATHS.contains(...) || (PREFIXES.hasPrefix(...) && contains("/Downloads/"))
+        // The second disjunct required "/Downloads/", which the FIRST disjunct
+        // already matched — so RISKY_PREFIXES contributed nothing at all and
+        // the whole rule collapsed to "/Downloads/ or /Library/Caches/".
+        // The constant read like coverage while being dead code.
+        let matchedSubpath = RISKY_SUBPATHS.first(where: { path.contains($0) })
+        let matchedPrefix = RISKY_PREFIXES.first(where: { path.hasPrefix($0) })
+        if let where_ = matchedSubpath ?? matchedPrefix {
+            // Name WHICH form of untrust and WHERE, so a MONITOR run can be
+            // tuned on evidence. "untrusted" lumps together three very
+            // different populations: genuinely unsigned binaries (rare, and
+            // interesting), ad-hoc signed ones (ubiquitous on a developer
+            // machine — every local build and most homebrew bottles), and
+            // signed-but-invalid ones (rare, and the most alarming). Emitting
+            // one undifferentiated string made it impossible to tell a flood
+            // of benign local builds from a real finding.
+            let kind = !signed ? "unsigned" : (adhoc ? "adhoc-signed" : "signature-invalid")
+            return (true, "\(kind) binary from \(where_)")
+        }
     }
     return (false, "allow")
 }
 
 func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
     let m = msg.pointee
-    guard m.event_type == ES_EVENT_TYPE_AUTH_EXEC, let target = m.event.exec.target else {
-        // Not ours (or malformed) — allow immediately, never hold the kernel.
+    guard m.event_type == ES_EVENT_TYPE_AUTH_EXEC else {
+        // Not ours — allow immediately, never hold the kernel.
         es_respond_auth_result(client, msg, ES_AUTH_RESULT_ALLOW, false)
         return
     }
+    let target = m.event.exec.target // non-optional in the ESF C API
     let path = tok(target.pointee.executable.pointee.path)
     let csFlags = target.pointee.codesigning_flags
     let isPlatform = target.pointee.is_platform_binary
@@ -127,7 +148,7 @@ func run() {
         exit(1)
     }
     var events = [ES_EVENT_TYPE_AUTH_EXEC]
-    guard es_subscribe(client, &events, events.count) == ES_RETURN_SUCCESS else {
+    guard es_subscribe(client, &events, UInt32(events.count)) == ES_RETURN_SUCCESS else {
         FileHandle.standardError.write(Data("es_subscribe failed\n".utf8)); exit(1)
     }
     FileHandle.standardError.write(Data(
