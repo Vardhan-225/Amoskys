@@ -1,0 +1,442 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Ledger — AMOSKYS{% endblock %}
+
+{% block extra_head %}
+<style>
+.lg-wrap { max-width: 1080px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
+
+/* ── Verdict bar: the one number, with its scale stated ─────────────── */
+.lg-verdict {
+    display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-left: 3px solid var(--lg-tone); border-radius: 10px;
+    padding: 1.15rem 1.4rem; margin-bottom: 0.6rem;
+}
+.lg-verdict[data-band="calm"]    { --lg-tone: #3ad29f; }
+.lg-verdict[data-band="amber"]   { --lg-tone: #ffb038; }
+.lg-verdict[data-band="red"]     { --lg-tone: #ff4d5e; }
+.lg-verdict[data-band="unknown"] { --lg-tone: #6b7785; }
+
+.lg-score { font-size: 2.6rem; font-weight: 700; line-height: 1; color: var(--lg-tone); font-variant-numeric: tabular-nums; }
+.lg-score .lg-of { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+.lg-headline { font-size: 1.32rem; font-weight: 650; color: var(--text-primary); letter-spacing: -0.01em; }
+.lg-sub { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.2rem; }
+.lg-meta { margin-left: auto; text-align: right; font-size: 0.74rem; color: var(--text-muted); line-height: 1.7; }
+.lg-meta code { background: var(--bg-tertiary); padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.95em; }
+
+.lg-scale-note {
+    font-size: 0.72rem; color: var(--text-muted); margin: 0 0 1.6rem 0.2rem;
+    letter-spacing: 0.02em;
+}
+
+/* ── Section headings ───────────────────────────────────────────────── */
+.lg-sec-head { display: flex; align-items: baseline; gap: 0.7rem; margin: 2rem 0 0.85rem; flex-wrap: wrap; }
+.lg-sec-head h2 { font-size: 1.05rem; font-weight: 650; color: var(--text-primary); margin: 0; letter-spacing: 0.01em; }
+.lg-sec-head .lg-count { font-size: 0.8rem; color: var(--text-muted); }
+
+/* ── Rows ───────────────────────────────────────────────────────────── */
+.lg-item {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-left: 3px solid var(--lg-tone, var(--border-color));
+    border-radius: 9px; margin-bottom: 0.7rem; overflow: hidden;
+}
+.lg-item[data-band="calm"]  { --lg-tone: #3ad29f; }
+.lg-item[data-band="amber"] { --lg-tone: #ffb038; }
+.lg-item[data-band="red"]   { --lg-tone: #ff4d5e; }
+
+.lg-head {
+    display: flex; align-items: flex-start; gap: 1rem; width: 100%;
+    padding: 1rem 1.15rem; background: none; border: 0; text-align: left;
+    color: inherit; font: inherit; cursor: pointer;
+}
+.lg-head:hover { background: rgba(255,255,255,0.02); }
+.lg-head:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: -2px; }
+
+.lg-mark {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center; font-size: 0.95rem; font-weight: 700;
+    background: color-mix(in srgb, var(--lg-tone) 16%, transparent); color: var(--lg-tone);
+}
+.lg-body { flex: 1; min-width: 0; }
+.lg-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); letter-spacing: -0.005em; }
+.lg-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+.lg-chip {
+    font-size: 0.68rem; padding: 0.14rem 0.45rem; border-radius: 4px;
+    background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color);
+}
+.lg-chip.mitre { color: #9fb4ff; border-color: rgba(120,150,255,0.28); font-family: var(--font-mono, monospace); }
+.lg-right { flex: 0 0 auto; text-align: right; }
+.lg-verdict-label { font-size: 0.72rem; font-weight: 650; color: var(--lg-tone); letter-spacing: 0.02em; }
+.lg-evidence-count { display: block; font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; }
+.lg-decided {
+    display: inline-block; margin-top: 0.4rem; font-size: 0.68rem;
+    padding: 0.1rem 0.42rem; border-radius: 4px;
+    background: rgba(58,210,159,0.12); color: #3ad29f; border: 1px solid rgba(58,210,159,0.25);
+}
+.lg-decided.not-mine { background: rgba(255,176,56,0.12); color: #ffb038; border-color: rgba(255,176,56,0.28); }
+
+/* ── Expanded detail ────────────────────────────────────────────────── */
+.lg-detail { padding: 0 1.15rem 1.15rem 3.3rem; display: none; }
+.lg-item.open .lg-detail { display: block; }
+.lg-why { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin: 0 0 0.9rem; max-width: 74ch; }
+
+.lg-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; align-items: center; }
+.lg-btn {
+    font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    padding: 0.42rem 0.85rem; border-radius: 7px; border: 1px solid var(--border-color);
+    background: var(--bg-tertiary); color: var(--text-primary);
+}
+.lg-btn:hover { border-color: var(--neural-primary); }
+.lg-btn:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
+.lg-btn.mine    { border-color: rgba(58,210,159,0.45); color: #3ad29f; }
+.lg-btn.notmine { border-color: rgba(255,176,56,0.45); color: #ffb038; }
+.lg-btn[disabled] { opacity: 0.5; cursor: default; }
+.lg-btn-note { font-size: 0.74rem; color: var(--text-muted); margin-left: 0.15rem; }
+
+.lg-evidence { margin-top: 0.95rem; border-top: 1px solid var(--border-color); padding-top: 0.85rem; }
+.lg-ev-row {
+    display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 0.9rem;
+    padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);
+    font-size: 0.8rem; align-items: baseline;
+}
+.lg-ev-row:last-child { border-bottom: none; }
+.lg-ev-when { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 0.72rem; }
+.lg-ev-desc { color: var(--text-secondary); overflow-wrap: anywhere; }
+.lg-ev-cat { display: block; color: var(--text-primary); font-weight: 600; font-size: 0.78rem; margin-bottom: 0.1rem; }
+.lg-ev-flags { color: var(--text-muted); font-size: 0.7rem; white-space: nowrap; }
+.lg-ev-flags .hot { color: #ff4d5e; }
+
+/* ── Recognised group ───────────────────────────────────────────────── */
+.lg-recognised-toggle {
+    width: 100%; text-align: left; font: inherit; cursor: pointer;
+    background: var(--bg-secondary); border: 1px dashed var(--border-color);
+    border-radius: 9px; padding: 0.9rem 1.15rem; color: var(--text-secondary);
+}
+.lg-recognised-toggle:hover { border-color: var(--neural-primary); color: var(--text-primary); }
+.lg-recognised-toggle:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
+.lg-recognised-toggle b { color: var(--text-primary); }
+#lg-recognised-list { margin-top: 0.7rem; display: none; }
+#lg-recognised-list.open { display: block; }
+
+.lg-empty {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: 9px; padding: 1.6rem; text-align: center; color: var(--text-secondary);
+}
+.lg-empty strong { display: block; color: var(--text-primary); font-size: 1.02rem; margin-bottom: 0.3rem; }
+
+/* ── Taught strip ───────────────────────────────────────────────────── */
+.lg-taught {
+    margin-top: 2.2rem; padding: 0.95rem 1.15rem; border-radius: 9px;
+    background: var(--bg-tertiary); border: 1px solid var(--border-color);
+    font-size: 0.84rem; color: var(--text-secondary);
+}
+.lg-taught b { color: var(--text-primary); }
+
+/* ── Toast ──────────────────────────────────────────────────────────── */
+#lg-toast {
+    position: fixed; right: 1.4rem; bottom: 1.4rem; z-index: 9000;
+    max-width: 380px; padding: 0.85rem 1.05rem; border-radius: 9px;
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-left: 3px solid var(--neural-primary);
+    color: var(--text-primary); font-size: 0.86rem; box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+    display: none;
+}
+#lg-toast.show { display: block; }
+#lg-toast .lg-toast-detail { display: block; margin-top: 0.3rem; color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
+#lg-toast[data-kind="partial"] { border-left-color: #ffb038; }
+#lg-toast[data-kind="error"]   { border-left-color: #ff4d5e; }
+
+@media (max-width: 680px) {
+    .lg-detail { padding-left: 1.15rem; }
+    .lg-ev-row { grid-template-columns: 1fr; }
+    .lg-meta { margin-left: 0; text-align: left; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lg-wrap">
+
+    <div class="lg-verdict" id="lg-verdict" data-band="unknown">
+        <div>
+            <div class="lg-score" id="lg-score">—</div>
+        </div>
+        <div>
+            <div class="lg-headline" id="lg-headline">Reading your machine…</div>
+            <div class="lg-sub" id="lg-sub">One verdict, computed once.</div>
+        </div>
+        <div class="lg-meta" id="lg-meta"></div>
+    </div>
+    <p class="lg-scale-note" id="lg-scale-note"></p>
+
+    <div class="lg-sec-head">
+        <h2>Needs you</h2>
+        <span class="lg-count" id="lg-needs-count"></span>
+    </div>
+    <div id="lg-needs"></div>
+
+    <div class="lg-sec-head">
+        <h2>Recognised</h2>
+        <span class="lg-count">activity AMOSKYS attributes to you or your machine</span>
+    </div>
+    <button type="button" class="lg-recognised-toggle" id="lg-recognised-toggle" aria-expanded="false" aria-controls="lg-recognised-list">
+        Loading…
+    </button>
+    <div id="lg-recognised-list"></div>
+
+    <div class="lg-taught" id="lg-taught"></div>
+</div>
+
+<div id="lg-toast" role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+    "use strict";
+
+    const needsEl = document.getElementById('lg-needs');
+    const recogEl = document.getElementById('lg-recognised-list');
+    const recogBtn = document.getElementById('lg-recognised-toggle');
+    const toastEl = document.getElementById('lg-toast');
+    let toastTimer = null;
+
+    const esc = (s) => String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    function toast(message, detail, kind) {
+        toastEl.dataset.kind = kind || 'ok';
+        toastEl.innerHTML = esc(message) +
+            (detail ? '<span class="lg-toast-detail">' + esc(detail) + '</span>' : '');
+        toastEl.classList.add('show');
+        if (toastTimer) { clearTimeout(toastTimer); }
+        toastTimer = setTimeout(() => toastEl.classList.remove('show'), 7000);
+    }
+
+    function renderVerdict(v) {
+        const wrap = document.getElementById('lg-verdict');
+        wrap.dataset.band = v.band || 'unknown';
+        document.getElementById('lg-score').innerHTML =
+            (v.score === null || v.score === undefined)
+                ? '—'
+                : esc(v.score) + '<span class="lg-of"> / 100</span>';
+        document.getElementById('lg-headline').textContent = v.headline || '';
+        document.getElementById('lg-sub').textContent = v.sub_line || '';
+
+        const cov = v.coverage || {};
+        const meta = [];
+        meta.push('as of <code>' + esc(v.age_human || 'unknown') + '</code>');
+        if (cov.devices_total) {
+            meta.push(esc(cov.devices_reporting) + ' of ' + esc(cov.devices_total) + ' devices reporting');
+        }
+        meta.push(esc(v.source || ''));
+        document.getElementById('lg-meta').innerHTML = meta.join('<br>');
+
+        const note = document.getElementById('lg-scale-note');
+        note.textContent = v.scale === 'risk'
+            ? 'Risk scale — ' + (v.scale_note || '') + (v.stale ? ' · this reading is not current' : '')
+            : '';
+    }
+
+    function chips(item) {
+        const out = [];
+        (item.mitre || []).slice(0, 6).forEach((t) => {
+            out.push('<span class="lg-chip mitre">' + esc(t) + '</span>');
+        });
+        (item.factors || []).slice(0, 4).forEach((f) => {
+            out.push('<span class="lg-chip">' + esc(f) + '</span>');
+        });
+        return out.join('');
+    }
+
+    function decidedBadge(item) {
+        if (!item.user_verdict) { return ''; }
+        const mine = item.user_verdict.verdict === 'mine';
+        const label = mine ? "You said: that's me" : 'You said: not me';
+        return '<span class="lg-decided' + (mine ? '' : ' not-mine') + '">' + esc(label) + '</span>';
+    }
+
+    function itemHTML(item) {
+        const mark = item.band === 'calm' ? '✓' : '!';
+        const evidence = item.evidence_count
+            ? esc(item.evidence_count) + ' event' + (item.evidence_count === 1 ? '' : 's')
+            : (item.count ? esc(item.count) + ' observation' + (item.count === 1 ? '' : 's') : '');
+
+        return '' +
+        '<article class="lg-item" data-band="' + esc(item.band) + '" data-key="' + esc(item.key) + '">' +
+            '<button type="button" class="lg-head" aria-expanded="false">' +
+                '<span class="lg-mark" aria-hidden="true">' + mark + '</span>' +
+                '<span class="lg-body">' +
+                    '<span class="lg-title">' + esc(item.title) + '</span>' +
+                    '<span class="lg-chips">' + chips(item) + '</span>' +
+                '</span>' +
+                '<span class="lg-right">' +
+                    '<span class="lg-verdict-label">' + esc(item.verdict_label || '') + '</span>' +
+                    '<span class="lg-evidence-count">' + evidence + '</span>' +
+                    decidedBadge(item) +
+                '</span>' +
+            '</button>' +
+            '<div class="lg-detail">' +
+                '<p class="lg-why">' + esc(item.why) + '</p>' +
+                '<div class="lg-actions">' +
+                    '<button type="button" class="lg-btn mine" data-act="mine">That\'s me</button>' +
+                    '<button type="button" class="lg-btn notmine" data-act="not_mine">Not me</button>' +
+                    (item.user_verdict
+                        ? '<button type="button" class="lg-btn" data-act="clear">Undo my answer</button>'
+                        : '') +
+                    (item.has_evidence
+                        ? '<button type="button" class="lg-btn" data-act="evidence">Show me the events</button>'
+                        : '<span class="lg-btn-note">Built from flow aggregates — no individual rows to open.</span>') +
+                '</div>' +
+                '<div class="lg-evidence" hidden></div>' +
+            '</div>' +
+        '</article>';
+    }
+
+    function render(payload) {
+        renderVerdict(payload.verdict || {});
+
+        const needs = payload.needs_you || [];
+        document.getElementById('lg-needs-count').textContent =
+            needs.length ? needs.length + ' item' + (needs.length === 1 ? '' : 's') : '';
+        needsEl.innerHTML = needs.length
+            ? needs.map(itemHTML).join('')
+            : '<div class="lg-empty"><strong>Nothing is waiting on you.</strong>' +
+              'Everything AMOSKYS saw either matched your normal patterns or you have already answered it.</div>';
+
+        const rec = payload.recognised || { count: 0, items: [] };
+        recogBtn.innerHTML = rec.count
+            ? '<b>' + esc(rec.count) + ' thing' + (rec.count === 1 ? '' : 's') + ' AMOSKYS recognised</b>' +
+              (rec.event_count ? ' — covering ' + esc(rec.event_count) + ' suppressed events' : '') +
+              ' · show me what it hid'
+            : '<b>Nothing was auto-recognised yet</b> · everything AMOSKYS saw is above';
+        recogEl.innerHTML = (rec.items || []).map(itemHTML).join('');
+
+        const taught = payload.taught || {};
+        const el = document.getElementById('lg-taught');
+        if (taught.total) {
+            el.innerHTML = 'You have answered <b>' + esc(taught.total) + '</b> item' +
+                (taught.total === 1 ? '' : 's') + ' — <b>' + esc(taught.mine) + '</b> as yours, <b>' +
+                esc(taught.not_mine) + '</b> as not yours. ' +
+                (taught.upstream_applied
+                    ? '<b>' + esc(taught.upstream_applied) + '</b> reached the detector and changed probe weighting.'
+                    : 'None have reached the detector yet — they are applied to what you see here.');
+        } else {
+            el.innerHTML = 'You have not answered anything yet. ' +
+                '<b>That\'s me</b> teaches AMOSKYS to recognise your own activity; ' +
+                '<b>Not me</b> keeps it in front of you and tells the detector it was right to ask.';
+        }
+    }
+
+    async function load() {
+        try {
+            const res = await fetch('/dashboard/api/ledger', { credentials: 'same-origin' });
+            if (!res.ok) { throw new Error('HTTP ' + res.status); }
+            render(await res.json());
+        } catch (err) {
+            needsEl.innerHTML = '<div class="lg-empty"><strong>The ledger could not load.</strong>' +
+                esc(String(err)) + '</div>';
+        }
+    }
+
+    async function showEvidence(article) {
+        const box = article.querySelector('.lg-evidence');
+        const key = article.dataset.key;
+        box.hidden = false;
+        box.innerHTML = '<div class="lg-ev-row"><span class="lg-ev-desc">Loading the rows…</span></div>';
+        try {
+            const res = await fetch('/dashboard/api/ledger/evidence?key=' + encodeURIComponent(key),
+                { credentials: 'same-origin' });
+            const data = await res.json();
+            const rows = data.rows || [];
+            if (!rows.length) {
+                box.innerHTML = '<div class="lg-ev-row"><span class="lg-ev-desc">' +
+                    esc(data.note || 'No rows returned.') + '</span></div>';
+                return;
+            }
+            box.innerHTML = rows.map((r) => {
+                const flags = [];
+                if (r.requires_investigation) { flags.push('<span class="hot">needs investigation</span>'); }
+                if (r.threat_intel_match) { flags.push('<span class="hot">threat-intel hit</span>'); }
+                if (r.classification) { flags.push(esc(r.classification)); }
+                if (r.risk !== null && r.risk !== undefined) { flags.push('risk ' + esc(r.risk)); }
+                return '<div class="lg-ev-row">' +
+                    '<span class="lg-ev-when" title="' + esc(r.when_full || '') + '">' + esc(r.when || '') + '</span>' +
+                    '<span class="lg-ev-desc"><span class="lg-ev-cat">' + esc(r.category) + '</span>' +
+                        esc(r.description || '') + '</span>' +
+                    '<span class="lg-ev-flags">' + flags.join(' · ') + '</span>' +
+                '</div>';
+            }).join('') +
+            (data.evidence_count > rows.length
+                ? '<div class="lg-ev-row"><span class="lg-ev-desc">Showing ' + esc(rows.length) +
+                  ' of ' + esc(data.evidence_count) + ' — ask IGRIS for the rest.</span></div>'
+                : '');
+        } catch (err) {
+            box.innerHTML = '<div class="lg-ev-row"><span class="lg-ev-desc">Could not load evidence: ' +
+                esc(String(err)) + '</span></div>';
+        }
+    }
+
+    async function decide(article, decision) {
+        const key = article.dataset.key;
+        const buttons = article.querySelectorAll('.lg-btn');
+        buttons.forEach((b) => { b.disabled = true; });
+        try {
+            const res = await fetch('/dashboard/api/ledger/verdict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ key: key, verdict: decision })
+            });
+            const data = await res.json();
+            if (!res.ok) { throw new Error(data.error || ('HTTP ' + res.status)); }
+
+            if (decision === 'clear') {
+                toast(data.message || 'Cleared.', '', 'ok');
+            } else if (data.upstream === 'applied') {
+                toast(data.message, 'The detector was updated: ' + (data.upstream_detail || ''), 'ok');
+            } else if (data.upstream === 'nothing_to_label') {
+                toast(data.message, data.upstream_detail, 'partial');
+            } else if (data.upstream === 'unavailable') {
+                toast(data.message, data.upstream_detail, 'partial');
+            } else {
+                toast(data.message || 'Recorded.', data.upstream_detail || '', 'partial');
+            }
+            await load();
+        } catch (err) {
+            toast('That did not save.', String(err), 'error');
+            buttons.forEach((b) => { b.disabled = false; });
+        }
+    }
+
+    // One delegated listener — a CSP nonce can never authorise an inline
+    // on* attribute, which is exactly how four dashboard pages died before.
+    document.addEventListener('click', (ev) => {
+        const head = ev.target.closest('.lg-head');
+        if (head) {
+            const article = head.closest('.lg-item');
+            const open = article.classList.toggle('open');
+            head.setAttribute('aria-expanded', open ? 'true' : 'false');
+            return;
+        }
+        const btn = ev.target.closest('.lg-btn');
+        if (btn && btn.dataset.act) {
+            const article = btn.closest('.lg-item');
+            if (btn.dataset.act === 'evidence') { showEvidence(article); }
+            else { decide(article, btn.dataset.act); }
+        }
+    });
+
+    recogBtn.addEventListener('click', () => {
+        const open = recogEl.classList.toggle('open');
+        recogBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    load();
+    setInterval(load, 60000);
+})();
+</script>
+{% endblock %}

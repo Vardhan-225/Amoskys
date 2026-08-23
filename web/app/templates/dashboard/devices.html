@@ -59,6 +59,8 @@
 .dv-meta { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .dv-tag { font-size: 0.65em; padding: 1px 6px; border-radius: 3px; color: #6b7a99; background: rgba(255,255,255,0.03); }
 .dv-tag-ok { color: #00ff88; background: rgba(0,255,136,0.06); }
+.dv-tag-unknown { color: #8d99a8; background: rgba(141,153,168,0.09); }
+.dv-blind { color: #c9a227; font-size: 0.82em; padding: 8px 0; line-height: 1.5; }
 .dv-tag-warn { color: #f0ad4e; background: rgba(240,173,78,0.08); }
 .dv-tag-crit { color: #ff3366; background: rgba(255,51,102,0.08); }
 .dv-stats { display: flex; gap: 14px; }
@@ -182,17 +184,25 @@
             var cr = parseInt(x.critical_count) || 0;
             var hi = parseInt(x.high_count) || 0;
             var events = parseInt(x.event_count) || 0;
-            var rtag = cr > 0 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
-                : hi > 0 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
-                : '<span class="dv-tag dv-tag-ok">Healthy</span>';
+            // A device that has reported nothing is BLIND, not clean. Saying
+            // "Healthy" over zero telemetry is the one claim a security tool
+            // must never make.
+            // The badge is filled in from the canonical verdict, not from this
+            // endpoint's counters: the fleet devices table reports 0 events for
+            // a device that has hundreds of rows in security_events, and it was
+            // that disagreement — read as "no threats" — which produced the
+            // "Healthy" badge over an unseen machine. Until the verdict answers,
+            // the badge says so rather than guessing.
+            var rtag = '<span class="dv-tag dv-tag-unknown" data-verdict-badge-for="'
+                + esc(x.device_id || '') + '">Checking…</span>';
 
-            // Posture based on actual threat counts
-            var ps, pl, pc;
-            if (cr === 0 && hi === 0) { ps = 100; pl = 'All Clear'; pc = '#00ff88'; }
-            else if (cr === 0) { ps = Math.max(60, 85 - hi); pl = 'Guarded'; pc = '#f0ad4e'; }
-            else if (cr <= 10) { ps = Math.max(20, 55 - cr * 3); pl = 'Needs Attention'; pc = '#f0ad4e'; }
-            else { ps = Math.max(5, 20 - Math.floor(cr / 5)); pl = 'Critical'; pc = '#ff3366'; }
-            var circ = 2 * Math.PI * 18, off = circ * (1 - ps / 100);
+            // Posture is NOT computed here any more. This template used to
+            // derive its own 0-100 health score (100 = "All Clear") while the
+            // posture page derived a 0-100 score in the opposite direction and
+            // the overview derived a third — one laptop, three answers. The
+            // ring is now filled from /dashboard/api/verdict, the single
+            // corroboration-gated verdict every surface reads.
+            var circ = 2 * Math.PI * 18;
 
             html += '<div class="dv-card" id="dvc-' + i + '">';
 
@@ -212,20 +222,26 @@
             // Expandable detail
             html += '<div class="dv-detail"><div class="dv-detail-grid">';
 
-            // Posture
-            html += '<div class="dv-panel"><div class="dv-panel-t">Security Posture</div>'
-                + '<div class="dv-posture-mini">'
+            // Verdict — hydrated from the canonical endpoint, never computed here.
+            html += '<div class="dv-panel"><div class="dv-panel-t">Verdict</div>'
+                + '<div class="dv-posture-mini" data-verdict-for="' + esc(x.device_id || '') + '">'
                 + '<div class="dv-mini-ring"><svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="18"/>'
-                + '<circle class="fg" cx="22" cy="22" r="18" stroke="' + pc + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
-                + '<div class="dv-mini-val" style="color:' + pc + '">' + ps + '</div></div>'
-                + '<div class="dv-mini-info"><div class="dv-mini-level" style="color:' + pc + '">' + pl + '</div>'
-                + '<div class="dv-mini-desc">' + events + ' events in 24h</div></div></div></div>';
+                + '<circle class="fg" cx="22" cy="22" r="18" stroke="#6b7785" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + circ.toFixed(1) + '"/></svg>'
+                + '<div class="dv-mini-val" style="color:#6b7785">—</div></div>'
+                + '<div class="dv-mini-info"><div class="dv-mini-level" style="color:#6b7785">Reading…</div>'
+                + '<div class="dv-mini-desc">risk scale · 0 = nothing to do</div></div></div></div>';
 
             // Needs Attention
             html += '<div class="dv-panel"><div class="dv-panel-t">Needs Attention</div>';
             if (cr > 0) html += alertItem('c', cr + ' critical threat' + (cr>1?'s':''), 'Review immediately');
             if (hi > 0) html += alertItem('h', hi + ' high-risk event' + (hi>1?'s':''), 'Worth investigating');
-            if (cr === 0 && hi === 0) html += '<div style="color:#00ff88;font-size:0.82em;padding:8px 0;">No issues detected</div>';
+            if (events === 0) {
+                html += '<div class="dv-blind">Nothing has been reported from this device'
+                    + (x.last_seen ? ' since ' + esc(timeAgo(x.last_seen)) : ' yet')
+                    + '. That is not the same as clean &mdash; AMOSKYS cannot see this machine.</div>';
+            } else if (cr === 0 && hi === 0) {
+                html += '<div style="color:#00ff88;font-size:0.82em;padding:8px 0;">Nothing above your baseline in the last 24h.</div>';
+            }
             html += '</div>';
 
             // Activity (top categories for this device — using fleet-wide for now)
@@ -272,6 +288,57 @@
                 card.classList.toggle('expanded');
             });
         });
+        // Every device's verdict resolves immediately: a badge that only became
+        // truthful once you expanded the row would still be a lie in the list.
+        document.querySelectorAll('.dv-card').forEach(hydrateVerdict);
+    }
+
+    // ── The one verdict ─────────────────────────────────────────────────────
+    // This page asks the server rather than deriving a score of its own. The
+    // ring shows RISK (0 = nothing to do), the same direction and the same
+    // number the ledger and the overview show for this device.
+    var VERDICT_TONE = { calm: '#3ad29f', amber: '#ffb038', red: '#ff4d5e', unknown: '#6b7785' };
+
+    function hydrateVerdict(card) {
+        var box = card.querySelector('[data-verdict-for]');
+        if (!box || box.dataset.loaded === '1') { return; }
+        box.dataset.loaded = '1';
+        var deviceId = box.dataset.verdictFor;
+        var badge = card.querySelector('[data-verdict-badge-for="' + deviceId + '"]');
+        var ring = box.querySelector('circle.fg');
+        var val = box.querySelector('.dv-mini-val');
+        var level = box.querySelector('.dv-mini-level');
+        var desc = box.querySelector('.dv-mini-desc');
+        var circ = 2 * Math.PI * 18;
+
+        fetch('/dashboard/api/verdict?device_id=' + encodeURIComponent(deviceId), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(v) {
+                var tone = VERDICT_TONE[v.band] || VERDICT_TONE.unknown;
+                if (badge) {
+                    badge.textContent = (v.band === 'unknown') ? 'Not seen' : (v.headline || 'Unknown');
+                    badge.className = 'dv-tag ' + (
+                        v.band === 'red' ? 'dv-tag-crit' :
+                        v.band === 'amber' ? 'dv-tag-warn' :
+                        v.band === 'calm' ? 'dv-tag-ok' : 'dv-tag-unknown');
+                    badge.title = (v.sub_line || '') + (v.age_human ? ' (as of ' + v.age_human + ')' : '');
+                }
+                var score = (v.score === null || v.score === undefined) ? null : v.score;
+                ring.setAttribute('stroke', tone);
+                ring.setAttribute('stroke-dashoffset', (score === null ? circ : circ * (1 - score / 100)).toFixed(1));
+                val.style.color = tone;
+                val.textContent = score === null ? '—' : score;
+                level.style.color = tone;
+                level.textContent = v.headline || 'Unknown';
+                desc.textContent = (score === null ? '' : 'risk ' + score + '/100 · ')
+                    + (v.sub_line || v.coverage && v.coverage.reason || '')
+                    + (v.age_human ? ' · as of ' + v.age_human : '');
+            })
+            .catch(function() {
+                if (badge) { badge.textContent = 'Unavailable'; }
+                level.textContent = 'Verdict unavailable';
+                desc.textContent = 'The verdict service did not answer — this is not an all-clear.';
+            });
     }
 
     function alertItem(level, title, sub) {

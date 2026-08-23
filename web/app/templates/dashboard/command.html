@@ -288,8 +288,9 @@ body{
 let M = window.AMOSKYS_MODEL || null;
 const $ = s => document.querySelector(s);
 const SEV_ICON = {calm:'✓',amber:'!',red:'▲'};
-const bandColor = b => b==='red'?'var(--red)':b==='amber'?'var(--amber)':'var(--calm)';
-const bandBg = b => b==='red'?'var(--red-bg)':b==='amber'?'var(--amber-bg)':'var(--calm-bg)';
+// 'unknown' is its own colour: an empty query must never paint the calm green.
+const bandColor = b => b==='red'?'var(--red)':b==='amber'?'var(--amber)':b==='unknown'?'#6b7785':'var(--calm)';
+const bandBg = b => b==='red'?'var(--red-bg)':b==='amber'?'var(--amber-bg)':b==='unknown'?'rgba(107,119,133,0.14)':'var(--calm-bg)';
 /* escape any telemetry-derived string before it touches innerHTML (untrusted host data) */
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -326,7 +327,7 @@ function renderVerdict(){
   let n=0; const t=setInterval(()=>{n+=Math.max(1,Math.round(v.active_risk/22));
     if(n>=v.active_risk){n=v.active_risk;clearInterval(t)}$('#rv').textContent=n;},26);
   const vb=$('#vband'); vb.style.background=bandBg(v.band); vb.style.color=c;
-  vb.textContent = (v.band==='calm'?'● CALM':v.band==='amber'?'● WORTH A LOOK':'● ACT NOW');
+  vb.textContent = (v.band==='calm'?'● CALM':v.band==='amber'?'● WORTH A LOOK':v.band==='unknown'?'● NOT SEEN':'● ACT NOW');
   // exposure vs active
   $('#expv').innerHTML='Good <span style="color:var(--calm);font-size:14px">●</span>';
   $('#actv').innerHTML=v.active_risk+' <span style="color:'+c+';font-size:14px">●</span>';

@@ -76,6 +76,27 @@ KNOWN_TELEMETRY = (
 # noise, but never silently drop needs-confirmation categories.)
 NEVER_SUPPRESS = ("browser_credential_theft", "persistence_creation", "credential_dump")
 
+# ── AMOSKYS observing AMOSKYS ────────────────────────────────────────────────
+# Measured on the live fleet: the polling collector spawns `log show`,
+# `codesign --verify`, `lsof` and `nettop` every cycle, and every one of those
+# execs came back classified as LOLBin Execution (T1218/T1059, sigma high). A
+# 101-step "attack reconstruction" turned out to be the agent watching itself,
+# and that self-noise was the bulk of the exploit-stage count on the home page.
+#
+# These are matched narrowly — the *collection command shape*, not the binary
+# name alone — so a genuine `log`/`lsof` abuse still surfaces. They are marked
+# expected, never dropped: the ledger keeps them one click away under
+# "recognised", because a suppression you cannot audit is a blind spot.
+SELF_TELEMETRY_SIGNATURES = (
+    ("log", ("'show'", '"show"', "log show", "--predicate", "--style', 'json")),
+    ("codesign", ("--verify", "-dv", "--display")),
+    ("lsof", ("-i", "-n", "-p")),
+    ("nettop", ("-x", "-l", "-p")),
+    ("ps", ("axo", "-eo", "-ax")),
+    ("system_profiler", ("spusb", "sphardware", "-json")),
+)
+SELF_PROCESS_NAMES = ("amoskys", "collect_and_store", "analyzer_main", "collector_main")
+
 
 def _proc_ctx(desc: str) -> str:
     """Lowercased process/exe context from an event description."""
@@ -147,7 +168,9 @@ def resolve_db_path() -> str | None:
 def _error_stub(kind: str, message: str, headline: str, sub: str) -> dict:
     return {
         "error": kind, "message": message,
-        "verdict": {"active_risk": 0, "band": "calm", "headline": headline, "tone": "calm",
+        # band 'unknown', never 'calm': a store we could not read is not an
+        # all-clear, and painting it green is how "blind" became "healthy".
+        "verdict": {"active_risk": 0, "band": "unknown", "headline": headline, "tone": "unknown",
                     "live_count": 0, "suppressed_count": 0, "requires_investigation": 0,
                     "top_factors": [], "sub_line": sub},
         "incidents": [], "globe": {"device": {"lat": 0, "lon": 0}, "destinations": []},
@@ -216,6 +239,44 @@ def _is_known_good(org: str | None) -> bool:
 
 
 # ── Benign suppression: the moat ─────────────────────────────────────────────
+def _amoskys_hosts() -> tuple[str, ...]:
+    """Hosts this installation ships its own telemetry to."""
+    raw = os.getenv("AMOSKYS_SERVER", "") + " " + os.getenv("AMOSKYS_OPS_SERVER", "")
+    hosts = []
+    for token in raw.replace("https://", " ").replace("http://", " ").split():
+        host = token.split("/")[0].split(":")[0].strip()
+        if host:
+            hosts.append(host.lower())
+    return tuple(hosts) or ("18.223.110.15",)
+
+
+def _classify_self_noise(desc: str, desc_low: str) -> str | None:
+    """Recognise AMOSKYS's own instrumentation in its own telemetry.
+
+    Returns a human reason, or None. Matching is on the *command shape* — the
+    binary plus an argument this collector actually passes — so an attacker
+    running bare `log` or `lsof` is still surfaced.
+    """
+    if not desc_low:
+        return None
+
+    for proc in SELF_PROCESS_NAMES:
+        if proc in desc_low:
+            return "AMOSKYS itself (its own collector process)"
+
+    for binary, markers in SELF_TELEMETRY_SIGNATURES:
+        if not re.search(rf"\b{re.escape(binary)}\b", desc_low):
+            continue
+        if any(marker.lower() in desc_low for marker in markers):
+            return f"AMOSKYS itself (its `{binary}` collection probe)"
+
+    for host in _amoskys_hosts():
+        if host and host in desc_low:
+            return "AMOSKYS itself (shipping telemetry to your own server)"
+
+    return None
+
+
 def classify_expected(ev: dict) -> str | None:
     """Return a human reason if this event is EXPECTED activity, else None.
 
@@ -229,6 +290,13 @@ def classify_expected(ev: dict) -> str | None:
     # Guardrail: scary categories always surface for human confirmation.
     if cat in NEVER_SUPPRESS:
         return None
+
+    # 0) AMOSKYS observing AMOSKYS. Checked first because it is the single
+    #    largest source of "detections" on a healthy machine, and because
+    #    every rule below would otherwise have to fight it.
+    self_reason = _classify_self_noise(desc, desc_low)
+    if self_reason:
+        return self_reason
 
     # 1) Owner's own deploy/admin: ssh/scp/rsync/git are admin tools; curl/wget
     #    to a known host is the deploy workflow.
@@ -272,7 +340,7 @@ def classify_expected(ev: dict) -> str | None:
 def load_events(db: sqlite3.Connection, allowed_device_ids: list[str] | None = None) -> list[dict]:
     scope, scope_p = _scope_sql(allowed_device_ids, " WHERE ")
     rows = db.execute(
-        """SELECT timestamp_ns, timestamp_dt, device_id, event_category, event_action,
+        """SELECT id AS row_id, timestamp_ns, timestamp_dt, device_id, event_category, event_action,
                   event_outcome, risk_score, confidence, mitre_techniques,
                   geometric_score, temporal_score, behavioral_score, final_classification,
                   description, requires_investigation, threat_intel_match,
@@ -392,6 +460,26 @@ def compute_verdict(events: list[dict]) -> dict:
 
 
 # ── Correlation into incident "stories" ──────────────────────────────────────
+def _members(evs: list[dict], cap: int = 200) -> dict:
+    """Provenance for a story: which rows, which devices, which categories.
+
+    The ledger's "That's me" / "Not me" buttons need real event ids to label,
+    and the evidence links need real rows to open. Without this an incident is
+    an unreachable assertion — which is exactly what the drawer's 303 inert
+    event-id strings were.
+    """
+    return {
+        # row_id is the security_events PRIMARY KEY — the reliability API's label
+        # writeback matches on it. event_id is the human-facing hash and matches
+        # nothing in an UPDATE, which is why a label write would silently miss.
+        "row_ids": [e.get("row_id") for e in evs[:cap] if e.get("row_id") is not None],
+        "event_ids": [e.get("event_id") for e in evs[:cap] if e.get("event_id")],
+        "device_ids": sorted({e.get("device_id") for e in evs if e.get("device_id")}),
+        "categories": sorted({(e.get("event_category") or "").lower() for e in evs if e.get("event_category")}),
+        "evidence_count": len(evs),
+    }
+
+
 def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
     """Group related events into legible, correlated stories. Severity = MAX
     member, verdict reflects suppression. Auto-named from attributes."""
@@ -422,6 +510,7 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
             "first": admin[-1]["timestamp_dt"],
             "last": admin[0]["timestamp_dt"],
             "factors": ["Known deploy key", "Known destination host", "Recurring pattern", "Owner-initiated"],
+            **_members(admin),
         })
 
     # Story 2: foreign / unattributed egress (the genuinely interesting signal).
@@ -451,6 +540,7 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
             "last": None,
             "factors": [f"{agg['country']} destination", "Not a known service", f"{agg.get('bytes', 0):,} bytes", "Off baseline"],
             "dest": {"lat": agg["lat"], "lon": agg["lon"], "org": agg.get("org"), "country": agg["country"]},
+            **_members([]),
         })
 
     # Story: high-signal categories we never auto-suppress (surface for confirm).
@@ -472,6 +562,7 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
                 "band": "amber", "count": len(hits), "mitre": [tech],
                 "why": why, "first": hits[-1]["timestamp_dt"], "last": hits[0]["timestamp_dt"],
                 "factors": ["High-signal category", "Not auto-suppressed", "Needs your confirmation"],
+                **_members(hits),
             })
 
     # Story 3: DNS beaconing cluster (suspected periodic lookups).
@@ -493,6 +584,7 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
             "first": beacon[-1]["timestamp_dt"],
             "last": beacon[0]["timestamp_dt"],
             "factors": ["Periodic interval", "No threat-intel match", "Needs destination review"],
+            **_members(beacon),
         })
 
     # Rank: act > look > calm, then by count.

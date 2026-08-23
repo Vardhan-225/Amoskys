@@ -490,9 +490,11 @@
             <a href="/dashboard/devices" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4BB;</span> Devices</a>
             <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
             <div class="hdr-nav-menu-label">Detection</div>
+            <a href="/dashboard/ledger" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2713;</span> Ledger</a>
             <a href="/dashboard/threats" class="mobile-nav-link"><span class="hdr-nav-icon">&#x26A0;</span> Threats</a>
-            <a href="/dashboard/incidents" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4CB;</span> Incidents</a>
+            <a href="/dashboard/incidents-view" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4CB;</span> Incidents</a>
             <a href="/dashboard/threat-feed" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4E1;</span> Threat Feed</a>
+            <a href="/dashboard/event-stream" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4C8;</span> Event Stream</a>
             <a href="/dashboard/mitre" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F3AF;</span> MITRE ATT&amp;CK</a>
             <a href="/dashboard/hunt" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F50D;</span> Hunt</a>
             <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
@@ -506,14 +508,15 @@
             <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
             <div class="hdr-nav-menu-label">Intelligence &amp; Ops</div>
             <a href="/dashboard/igris" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F9E0;</span> IGRIS</a>
+            <a href="/dashboard/guardian" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F6E1;</span> Guardian</a>
             <a href="/dashboard/soma" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2B22;</span> SOMA</a>
             <a href="/dashboard/agents" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F916;</span> Agents</a>
+            <a href="/dashboard/command-center" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F5C2;</span> Command Center</a>
             <a href="/dashboard/system" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F5A5;</span> System</a>
-            <a href="/dashboard/deploy" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F6E1;</span> Deploy</a>
+            <a href="/dashboard/deploy" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F680;</span> Deploy</a>
             <a href="/dashboard/settings" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2699;</span> Settings</a>
             {% if user and user.role.value == 'admin' %}
             <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
-            <a href="/dashboard/cortex" class="mobile-nav-link" style="color:var(--text-muted);"><span class="hdr-nav-icon">&#x2B22;</span> Advanced</a>
             <a href="/admin" class="mobile-nav-link" style="color:var(--neural-danger);"><span class="hdr-nav-icon">&#x1F512;</span> Admin</a>
             {% endif %}
         </div>
@@ -543,9 +546,12 @@
                 </span>
                 <div class="hdr-nav-menu">
                     <div class="hdr-nav-menu-label">Threats &amp; response</div>
+                    <a href="/dashboard/ledger"><span class="mi">&#x2713;</span> Ledger <span class="md">what needs you</span></a>
                     <a href="/dashboard/threats"><span class="mi">&#x26A0;</span> Threats <span class="md">correlated</span></a>
-                    <a href="/dashboard/incidents"><span class="mi">&#x1F4CB;</span> Incidents <span class="md">manage</span></a>
+                    <a href="/dashboard/incidents-view"><span class="mi">&#x1F4CB;</span> Incidents <span class="md">triage queue</span></a>
+                    <a href="/dashboard/command"><span class="mi">&#x1F3AF;</span> Command <span class="md">verdicts</span></a>
                     <a href="/dashboard/threat-feed"><span class="mi">&#x1F4E1;</span> Threat Feed <span class="md">live events</span></a>
+                    <a href="/dashboard/event-stream"><span class="mi">&#x1F4C8;</span> Event Stream <span class="md">raw firehose</span></a>
                     <div class="hdr-nav-menu-sep"></div>
                     <a href="/dashboard/mitre"><span class="mi">&#x1F3AF;</span> MITRE ATT&amp;CK <span class="md">coverage</span></a>
                     <a href="/dashboard/hunt"><span class="mi">&#x1F50D;</span> Hunt <span class="md">query</span></a>
@@ -584,6 +590,7 @@
                 <div class="hdr-nav-menu">
                     <div class="hdr-nav-menu-label">Brain &amp; supervision</div>
                     <a href="/dashboard/igris"><span class="mi">&#x1F9E0;</span> IGRIS <span class="md">supervisor</span></a>
+                    <a href="/dashboard/guardian"><span class="mi">&#x1F6E1;</span> Guardian <span class="md">anomalies</span></a>
                     <a href="/dashboard/soma"><span class="mi">&#x2B22;</span> SOMA <span class="md">correlation</span></a>
                 </div>
             </div>
@@ -598,7 +605,9 @@
                 <div class="hdr-nav-menu">
                     <div class="hdr-nav-menu-label">Fleet operations</div>
                     <a href="/dashboard/agents"><span class="mi">&#x1F916;</span> Agents <span class="md">health</span></a>
+                    <a href="/dashboard/command-center"><span class="mi">&#x1F5C2;</span> Command Center <span class="md">fleet ops</span></a>
                     <a href="/dashboard/system"><span class="mi">&#x1F5A5;</span> System <span class="md">vitals</span></a>
+                    <a href="/dashboard/argos/campaign"><span class="mi">&#x1F52D;</span> Argos <span class="md">exposure scan</span></a>
                     <a href="/dashboard/deploy"><span class="mi">&#x1F680;</span> Deploy</a>
                     <a href="/dashboard/settings"><span class="mi">&#x2699;</span> Settings</a>
                 </div>
@@ -610,6 +619,11 @@
 
         <!-- Right area -->
         <div class="hdr-right">
+            <!-- Search / command palette trigger (also ⌘K / Ctrl+K) -->
+            <button class="hdr-mic-btn" id="searchTrigger" title="Search pages &amp; actions (⌘K)" aria-label="Search pages and actions">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+            </button>
+
             <!-- IGRIS voice — hidden until speech recognition support is confirmed by widget JS -->
             <button class="hdr-mic-btn" id="igris-nav-mic" title="Ask IGRIS (voice)" aria-label="Ask IGRIS (voice)" style="display:none;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -630,7 +644,7 @@
                     <div class="hdr-dropdown-sep"></div>
                     <a href="/dashboard/settings" class="hdr-dropdown-item">&#x2699; Settings</a>
                     {% if user and user.role.value == 'admin' %}
-                    <a href="/dashboard/cortex" class="hdr-dropdown-item">&#x2B22; Advanced Dashboard</a>
+                    <a href="/dashboard/command-center" class="hdr-dropdown-item">&#x1F5C2; Command Center</a>
                     <a href="/admin" class="hdr-dropdown-item">&#x1F512; Admin Panel</a>
                     {% endif %}
                     <div class="hdr-dropdown-sep"></div>
@@ -665,6 +679,22 @@
             if (ctx && !ctx.textContent) ctx.textContent = '{{ device_id[:12] }}...';
         });
         {% endif %}
+
+        /* ── Device-aware telemetry nav: while a device is in context, domain
+           links go to that device's pages instead of the bare resolver routes
+           (which teleport to the fleet-primary device). ── */
+        document.addEventListener('DOMContentLoaded', function() {
+            var dev = window.AMOSKYS_DEVICE_ID;
+            if (!dev) return;
+            var domains = ['processes', 'network', 'dns', 'file-integrity', 'peripherals', 'posture'];
+            document.querySelectorAll('.hdr-nav-menu a, .mobile-nav-link').forEach(function(a) {
+                var href = a.getAttribute('href') || '';
+                var m = href.match(/^\/dashboard\/([a-z-]+)$/);
+                if (m && domains.indexOf(m[1]) !== -1) {
+                    a.setAttribute('href', '/dashboard/device/' + encodeURIComponent(dev) + '/' + m[1]);
+                }
+            });
+        });
     </script>
 
     {% if request.args.get('embed') != '1' %}
@@ -685,12 +715,12 @@
                 const path = window.location.pathname;
                 /* Map routes to nav items */
                 const NAV_MAP = {
-                    overview: ['dashboard', 'cortex', 'command-center'],
-                    threats: ['threats', 'threat-feed', 'mitre', 'hunt', 'incidents', 'correlation', 'timeline-replay', 'event-stream'],
-                    devices: ['devices', 'device', 'observatory', 'posture', 'processes', 'network', 'dns', 'file-integrity', 'persistence', 'auth', 'peripherals', 'observations'],
-                    igris: ['igris', 'guardian'],
-                    deploy: ['deploy', 'fleet', 'agents', 'agent-monitor', 'my-agents', 'agent-control-panel', 'probe-explorer', 'system', 'database'],
-                    settings: ['settings', 'intelligence', 'soma', 'reliability'],
+                    overview: ['dashboard'],
+                    threats: ['threats', 'threat-feed', 'mitre', 'hunt', 'incidents', 'incidents-view', 'correlation', 'timeline-replay', 'event-stream', 'command'],
+                    devices: ['devices', 'device', 'observatory', 'posture', 'processes', 'network', 'dns', 'file-integrity', 'persistence', 'auth', 'peripherals', 'observations', 'cortex'],
+                    igris: ['igris', 'guardian', 'soma'],
+                    deploy: ['deploy', 'fleet', 'agents', 'agent-monitor', 'my-agents', 'agent-control-panel', 'probe-explorer', 'system', 'database', 'command-center', 'campaign'],
+                    settings: ['settings', 'intelligence', 'reliability'],
                 };
                 const segment = path.split('/').filter(Boolean).pop() || 'dashboard';
                 /* /dashboard/ with no trailing segment = overview */
@@ -871,6 +901,7 @@
                 this.commands = [
                     /* ── Primary ── */
                     { icon:'&#x1F3E0;', title:'Overview', desc:'Security posture, globe, fleet status', url:'/dashboard/', kw:['overview','home','dashboard','posture','safe'] },
+                    { icon:'&#x2713;', title:'Ledger', desc:'What needs you, and what AMOSKYS recognised as yours', url:'/dashboard/ledger', kw:['ledger','queue','needs','triage','mine','confirm','feedback','recognised'] },
                     { icon:'&#x26A0;', title:'Threats', desc:'Live feed, incidents, signals, hunt', url:'/dashboard/threats', kw:['threats','feed','live','events','incidents','correlation','hunt'] },
                     { icon:'&#x1F4BB;', title:'Devices', desc:'Fleet inventory & device health', url:'/dashboard/devices', kw:['devices','fleet','agents','monitor'] },
                     { icon:'&#x1F441;', title:'IGRIS', desc:'AI security analyst & governance', url:'/dashboard/igris', kw:['igris','chat','ask','analyst','guardian','c2'] },
