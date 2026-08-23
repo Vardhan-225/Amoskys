@@ -253,6 +253,147 @@ def device_verdict(
     return _shape(raw, coverage, device_id)
 
 
+def _known_device_ids(allowed_device_ids: list[str] | None) -> list[str]:
+    if insight_service is None:
+        return []
+    db_path = insight_service.resolve_db_path()
+    if not db_path:
+        return []
+    try:
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+    except sqlite3.Error:
+        return []
+    try:
+        scope, params = insight_service._scope_sql(allowed_device_ids, " WHERE ")
+        rows = db.execute(
+            "SELECT DISTINCT device_id FROM devices" + scope, params
+        ).fetchall()
+        return [r[0] for r in rows if r[0]]
+    except sqlite3.Error:
+        return []
+    finally:
+        db.close()
+
+
+def device_names(allowed_device_ids: list[str] | None = None) -> list[str]:
+    """Friendly device names for the front-page sentence."""
+    if insight_service is None:
+        return []
+    db_path = insight_service.resolve_db_path()
+    if not db_path:
+        return []
+    try:
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+    except sqlite3.Error:
+        return []
+    try:
+        scope, params = insight_service._scope_sql(allowed_device_ids, " WHERE ")
+        rows = db.execute(
+            "SELECT COALESCE(NULLIF(hostname,''), device_id) FROM devices" + scope,
+            params,
+        ).fetchall()
+        return [r[0] for r in rows if r[0]]
+    except sqlite3.Error:
+        return []
+    finally:
+        db.close()
+
+
+def fleet_and_devices(
+    allowed_device_ids: list[str] | None = None,
+    cache_key: str = "admin",
+    force: bool = False,
+) -> dict:
+    """Fleet verdict plus one verdict per device, from the same computation.
+
+    The overview used to colour its fleet badge and each device card from a
+    JavaScript function of critical/high counts, which is how the front page
+    and the device page could disagree about the same laptop. One call, one
+    scale, one set of answers.
+    """
+    fleet = fleet_verdict(
+        allowed_device_ids=allowed_device_ids, cache_key=cache_key, force=force
+    )
+    devices = {}
+    for device_id in _known_device_ids(allowed_device_ids):
+        devices[device_id] = device_verdict(
+            device_id,
+            allowed_device_ids=allowed_device_ids,
+            cache_key=cache_key,
+            force=force,
+        )
+    return {"fleet": fleet, "devices": devices}
+
+
+def narrative(
+    verdict: dict,
+    device_names: list[str] | None = None,
+    item_count: int | None = None,
+) -> str:
+    """The one sentence the front page says out loud.
+
+    It used to read "No critical threats detected — traffic appears clean"
+    whenever the *critical* counter was zero, printed directly above a kill
+    chain showing 1.1K exploit-stage events. The sentence now comes from the
+    same verdict as the number beside it, and it never claims clean while
+    anything is still waiting for a human.
+    """
+    counts = verdict.get("counts") or {}
+    live = counts.get("live") or 0
+    suppressed = counts.get("suppressed") or 0
+    band = verdict.get("band")
+
+    who = ""
+    if device_names:
+        if len(device_names) == 1:
+            who = device_names[0]
+        elif len(device_names) == 2:
+            who = f"{device_names[0]} and {device_names[1]}"
+        else:
+            who = f"your {len(device_names)} devices"
+    subject = who or "your fleet"
+
+    if band == "unknown":
+        return (
+            f"AMOSKYS has not heard from {subject} recently enough to judge it. "
+            "This is a gap in visibility, not an all-clear."
+        )
+    # "111 things worth a look" would overstate: 111 is the number of unexplained
+    # EVENTS, which the ledger groups into a handful of items. Say both, and say
+    # which is which.
+    if item_count is not None:
+        grouped = (
+            f"{item_count} thing{'s' if item_count != 1 else ''}"
+            if item_count
+            else "nothing"
+        )
+        if band == "red":
+            return (
+                f"{subject}: {grouped} need you now, grouped from {live} unexplained "
+                f"events. {suppressed} more were recognised as your own activity."
+            )
+        if band == "amber":
+            return (
+                f"{subject}: {grouped} worth a look, grouped from {live} unexplained "
+                f"events. {suppressed} more were recognised as your own activity."
+            )
+    if band == "red":
+        return (
+            f"{subject}: {live} unexplained event{'s' if live != 1 else ''} need you "
+            f"now; {suppressed} were recognised as your own activity."
+        )
+    if band == "amber":
+        return (
+            f"{subject}: {live} unexplained event{'s' if live != 1 else ''} worth a "
+            f"look; {suppressed} recognised as your own activity."
+        )
+    return (
+        f"Nothing on {subject} is above your baseline. "
+        f"{suppressed} event{'s' if suppressed != 1 else ''} were recognised as "
+        "your own activity and cleared automatically."
+    )
+
+
 def badge(verdict: dict) -> dict:
     """Presentation triple for a compact badge, derived from the same payload.
 

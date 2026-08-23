@@ -215,14 +215,22 @@
                     return;
                 }
                 // Adapt shape
-                data.posture = computePosture(data.last_24h.critical, data.last_24h.high);
                 data.previous_24h = { total_events: 0, critical: 0 };
                 data.mitre = { unique_techniques: (data.top_mitre_techniques || []).length, top: data.top_mitre_techniques || [] };
                 data.signals = { active: 0 };
                 data.needs_attention = [];
-                data.devices.forEach(function(d) {
-                    d.posture = computePosture(d.critical_count || 0, d.high_count || 0);
+            }
+            await loadCanonicalVerdict();
+            if (canonicalVerdict) {
+                data.posture = verdictToPosture(canonicalVerdict.fleet);
+                data.verdict = canonicalVerdict.fleet;
+                data.narrative = canonicalVerdict.narrative;
+                (data.devices || []).forEach(function(dev) {
+                    dev.verdict = (canonicalVerdict.devices || {})[dev.device_id] || null;
+                    dev.posture = verdictToPosture(dev.verdict);
                 });
+            } else if (!data.posture) {
+                data.posture = verdictToPosture(null);
             }
             fleetData = data;
             render(data);
@@ -232,15 +240,33 @@
         }
     }
 
-    // RISK score: 0 = safe (green), 100 = critical (red). Consistent with every
-    // other page's threat scale, so "Am I safe?" reads the same way everywhere.
-    // The gauge ring uses go = gc*(1 - score/100), so it now fills UP with risk.
-    function computePosture(cr, hi) {
-        cr = cr || 0; hi = hi || 0;
-        if (cr === 0 && hi === 0) return { score: 0, label: 'All Clear', color: '#3ad29f' };
-        if (cr === 0) return { score: Math.min(35, 8 + hi * 4), label: 'Guarded', color: '#ffb038' };
-        if (cr <= 5) return { score: Math.min(70, 40 + cr * 6 + hi * 2), label: 'Needs Attention', color: '#ffb038' };
-        return { score: Math.min(100, 75 + cr * 3), label: 'Critical', color: '#ff4d5e' };
+    // The verdict is NOT computed here. This function used to derive a score
+    // from critical/high counts while devices.html derived a different one in
+    // the opposite direction and the posture page derived a third — one laptop,
+    // three answers on three pages. Everything now renders whatever
+    // /dashboard/api/verdict says, on one stated scale (risk: 0 = safe).
+    var VERDICT_COLOR = { calm: '#3ad29f', amber: '#ffb038', red: '#ff4d5e', unknown: '#6b7785' };
+    var canonicalVerdict = null;   // { fleet, devices, narrative }
+
+    function verdictToPosture(v) {
+        if (!v) return { score: null, label: 'Reading…', color: '#6b7785', band: 'unknown' };
+        return {
+            score: (v.score === null || v.score === undefined) ? null : v.score,
+            label: v.band === 'unknown' ? 'Not seen' : (v.headline || 'Unknown'),
+            color: VERDICT_COLOR[v.band] || VERDICT_COLOR.unknown,
+            band: v.band,
+            age: v.age_human,
+            stale: v.stale
+        };
+    }
+
+    async function loadCanonicalVerdict() {
+        try {
+            var r = await fetch('/dashboard/api/verdict?include=devices', { credentials: 'same-origin' });
+            if (!r.ok) return null;
+            canonicalVerdict = await r.json();
+            return canonicalVerdict;
+        } catch (e) { return null; }
     }
 
     function render(data) {
@@ -258,9 +284,13 @@
 
         // Posture badge — top-left
         html += '<div class="ov-posture-badge">';
-        html += '<div class="ov-pb-label" style="color:' + p.color + '">' + p.label + '</div>';
-        html += '<div class="ov-pb-score" style="color:' + p.color + '">risk ' + p.score + ' / 100</div>';
-        html += '<div class="ov-pb-events">' + fmtNum(ev.total_events) + ' events (24h)</div>';
+        html += '<div class="ov-pb-label" style="color:' + p.color + '">' + esc(p.label) + '</div>';
+        html += '<div class="ov-pb-score" style="color:' + p.color + '">'
+             + (p.score === null ? 'no reading' : 'risk ' + p.score + ' / 100') + '</div>';
+        var vc = (data.verdict && data.verdict.counts) || null;
+        var seen = vc ? (vc.live + vc.suppressed) : ev.total_events;
+        html += '<div class="ov-pb-events">' + fmtNum(seen) + ' security events assessed'
+             + (p.age ? ' &middot; as of ' + esc(p.age) : '') + '</div>';
         html += '</div>';
 
         // Metrics — top-right
@@ -300,17 +330,22 @@
 
         /* ═══ NLP SUMMARY ═══ */
         html += '<div class="ov-nlp" id="ov-nlp">';
+        // ONE sentence, from the same verdict as the number above it. The old
+        // line opened with a device event-count taken from the fleet table,
+        // which disagrees with security_events for the same device and window —
+        // so the page contradicted itself inside a single paragraph.
         var nlp = 'In the last <strong>24 hours</strong>, ';
-        // List device names and locations if available
-        if (d.length === 1) {
-            nlp += '<strong>' + esc(d[0].hostname) + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
-        } else if (d.length === 2) {
-            nlp += '<strong>' + esc(d[0].hostname) + '</strong> and <strong>' + esc(d[1].hostname) + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong> across your fleet.';
+        // The sentence and the number beside it now come from the same verdict.
+        // This line used to say "traffic appears clean" whenever the critical
+        // counter was zero — printed directly above a kill chain showing 1.1K
+        // exploit-stage events.
+        if (data.narrative) {
+            nlp += esc(data.narrative);
+        } else if (ev.critical > 0) {
+            nlp += '<span class="warn">' + ev.critical + ' critical</span> and ' + (ev.high || 0) + ' high-risk detections are waiting on you.';
         } else {
-            nlp += 'your fleet of <strong>' + f.total_devices + ' device' + (f.total_devices !== 1 ? 's' : '') + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
+            nlp += 'AMOSKYS has not produced a verdict for this window yet.';
         }
-        if (ev.critical > 0) nlp += ' <span class="warn">' + ev.critical + ' critical</span> and ' + (ev.high || 0) + ' high-risk events require attention.';
-        else nlp += ' No critical threats detected &mdash; traffic appears clean.';
         html += nlp + '</div>';
 
         /* ═══ CONTENT BELOW GLOBE ═══ */
@@ -345,8 +380,10 @@
         for (var i = 0; i < d.length; i++) {
             var x = d[i], on = x.status === 'online';
             var cr = x.critical_count || 0, hi = x.high_count || 0;
-            var dp = x.posture || computePosture(cr, hi);
-            var gc = 2 * Math.PI * 14, go = gc * (1 - dp.score / 100);
+            var dp = x.posture || verdictToPosture(x.verdict);
+            // A device with no reading shows an empty ring and an em-dash, not a zero.
+            var hasScore = dp.score !== null && dp.score !== undefined;
+            var gc = 2 * Math.PI * 14, go = hasScore ? gc * (1 - dp.score / 100) : gc;
             var tagCls = cr > 0 ? 'crit' : hi > 0 ? 'warn' : 'ok';
             var tagText = cr > 0 ? 'Critical' : hi > 0 ? 'High Risk' : 'Healthy';
             html += '<a href="/dashboard/device/' + encodeURIComponent(x.device_id) + '" class="ov-dev">'
@@ -357,7 +394,7 @@
                 + '<span>' + fmtNum(x.event_count || 0) + ' events</span></div></div>'
                 + '<div class="ov-dev-gauge"><svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="14"/>'
                 + '<circle class="fg" cx="18" cy="18" r="14" stroke="' + dp.color + '" stroke-dasharray="' + gc.toFixed(1) + '" stroke-dashoffset="' + go.toFixed(1) + '"/></svg>'
-                + '<div class="ov-dev-gauge-v" style="color:' + dp.color + '">' + dp.score + '</div></div></a>';
+                + '<div class="ov-dev-gauge-v" style="color:' + dp.color + '">' + (hasScore ? dp.score : '&mdash;') + '</div></div></a>';
         }
         html += '</div></div>';
 

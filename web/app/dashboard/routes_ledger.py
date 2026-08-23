@@ -172,6 +172,23 @@ def api_verdict():
             ),
             200,
         )
+    if request.args.get("include") == "devices":
+        payload = verdict_mod.fleet_and_devices(
+            allowed_device_ids=allowed, cache_key=scope_key
+        )
+        # The sentence counts the ledger's grouped items, so the front page and
+        # the ledger cannot disagree about how much is waiting on you.
+        book = ledger.build(
+            allowed_device_ids=allowed, cache_key=scope_key, org_scope=scope_key
+        )
+        payload["narrative"] = verdict_mod.narrative(
+            payload["fleet"],
+            device_names=verdict_mod.device_names(allowed),
+            item_count=len(book["needs_you"]),
+        )
+        payload["needs_you_count"] = len(book["needs_you"])
+        payload["recognised_count"] = book["recognised"]["count"]
+        return jsonify(payload), 200
     return (
         jsonify(
             verdict_mod.fleet_verdict(allowed_device_ids=allowed, cache_key=scope_key)

@@ -54,9 +54,12 @@ def test_bare_binary_without_collection_arguments_still_surfaces():
         "event_category": "lolbin_execution",
         "description": "log /tmp/.hidden/log --exfiltrate",
     }
-    assert insight_service._classify_self_noise(
-        ev["description"], ev["description"].lower()
-    ) is None
+    assert (
+        insight_service._classify_self_noise(
+            ev["description"], ev["description"].lower()
+        )
+        is None
+    )
 
 
 def test_never_suppress_categories_survive_self_noise_matching():
@@ -248,3 +251,40 @@ def test_categories_map_to_the_probe_whose_weight_moves():
     assert routes_ledger._agents_for(["macos_launchagent_new"]) == ["persistence_agent"]
     assert routes_ledger._agents_for(["browser_credential_theft"]) == ["auth_agent"]
     assert routes_ledger._agents_for(["something_unmapped"]) == []
+
+
+# ── The front-page sentence ──────────────────────────────────────────────────
+def _v(band, live, suppressed):
+    return {"band": band, "counts": {"live": live, "suppressed": suppressed}}
+
+
+def test_narrative_never_claims_clean_while_items_wait():
+    """The old line said "traffic appears clean" whenever the *critical*
+    counter was zero — directly above a kill chain showing 1.1K exploit
+    events. The sentence now comes from the same verdict as the number."""
+    line = verdict.narrative(_v("amber", 111, 694), item_count=3)
+    assert "clean" not in line.lower()
+    assert "3 things worth a look" in line
+    assert "111 unexplained events" in line
+    assert "694" in line
+
+
+def test_narrative_separates_grouped_items_from_raw_events():
+    """111 events grouped into 3 items must not read as "111 things"."""
+    line = verdict.narrative(_v("amber", 111, 0), item_count=3)
+    assert "111 things" not in line
+
+
+def test_narrative_for_no_coverage_is_a_gap_not_an_all_clear():
+    line = verdict.narrative(_v("unknown", 0, 0))
+    assert "not an all-clear" in line
+
+
+def test_narrative_calm_still_accounts_for_what_was_suppressed():
+    line = verdict.narrative(_v("calm", 0, 694), item_count=0)
+    assert "694" in line
+
+
+def test_narrative_names_a_single_device():
+    line = verdict.narrative(_v("calm", 0, 5), device_names=["Akash's MacBook Air"])
+    assert "Akash's MacBook Air" in line
