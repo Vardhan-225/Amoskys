@@ -165,14 +165,26 @@ def test_health_blindness_route_surfaces_active_events(client, monkeypatch):
 
 
 def test_esf_authorization_probe_reports_tcc_denial(tmp_path):
+    """A DENIED Endpoint Security grant is a blindness event.
+
+    Passes an explicit tcc_db_paths. Without it the probe falls back to
+    _DEFAULT_TCC_DB_PATHS — the REAL system TCC.db — and this test passed only
+    because the developer's machine happened to hold a denial. The moment that
+    grant was fixed the test broke, having asserted nothing about the code for
+    as long as it was green. Its sibling had the identical defect; both are now
+    hermetic.
+    """
     log_path = tmp_path / "sentinel.log"
     binary_path = tmp_path / "amoskys-sentinel"
+    tcc_path = tmp_path / "TCC.db"
     binary_path.write_text("#!/bin/sh\n")
     log_path.write_text("amoskys-sentinel: needs Full Disk Access (TCC)\n")
+    _write_tcc_db(tcc_path, auth_value=0)
 
     event = inspect_esf_authorization(
         log_paths=[log_path],
         binary_path=binary_path,
+        tcc_db_paths=[tcc_path],
         device_id="dev-1",
         now=1000.0,
     )
@@ -303,7 +315,7 @@ def test_esf_authorization_probe_tcc_allow_does_not_swallow_runtime_denial_log(
     # present and FDA was the actual blocker. The intent of this test is
     # unchanged and still enforced: a TCC allow must NOT swallow a runtime
     # denial log. Only the label is more precise.
-    assert event["kind"] == "endpoint_security_fda"
+    assert event["kind"] == "endpoint_security_not_permitted"
     assert event["evidence"]["tcc"]["state"] == "allowed"
 
 

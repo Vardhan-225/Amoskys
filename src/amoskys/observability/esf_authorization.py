@@ -160,33 +160,41 @@ def _inspect_fda(paths: list[Path], binary: Path | None) -> dict[str, Any]:
 
 
 def _fda_clause(fda: dict[str, Any]) -> str:
-    """One sentence naming the FDA problem, or "" when FDA is not a problem.
+    """A note about stale FDA rows, NOT a claim that FDA is required.
 
-    Appended to whatever the primary verdict is, because ESF and FDA fail
-    INDEPENDENTLY and the old code returned on the first blocker it found.
-    That turned a two-fault machine into two debugging sessions: fix the ESF
-    grant, restart, wait, and only then learn FDA was also missing.
+    CORRECTED 2026-08-22 against a live grant, after this function asserted a
+    blocker that does not exist. Measured on this machine at the moment
+    es_new_client() finally succeeded, the ENTIRE TCC state for the Sentinel
+    was one row:
+
+        kTCCServiceEndpointSecurityClient  auth=2  [bundle-id] com.amoskys.agent
+
+    There is NO kTCCServiceSystemPolicyAllFiles row, and the Sentinel attached
+    to the kernel regardless. So FDA is not a second precondition: toggling the
+    app in System Settings -> Privacy & Security -> "Full Disk Access" is
+    simply the UI through which macOS grants the ENDPOINT SECURITY entitlement.
+    The pane's name is what made this look like two grants. (tccutil actually
+    FAILED during that run — the toggle is what flipped the row.)
+
+    Claiming "Full Disk Access is ALSO not held" turned a working sensor into a
+    dashboard blindness alert. A false alarm in a blindness detector is worse
+    than the false negative it replaced, because it teaches the operator to
+    ignore the one alert that matters.
+
+    What survives is the genuinely useful half: a path-form grant whose target
+    file has been deleted still renders as an enabled checkbox in System
+    Settings, and that is worth surfacing wherever it appears.
     """
-    state = fda.get("state")
-    if state in ("allowed", "unknown"):
-        return ""
     ghosts = fda.get("ghost_grants") or []
-    if ghosts:
-        stale = ghosts[0]["client"]
-        return (
-            ". Full Disk Access is ALSO not held: the entry named "
-            f"'{os.path.basename(stale)}' points at {stale}, which no longer "
-            "exists. System Settings shows that entry enabled, so FDA looks "
-            "granted while protecting a deleted file. Remove it and add the "
-            ".app bundle itself."
-        )
-    others = fda.get("same_name_elsewhere") or []
-    if others:
-        return (
-            ". Full Disk Access is ALSO not held by this binary — a file with "
-            f"the same name holds it instead ({others[0]['client']})."
-        )
-    return ". Full Disk Access is ALSO not held by this binary."
+    if not ghosts:
+        return ""
+    stale = ghosts[0]["client"]
+    return (
+        f" Note: a stale Full Disk Access entry named "
+        f"'{os.path.basename(stale)}' points at {stale}, which no longer "
+        f"exists — System Settings shows it enabled but it covers a deleted "
+        f"file. Harmless, but worth removing."
+    )
 
 
 def _safe_int(value: Any) -> int | None:
@@ -422,6 +430,28 @@ def inspect_esf_authorization(
     if tcc["state"] == "allowed" and (not line or "guarding exec" in line):
         return None
 
+    # A log is append-only HISTORY; TCC is CURRENT STATE. When the
+    # authoritative grant is allowed and was written AFTER the log was last
+    # touched, the denial in that log predates the fix and is not evidence of
+    # anything. Measured here: the Sentinel's last complaint was 2026-08-08
+    # 19:31 and the grant landed 2026-08-22 23:26, so the probe was reporting a
+    # fourteen-day-old line as live blindness.
+    #
+    # Deliberately NOT a blanket "allowed beats the log": a grant really can be
+    # present while the runtime still fails for some other reason, which
+    # test_esf_authorization_probe_tcc_allow_does_not_swallow_runtime_denial_log
+    # exists to enforce. Recency is the discriminator, not the grant alone.
+    if tcc["state"] == "allowed":
+        granted_at = _safe_int((tcc.get("row") or {}).get("last_modified"))
+        log_mtime = None
+        if source_path:
+            try:
+                log_mtime = os.path.getmtime(source_path)
+            except OSError:
+                log_mtime = None
+        if granted_at and log_mtime and granted_at > log_mtime:
+            return None
+
     if "guarding exec" in line:
         return None
     if "needs Full Disk Access" in line or "ERR_NOT_PERMITTED" in line:
@@ -432,21 +462,21 @@ def inspect_esf_authorization(
         # needs the grant — because the common failure is a same-named binary
         # holding it at a different path.
         status = "unauthorized"
-        kind = "endpoint_security_fda"
-        evidence["tcc_service"] = _TCC_FDA_SERVICE
-        if fda.get("same_name_elsewhere"):
-            other = fda["same_name_elsewhere"][0]["client"]
-            reason = (
-                "AMOSKYS Sentinel needs Full Disk Access on "
-                f"{fda.get('target')} — a different file with the same name "
-                f"holds it instead ({other}). Grant FDA to the app bundle's "
-                "binary."
-            )
-        else:
-            reason = (
-                "AMOSKYS Sentinel needs Full Disk Access on "
-                f"{fda.get('target')} (Endpoint Security grant is present)"
-            )
+        kind = "endpoint_security_not_permitted"
+        evidence["tcc_service"] = _TCC_SERVICE
+        # The shim prints "needs Full Disk Access (TCC)" for
+        # ES_NEW_CLIENT_RESULT_ERR_NOT_PERMITTED because that is the pane users
+        # know, but the approval macOS actually records is the Endpoint
+        # Security one. Name the pane (that is where the toggle lives) without
+        # claiming a second grant is missing.
+        reason = (
+            "AMOSKYS Sentinel was refused an Endpoint Security client "
+            "(ERR_NOT_PERMITTED). Grant it in System Settings -> Privacy & "
+            "Security -> Full Disk Access by adding the .app bundle itself "
+            f"({os.path.dirname(os.path.dirname(os.path.dirname(str(binary))))})"
+            " — macOS resolves a signed bundle by its bundle id, so adding the "
+            "inner binary will not take." + fda_note
+        )
     elif "missing com.apple.developer.endpoint-security.client entitlement" in line:
         status = "blind"
         kind = "endpoint_security_entitlement"

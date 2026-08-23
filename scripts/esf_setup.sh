@@ -135,23 +135,34 @@ done <<< "$ROWS"
 FDA=$(state_of SystemPolicyAllFiles)
 ESF=$(state_of EndpointSecurityClient)
 echo
-echo "  ${bold}Full Disk Access for the running binary : $FDA${rst}"
-echo "  ${bold}Endpoint Security for the running binary: $ESF${rst}"
+# CORRECTED after watching a real grant land. The Endpoint Security row is the
+# ONLY one that gates es_new_client(). When this Sentinel finally attached, the
+# entire TCC state was a single kTCCServiceEndpointSecurityClient=allow row and
+# there was NO kTCCServiceSystemPolicyAllFiles row at all. Toggling the app
+# under "Full Disk Access" is simply the UI macOS exposes for granting the ES
+# entitlement — the pane name is what made this look like two requirements.
+# The earlier version of this script reported "Full Disk Access: MISSING" for a
+# Sentinel that was provably live at the kernel.
+echo "  ${bold}Endpoint Security grant (this is the one that gates the client): $ESF${rst}"
+echo "  ${dim}Full Disk Access row: $FDA — informational; not required, see note in source${rst}"
 
 if [ "$VERIFY_ONLY" = "1" ]; then
   echo
-  [ "$FDA" = "ALLOW" ] && [ "$ESF" != "DENY" ] && echo "  ${grn}Grants look correct.${rst}" \
-    || echo "  ${ylw}Grants incomplete — run without --verify for the guided fix.${rst}"
+  [ "$ESF" = "ALLOW" ] && echo "  ${grn}Endpoint Security is granted. Sentinel should attach.${rst}" \
+    || echo "  ${ylw}Endpoint Security is $ESF — run without --verify for the guided fix.${rst}"
+  [ "$GHOSTS" -gt 0 ] && echo "  ${ylw}$GHOSTS stale (ghost) TCC entry/entries — harmless, worth removing.${rst}"
   exit 0
 fi
 
 # ── 3. Full Disk Access (GUI ONLY — this is not a limitation of this script) ─
-if [ "$FDA" != "ALLOW" ]; then
-  hdr "3. Grant Full Disk Access  ${dim}(GUI required)${rst}"
+if [ "$ESF" != "ALLOW" ]; then
+  hdr "3. Grant the Endpoint Security client  ${dim}(GUI required)${rst}"
   cat <<EOF
-  Full Disk Access CANNOT be granted from a shell. TCC.db is protected by SIP,
-  so writes are rejected even as root — sudo does not help here. System
-  Settings is the only path. This is macOS policy, not a missing feature.
+  This grant CANNOT be made from a shell. TCC.db is protected by SIP, so
+  writes are rejected even as root — sudo does not help, and `tccutil reset`
+  clears a row but cannot create an approval. System Settings is the only
+  path. macOS surfaces Endpoint Security clients under the "Full Disk Access"
+  pane, so that is where the toggle lives.
 
   Opening the pane now. In it:
 EOF
@@ -169,11 +180,11 @@ EOF
   echo
   open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null
   read -r -p "  Press Return when done (or Ctrl-C to stop)... " _
-  FDA=$(state_of SystemPolicyAllFiles)
-  [ "$FDA" = "ALLOW" ] && ok "Full Disk Access now granted to the running binary" \
-                       || warn "still reads $FDA — if you just added it, macOS may need a moment"
+  ESF=$(state_of EndpointSecurityClient)
+  [ "$ESF" = "ALLOW" ] && ok "Endpoint Security now granted to $BUNDLE_ID" \
+                       || warn "still reads $ESF — if you just toggled it, macOS may need a moment"
 else
-  hdr "3. Full Disk Access"; ok "already granted"
+  hdr "3. Endpoint Security grant"; ok "already granted"
 fi
 
 # ── 4. Clear the stale Endpoint Security denial ─────────────────────────────
@@ -231,6 +242,6 @@ fi
 rm -f "$LOG"
 
 hdr "Summary"
-echo "  Full Disk Access : $(state_of SystemPolicyAllFiles)"
-echo "  Endpoint Security: $(state_of EndpointSecurityClient)"
+echo "  Endpoint Security: $(state_of EndpointSecurityClient)   ${dim}(the grant that matters)${rst}"
+echo "  Full Disk Access : $(state_of SystemPolicyAllFiles)   ${dim}(informational; not required)${rst}"
 echo "  Re-check anytime : bash scripts/esf_setup.sh --verify"
