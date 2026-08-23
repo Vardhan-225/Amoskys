@@ -42,7 +42,7 @@ body{
   padding:14px 26px;background:linear-gradient(180deg,rgba(5,7,13,.92),rgba(5,7,13,.66));
   backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
 }
-.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.14em;font-size:15px}
+.brand{text-decoration:none;color:inherit;display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.14em;font-size:15px}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);
   box-shadow:0 0 0 0 rgba(53,224,240,.6);animation:pulse 2.4s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(53,224,240,.55)}70%{box-shadow:0 0 0 9px rgba(53,224,240,0)}100%{box-shadow:0 0 0 0 rgba(53,224,240,0)}}
@@ -188,7 +188,7 @@ body{
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>AMOSKYS <small>· nervous system for your machine</small></div>
+  <a class="brand" href="/dashboard/" title="Back to the dashboard"><span class="dot"></span>AMOSKYS <small>· nervous system for your machine</small></a>
   <a href="/dashboard/" style="padding:6px 12px;border-radius:8px;font-size:13px;color:var(--ink-3);margin-left:8px">Overview</a>
   <a href="/dashboard/command" style="padding:6px 12px;border-radius:8px;font-size:13px;color:var(--cyan);background:rgba(53,224,240,.10)">Command</a>
   <a href="/dashboard/incidents-view" style="padding:6px 12px;border-radius:8px;font-size:13px;color:var(--ink-3)">Incidents</a>
