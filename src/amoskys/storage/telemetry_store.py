@@ -27,6 +27,7 @@ from pathlib import Path
 from amoskys.storage._ts_caching import _ReadPool, _TTLCache
 from amoskys.storage._ts_domain_queries import DomainQueryMixin
 from amoskys.storage._ts_esf_forensics import ESFForensicsMixin
+from amoskys.storage._ts_hybrid_coverage import HybridCoverageMixin
 from amoskys.storage._ts_inserts import InsertMixin
 from amoskys.storage._ts_lifecycle import LifecycleMixin
 from amoskys.storage._ts_posture import PostureMixin
@@ -80,6 +81,7 @@ logger.addFilter(_RepeatSuppressFilter())
 
 class TelemetryStore(
     ESFForensicsMixin,
+    HybridCoverageMixin,
     SchemaMixin,
     InsertMixin,
     QueryMixin,

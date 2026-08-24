@@ -230,10 +230,19 @@ class ESFStreamCollector:
 
         if self.is_control(rec):
             if not self.is_heartbeat(rec):
-                # sentinel_start and any future control record: note it and
-                # move on. Not an exec, not an error, not evidence.
                 self.control_records += 1
                 logger.info("ESF control record: %s", rec.get("type"))
+                if rec.get("type") == "sentinel_start":
+                    # RECORDED, not just logged. A witnessing SESSION boundary
+                    # is load-bearing: coverage analysis needs to know when the
+                    # current stream began, and inferring it from
+                    # MIN(timestamp_ns) silently spans restarts. It did exactly
+                    # that here — reporting 34.4h of "continuous witnessing"
+                    # across a restart AND a clock correction, so rows from
+                    # before the epoch fix (stamped 17.5h in the past) were
+                    # treated as part of the live session and produced 13,249
+                    # phantom conservation violations.
+                    self._write_session_start(rec, now_ns)
                 return
             self.heartbeats += 1
             dropped = int(rec.get("dropped") or 0)
@@ -299,6 +308,29 @@ class ESFStreamCollector:
             "detail": json.dumps(detail) if detail else None,
             "ingested_at_ns": now_ns,
         }
+
+    def _write_session_start(self, rec: Dict[str, Any], now_ns: int) -> None:
+        """Mark a witnessing-session boundary in esf_stream_health.
+
+        Reuses that table with dropped=0 and an explicit note rather than
+        adding another one: it is already the record of stream continuity, and
+        a session start is the most important continuity event there is.
+        """
+        try:
+            self.store._execute(
+                "INSERT INTO esf_stream_health "
+                "(timestamp_ns, device_id, dropped, enforce_mode, note) "
+                "VALUES (?, ?, 0, ?, ?)",
+                (
+                    self._timestamp_ns(rec, now_ns), self.device_id,
+                    bool(rec.get("enforce")),
+                    "session_start subscriptions=%s buffer=%s" % (
+                        rec.get("subscriptions"), rec.get("buffer")),
+                ),
+            )
+            self.store._commit()
+        except Exception:
+            logger.debug("session-start write failed", exc_info=True)
 
     def _write_kernel_drop(self, rec: Dict[str, Any], now_ns: int) -> None:
         try:
