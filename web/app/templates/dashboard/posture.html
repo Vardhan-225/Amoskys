@@ -301,7 +301,9 @@ function renderPostureSummary(posture) {
             <div class="domain-card-header">
                 <span class="domain-icon">${meta.icon}</span>
                 <span class="domain-name">${meta.name}</span>
-                <span class="domain-status status-${d.status}"></span>
+                {# status reaches a class attribute, so it is reduced to the
+                   characters a class name may hold rather than escaped. #}
+                <span class="domain-status status-${String(d.status || 'unknown').toLowerCase().replace(/[^a-z0-9-]+/g, '-')}"></span>
             </div>
             <div class="domain-count">${formatNumber(d.count)}</div>
             <div class="domain-count-label">events (24h)</div>
@@ -363,9 +365,13 @@ function renderTimeline(timeline) {
         const item = document.createElement('div');
         item.className = 'timeline-item';
         item.innerHTML = `
-            <span class="timeline-ts">${ts}</span>
-            <span class="timeline-domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${ev.domain}</span>
-            <span class="timeline-summary" title="${(ev.summary||'').replace(/"/g, '&quot;')}">${ev.summary || ev.event_type || ''}</span>
+            <span class="timeline-ts">${amEsc(ts)}</span>
+            <span class="timeline-domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${amEsc(ev.domain)}</span>
+            {# ev.summary is assembled from the event that triggered it, so it
+               carries process names and file paths. The title= here escaped
+               only the double quote — enough to stop attribute breakout, and
+               nothing at all for the copy rendered beside it. #}
+            <span class="timeline-summary" title="${amEsc(ev.summary || '')}">${amEsc(ev.summary || ev.event_type || '')}</span>
             <span class="timeline-risk" style="color:${riskColor(risk)}">${risk > 0 ? risk.toFixed(2) : ''}</span>
         `;
         list.appendChild(item);

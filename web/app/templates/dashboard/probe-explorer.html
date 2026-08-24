@@ -323,11 +323,11 @@ function renderGrouped(probes) {
         html += `<div class="pe-agent-group">`;
         html += `<div class="pe-agent-header">
             <div class="agent-color-bar" style="background:${a.color};"></div>
-            <span class="agent-label" style="color:${a.color};">${a.name}</span>
-            <span style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${a.short}</span>
+            <span class="agent-label" style="color:${a.color};">${amEsc(a.name)}</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${amEsc(a.short)}</span>
             <div class="agent-meta">
                 <span style="color:#00ff88;">${realCount}/${group.probes.length} active</span>
-                <span>${a.mitre_count} MITRE</span>
+                <span>${amEsc(a.mitre_count)} MITRE</span>
                 <span>${formatNumber(a.event_count)} events</span>
             </div>
         </div>`;
@@ -337,14 +337,14 @@ function renderGrouped(probes) {
             html += `<div class="pe-probe-card">
                 <div class="pe-probe-header">
                     <div class="pe-probe-dot" style="background:${vs.dot};box-shadow:0 0 5px ${vs.dot};"></div>
-                    <span class="pe-probe-name">${p.name}</span>
-                    <span class="pe-probe-badge" style="background:${vs.bg};color:${vs.color};">${p.status}</span>
+                    <span class="pe-probe-name">${amEsc(p.name)}</span>
+                    <span class="pe-probe-badge" style="background:${vs.bg};color:${vs.color};">${amEsc(p.status)}</span>
                 </div>
                 <div class="pe-probe-details">
-                    ${p.description ? `<div style="margin-bottom:0.3rem;">${p.description}</div>` : ''}
-                    ${p.mitre.length > 0 ? '<div>MITRE: ' + p.mitre.map(t => `<span class="pe-mitre-chip">${t}</span>`).join('') + '</div>' : ''}
-                    ${p.fields.length > 0 ? '<div style="margin-top:0.2rem;">Fields: ' + p.fields.map(f => `<span class="pe-field-tag">${f}</span>`).join('') + '</div>' : ''}
-                    ${p.issues.length > 0 ? `<div style="margin-top:0.2rem;color:#ffaa00;font-size:0.7rem;">Issues: ${p.issues.join('; ')}</div>` : ''}
+                    ${p.description ? `<div style="margin-bottom:0.3rem;">${amEsc(p.description)}</div>` : ''}
+                    ${p.mitre.length > 0 ? '<div>MITRE: ' + p.mitre.map(t => `<span class="pe-mitre-chip">${amEsc(t)}</span>`).join('') + '</div>' : ''}
+                    ${p.fields.length > 0 ? '<div style="margin-top:0.2rem;">Fields: ' + p.fields.map(f => `<span class="pe-field-tag">${amEsc(f)}</span>`).join('') + '</div>' : ''}
+                    ${p.issues.length > 0 ? `<div style="margin-top:0.2rem;color:#ffaa00;font-size:0.7rem;">Issues: ${amEsc(p.issues.join('; '))}</div>` : ''}
                 </div>
             </div>`;
         }
