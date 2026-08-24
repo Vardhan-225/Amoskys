@@ -764,12 +764,12 @@ function createAgentCard(a) {
 
         <div style="margin-top:0.6rem;display:flex;justify-content:space-between;align-items:center;">
             <div style="display:flex;flex-wrap:wrap;gap:0;">
-                ${topMitre.map(t => `<span class="mitre-chip">${t}</span>`).join('')}
+                ${topMitre.map(t => `<span class="mitre-chip">${amEsc(t)}</span>`).join('')}
                 ${a.mitre_techniques.length > 4 ? `<span class="mitre-chip" style="background:rgba(255,255,255,0.08);color:var(--text-muted);">+${a.mitre_techniques.length - 4}</span>` : ''}
             </div>
             ${isRunning
-                ? '<a href="/dashboard/agent-monitor?agent=' + a.id + '" class="agent-quick-btn monitor-btn" onclick="event.stopPropagation();">Monitor</a>'
-                : '<button class="agent-quick-btn start-btn" data-catalog-id="' + catalogId + '" onclick="event.stopPropagation();">Start</button>'
+                ? '<a href="/dashboard/agent-monitor?agent=' + encodeURIComponent(a.id) + '" class="agent-quick-btn monitor-btn">Monitor</a>'
+                : '<button class="agent-quick-btn start-btn" data-catalog-id="' + amEsc(catalogId) + '">Start</button>'
             }
         </div>
     </div>`;
@@ -1222,14 +1222,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event delegation on agents grid (dynamic agent cards)
     document.getElementById('agents-grid').addEventListener('click', (e) => {
         // Quick-start button
+        // The Monitor control is a link. It used to carry
+        // onclick="event.stopPropagation()" so the card modal would not open
+        // behind the navigation — dead under production CSP, and unnecessary
+        // once the delegated listener simply lets a link be a link.
+        if (e.target.closest('.monitor-btn')) return;
+
         const startBtn = e.target.closest('.start-btn');
         if (startBtn) {
             const cid = startBtn.dataset.catalogId;
-            startBtn.textContent = 'Starting...';
+            const original = startBtn.textContent;
+            startBtn.textContent = 'Starting…';
             startBtn.disabled = true;
-            fetch('/dashboard/api/agents/' + cid + '/start', { method: 'POST' })
-                .then(function() { setTimeout(loadAgentData, 1500); })
-                .catch(function() { startBtn.textContent = 'Failed'; });
+            // A refused start returns HTTP 400 with a reason, and fetch RESOLVES
+            // on 400 — so the old .then() fired, the page reloaded 1.5s later,
+            // and the agent was simply still stopped with nothing said about
+            // why. The reason is now shown on the button that was pressed.
+            fetch('/dashboard/api/agents/' + encodeURIComponent(cid) + '/start', { method: 'POST' })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+                .then(function (res) {
+                    if (res.ok) { setTimeout(loadAgentData, 1500); return; }
+                    var why = (res.body && (res.body.message || res.body.status)) || 'refused';
+                    startBtn.textContent = 'Cannot start';
+                    startBtn.title = String(why);
+                    startBtn.disabled = false;
+                    setTimeout(function () { startBtn.textContent = original; startBtn.title = ''; }, 6000);
+                })
+                .catch(function (err) {
+                    startBtn.textContent = 'Failed';
+                    startBtn.title = 'The start request did not reach the server: ' + err;
+                    startBtn.disabled = false;
+                    setTimeout(function () { startBtn.textContent = original; startBtn.title = ''; }, 6000);
+                });
             return;
         }
         const card = e.target.closest('[data-action="open-agent-modal"]');

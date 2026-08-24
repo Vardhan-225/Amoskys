@@ -33,14 +33,20 @@
             <div class="c2-panel-hdr">Fleet</div>
             <div id="c2-fleet-list" class="c2-fleet-list"></div>
             <div class="c2-panel-hdr" style="margin-top:0.75rem;">Quick Actions</div>
+            {# Every control on this page carried its command in an inline
+               onclick. Production CSP is script-src 'self' plus a nonce, and a
+               nonce can never authorise an on* attribute — so in production the
+               entire quick-action bar, the CLR button, every fleet row and every
+               anomaly card did nothing at all when clicked. The command now
+               travels in data-c2-cmd and one delegated listener runs it. #}
             <div class="c2-quick-actions">
-                <button class="c2-qbtn" onclick="c2.exec('status')">Status All</button>
-                <button class="c2-qbtn" onclick="c2.exec('scan')">Fleet Scan</button>
-                <button class="c2-qbtn" onclick="c2.exec('threats')">Threats</button>
-                <button class="c2-qbtn" onclick="c2.exec('soma status')">SOMA Brain</button>
-                <button class="c2-qbtn" onclick="c2.exec('report')">Report</button>
-                <button class="c2-qbtn" onclick="c2.exec('sysinfo')">System</button>
-                <button class="c2-qbtn c2-qbtn-igris" onclick="c2.exec('igris')">IGRIS</button>
+                <button class="c2-qbtn" data-c2-cmd="status">Status All</button>
+                <button class="c2-qbtn" data-c2-cmd="scan">Fleet Scan</button>
+                <button class="c2-qbtn" data-c2-cmd="threats">Threats</button>
+                <button class="c2-qbtn" data-c2-cmd="soma status">SOMA Brain</button>
+                <button class="c2-qbtn" data-c2-cmd="report">Report</button>
+                <button class="c2-qbtn" data-c2-cmd="sysinfo">System</button>
+                <button class="c2-qbtn c2-qbtn-igris" data-c2-cmd="igris">IGRIS</button>
             </div>
         </div>
 
@@ -57,7 +63,7 @@
                     <span class="igris-dot" id="igris-dot"></span>
                     <span class="igris-label">IGRIS</span>
                 </div>
-                <button class="c2-term-btn" onclick="c2.exec('clear')" title="Clear">CLR</button>
+                <button class="c2-term-btn" data-c2-cmd="clear" title="Clear">CLR</button>
             </div>
             <div id="c2-output" class="c2-output"></div>
             <div class="c2-input-row">
@@ -307,8 +313,12 @@ const c2 = {
             { text: 'GUARDIAN C2 — Command & Control Interface', type: 'system' },
             { text: 'AMOSKYS Neural Security Platform v2.4', type: 'system' },
             { text: '', type: 'info' },
-            { text: '[INIT] IGRIS supervisory layer... ACTIVE', type: 'success' },
-            { text: '[IGRIS] Baseline warmup in progress. Observing.', type: 'system' },
+            // These two lines used to print unconditionally, in success green,
+            // before a single request had been made. The IGRIS indicator beside
+            // the terminal title reports the real status from
+            // /api/igris/status; the banner now says only what it knows, which
+            // at this point is nothing.
+            { text: '[INIT] Querying IGRIS supervisory layer...', type: 'system' },
             { text: '', type: 'info' },
             { text: 'Type "help" for available commands.', type: 'system' },
             { text: '', type: 'info' },
@@ -405,9 +415,11 @@ const c2 = {
         container.innerHTML = agents.map(a => {
             const dotCls = a.status === 'healthy' ? 'c2-fleet-dot-ok' : a.status === 'degraded' ? 'c2-fleet-dot-deg' : 'c2-fleet-dot-off';
             const short = (a.name || a.id).replace(/ Agent$| Monitor Agent$| Server$/, '');
-            return '<div class="c2-fleet-item" onclick="c2.exec(\'status ' + a.id + '\')" title="Click for status">' +
+            // a.id was concatenated straight into a JavaScript string inside an
+            // HTML attribute — two nested quoting contexts, neither escaped.
+            return '<div class="c2-fleet-item" data-c2-cmd="status ' + amEsc(a.id) + '" title="Click for status">' +
                 '<span class="c2-fleet-dot ' + dotCls + '"></span>' +
-                '<span class="c2-fleet-name">' + short + '</span>' +
+                '<span class="c2-fleet-name">' + amEsc(short) + '</span>' +
             '</div>';
         }).join('');
     },
@@ -423,7 +435,7 @@ const c2 = {
         strip.style.display = 'block';
         cards.innerHTML = anomalies.map(a => {
             const cls = a.severity === 'high' ? 'c2-anom-high' : 'c2-anom-medium';
-            return '<div class="c2-anomaly-card ' + cls + '" onclick="c2.exec(\'status ' + (a.agent || '') + '\')">' +
+            return '<div class="c2-anomaly-card ' + cls + '" data-c2-cmd="status ' + amEsc(a.agent || '') + '">' +
                 '<div class="c2-anom-agent">' + this.esc(a.agent_name || a.agent) + '</div>' +
                 '<div class="c2-anom-msg">' + this.esc(a.message) + '</div>' +
             '</div>';
@@ -448,13 +460,25 @@ const c2 = {
         }
     },
 
+    // Delegates to the one escaper in dashboard-core.js — five characters,
+    // including the quotes this page interpolates across.
     esc(s) {
-        const d = document.createElement('div');
-        d.textContent = s || '';
-        return d.innerHTML;
+        return amEsc(s);
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => c2.init());
+document.addEventListener('DOMContentLoaded', () => {
+    c2.init();
+
+    // One listener for every control on the page. Delegated rather than bound
+    // per element because the fleet list and anomaly strip replace their own
+    // innerHTML on each poll, which would drop directly-bound handlers.
+    document.addEventListener('click', (ev) => {
+        const el = ev.target.closest ? ev.target.closest('[data-c2-cmd]') : null;
+        if (!el) return;
+        const cmd = el.getAttribute('data-c2-cmd');
+        if (cmd) c2.exec(cmd);
+    });
+});
 </script>
 {% endblock %}

@@ -470,8 +470,11 @@
     </div>
 </div>
 
-<!-- Globe.gl — single CDN dependency (includes Three.js) -->
-<script src="https://cdn.jsdelivr.net/npm/globe.gl@2"></script>
+{# Self-hosted, same as the overview page. The CDN copy was a third-party
+   dependency for the page's main visual, on a security console that should not
+   need a working route to jsdelivr in order to draw. The bundle and the three
+   textures are already vendored under /static/vendor/. #}
+<script src="/static/vendor/globe.gl.min.js"></script>
 <script nonce="{{ csp_nonce() }}">
 /* ── Network Intelligence — Globe.gl threat globe + DashboardCache + DashboardPoller ── */
 (function() {
@@ -842,9 +845,9 @@
 
         globe = Globe()(containerEl)
             .backgroundColor('rgba(0,0,0,0)')
-            .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg')
-            .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
+            .globeImageUrl('/static/vendor/globe/earth-dark.jpg')
+            .bumpImageUrl('/static/vendor/globe/earth-topology.png')
+            .backgroundImageUrl('/static/vendor/globe/night-sky.png')
             .showAtmosphere(true)
             .atmosphereColor('#0099cc')
             .atmosphereAltitude(0.22)
@@ -956,7 +959,22 @@
     }
 
     function renderGlobe(points) {
-        if (!globe) initGlobe();
+        if (!globe) {
+            if (typeof Globe === 'undefined') {
+                // Say what is missing rather than leaving an empty black box,
+                // which on a map of outbound connections reads as "no traffic".
+                const c = document.getElementById('globe-container');
+                if (c && !c.dataset.globeFailed) {
+                    c.dataset.globeFailed = '1';
+                    c.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);' +
+                        'line-height:1.6;font-size:0.82rem;"><strong style="color:var(--neural-warning);">' +
+                        'The globe could not be drawn.</strong><br>Its rendering bundle did not load. ' +
+                        'The destination table below is unaffected and is the authoritative list.</div>';
+                }
+                return;
+            }
+            initGlobe();
+        }
         if (!deviceLat) {
             deviceLat = 38.2542;
             deviceLon = -85.7594;

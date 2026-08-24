@@ -600,7 +600,9 @@
     background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
     border-radius: 10px; padding: 1rem; transition: all 0.2s; cursor: pointer;
 }
+.ag-card { display: block; text-decoration: none; color: inherit; }
 .ag-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(0,217,255,0.15); transform: translateY(-1px); }
+.ag-card:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
 .ag-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
 .ag-name { font-weight: 700; font-size: 0.85rem; color: var(--neural-primary); }
 .ag-tier {
@@ -646,7 +648,8 @@
     var CIRC = 2 * Math.PI * 34; // 213.6
     var donutChart = null;
 
-    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // The one escaper, in dashboard-core.js.
+    function esc(s) { return amEsc(s); }
     function fmtNum(n) { return Number(n).toLocaleString(); }
 
     // ─── Section scroll tracking ─────────────────────────
@@ -745,7 +748,10 @@
             var driftType = drift.includes('No drift') ? 'none' : drift.includes('Gradual') ? 'gradual' : drift.includes('Abrupt') ? 'abrupt' : 'none';
             var driftLabel = driftType === 'none' ? '' : driftType === 'gradual' ? 'Gradual Drift' : 'Abrupt Drift';
             var obs = a.observations || {};
-            return '<div class="ag-card" onclick="window.location=\'/dashboard/reliability\'">' +
+            // Was a <div onclick="window.location=...">: dead under production
+            // CSP, and unreachable from the keyboard even in dev. An anchor
+            // navigates, focuses and opens in a new tab on middle-click.
+            return '<a class="ag-card" href="/dashboard/reliability">' +
                 '<div class="ag-header">' +
                     '<span class="ag-name">' + esc(a.agent_id || 'Unknown') + '</span>' +
                     '<span class="ag-tier ' + tier + '">' + esc(a.tier || 'NOMINAL') + '</span>' +
@@ -758,7 +764,7 @@
                 '</div>' +
                 '<div class="ag-rel-bar"><div class="ag-rel-fill" style="width:' + (rel * 100) + '%;background:' + barColor + ';"></div></div>' +
                 (driftLabel ? '<span class="ag-drift ' + driftType + '">' + driftLabel + '</span>' : '') +
-            '</div>';
+            '</a>';
         }).join('');
     }
 

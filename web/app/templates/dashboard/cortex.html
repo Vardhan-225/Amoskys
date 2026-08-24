@@ -227,7 +227,10 @@
     <div class="ctx-panel" style="padding:0.75rem 1rem;">
         <div class="ctx-hdr">
             <h3>Agent Constellation</h3>
-            <span class="ctx-sub" id="constellation-status">14 agents · 24h</span>
+            {# Was "14 agents · 24h" — a hardcoded count served before the
+               constellation API had been asked anything, and left standing
+               whenever that request failed. #}
+            <span class="ctx-sub" id="constellation-status">loading…</span>
         </div>
         <div class="constellation-wrap">
             <div id="constellation-3d"></div>
@@ -242,12 +245,14 @@
                 <div class="probe-list-mini" id="cx-hover-probes"></div>
             </div>
             <div class="constellation-stats">
-                <span class="constellation-stat"><b id="cs-observing">14</b>/14 observing</span>
+                <span class="constellation-stat"><b id="cs-observing">--</b> observing</span>
                 <span class="constellation-stat"><b id="cs-triggered">--</b> triggered</span>
                 <span class="constellation-stat"><b id="cs-probes">--</b> probes</span>
                 <span class="constellation-stat"><b id="cs-arcs">--</b> co-fire arcs</span>
                 <span class="constellation-stat">peak risk <b id="cs-peak">--</b></span>
-                <button id="cx-rotate-btn" onclick="CX.controls.autoRotate=!CX.controls.autoRotate;this.textContent=CX.controls.autoRotate?'Rotating':'Rotate'" style="background:rgba(0,217,255,0.08);border:1px solid rgba(0,217,255,0.15);color:#00d9ff;padding:2px 10px;border-radius:12px;font-size:0.6rem;font-weight:600;cursor:pointer;">Rotate</button>
+                {# Was an inline onclick, which production CSP blocks — the
+                   rotate toggle did nothing on the live site. #}
+                <button id="cx-rotate-btn" style="background:rgba(0,217,255,0.08);border:1px solid rgba(0,217,255,0.15);color:#00d9ff;padding:2px 10px;border-radius:12px;font-size:0.6rem;font-weight:600;cursor:pointer;">Rotate</button>
             </div>
         </div>
     </div>
@@ -493,12 +498,20 @@
     /* ═══════════════════════════════════════════════════════════════════
        3D Agent Constellation — Three.js
        ═══════════════════════════════════════════════════════════════════ */
+    // three.js comes from a CDN, and this object used to construct THREE
+    // objects in its own initialiser — at parse time, with no guard. When the
+    // CDN was unreachable the ReferenceError killed the entire script block,
+    // so an unrelated third-party outage took out the verdict funnel, the probe
+    // calibration list, SOMA, the threat list and the event feed along with the
+    // 3D panel. Everything THREE-dependent is now built lazily inside
+    // initConstellation, which refuses to run and says so.
+    const HAS_THREE = (typeof THREE !== 'undefined') && !!THREE.Scene && !!THREE.OrbitControls;
+
     const CX = {
         scene: null, camera: null, renderer: null, controls: null,
         agentMeshes: [], probeMeshes: [], arcLines: [], glowSprites: [],
-        raycaster: (function() { var r = new THREE.Raycaster(); r.params.Mesh = { threshold: 1 }; return r; })(),
-        mouse: new THREE.Vector2(-999, -999),
-        hovered: null, data: null, nexusScore: 0, clock: new THREE.Clock(),
+        raycaster: null, mouse: null,
+        hovered: null, data: null, nexusScore: 0, clock: null,
     };
 
     /* Short labels for 3D constellation */
@@ -549,6 +562,26 @@
     function initConstellation() {
         var container = document.getElementById('constellation-3d');
         if (!container || CX.renderer) return;
+
+        if (!HAS_THREE) {
+            // Say which part is missing rather than leaving an empty box that
+            // reads as "no agents".
+            container.innerHTML =
+                '<div style="padding:2rem;text-align:center;color:var(--text-muted);line-height:1.6;font-size:0.8rem;">' +
+                '<strong style="color:var(--neural-warning);">The 3D constellation could not load.</strong><br>' +
+                'Its rendering library is served from a third-party CDN that this browser could not reach. ' +
+                'The agent counts and every other panel on this page are unaffected — only the 3D view is missing.' +
+                '</div>';
+            var rotate = document.getElementById('cx-rotate-btn');
+            if (rotate) { rotate.disabled = true; rotate.title = 'Unavailable without the 3D renderer'; rotate.style.opacity = '0.45'; }
+            return;
+        }
+
+        CX.raycaster = new THREE.Raycaster();
+        CX.raycaster.params.Mesh = { threshold: 1 };
+        CX.mouse = new THREE.Vector2(-999, -999);
+        CX.clock = new THREE.Clock();
+
         var W = container.clientWidth, H = container.clientHeight;
 
         // Scene
@@ -733,6 +766,28 @@
             CX.renderer.render(CX.scene, CX.camera);
         }
         animate();
+    }
+
+    // The counts above the canvas are plain DOM. They used to be written from
+    // inside layoutConstellation, which returns early without a scene — so a
+    // CDN outage left the served placeholder "14/14 observing" on screen as if
+    // it had been measured. They are updated whether or not the 3D view exists.
+    function updateConstellationStats(data) {
+        var nodes = data.nodes || [];
+        var edges = data.edges || [];
+        var triggered = nodes.filter(function(nd) { return nd.active; }).length;
+        var totalProbes = 0;
+        nodes.forEach(function(nd) { totalProbes += (nd.probes || []).length; });
+        var peakRisk = 0;
+        nodes.forEach(function(nd) { if ((nd.max_risk || 0) > peakRisk) peakRisk = nd.max_risk; });
+
+        document.getElementById('cs-observing').textContent = nodes.length;
+        document.getElementById('cs-triggered').textContent = triggered;
+        document.getElementById('cs-probes').textContent = totalProbes;
+        document.getElementById('cs-arcs').textContent = edges.length;
+        document.getElementById('cs-peak').textContent = peakRisk.toFixed(2);
+        document.getElementById('constellation-status').textContent =
+            nodes.length + ' agents \u00B7 ' + triggered + ' triggered \u00B7 ' + totalProbes + ' probes \u00B7 ' + edges.length + ' arcs';
     }
 
     function layoutConstellation(data) {
@@ -970,20 +1025,6 @@
         CX.scene.add(ring);
         CX.glowSprites.push(ring);
 
-        // ── Update HTML stats ──
-        var triggered = nodes.filter(function(nd) { return nd.active; }).length;
-        document.getElementById('cs-observing').textContent = nodes.length;
-        document.getElementById('cs-triggered').textContent = triggered;
-        var totalProbes = 0;
-        nodes.forEach(function(nd) { totalProbes += (nd.probes || []).length; });
-        document.getElementById('cs-probes').textContent = totalProbes;
-        document.getElementById('cs-arcs').textContent = edges.length;
-        var peakRisk = 0;
-        nodes.forEach(function(nd) { if ((nd.max_risk || 0) > peakRisk) peakRisk = nd.max_risk; });
-        document.getElementById('cs-peak').textContent = peakRisk.toFixed(2);
-        document.getElementById('constellation-status').textContent =
-            nodes.length + ' agents \u00B7 ' + triggered + ' triggered \u00B7 ' + totalProbes + ' probes \u00B7 ' + edges.length + ' arcs';
-
         // Update center score overlay
         var scoreEl = document.getElementById('cx-score-3d');
         if (scoreEl) {
@@ -998,9 +1039,30 @@
     async function loadConstellation() {
         try {
             const d = await DashboardCache.fetch('/dashboard/api/nexus/constellation?hours=24', 30);
-            if (d.error) return;
-            layoutConstellation(d);
-        } catch (e) { console.warn('Constellation load failed:', e); }
+            // `if (d.error) return;` left the placeholder counts standing, which
+            // is how "14/14 observing" survived a failed request. A refusal to
+            // answer is reported as a refusal.
+            if (d.error) { markConstellationUnread(String(d.error)); return; }
+            updateConstellationStats(d);
+            // The numbers above the canvas are plain DOM and stay correct even
+            // when the renderer never came up.
+            if (CX.scene) layoutConstellation(d);
+        } catch (e) {
+            console.warn('Constellation load failed:', e);
+            markConstellationUnread(e && e.message ? e.message : String(e));
+        }
+    }
+
+    function markConstellationUnread(reason) {
+        ['cs-observing', 'cs-triggered', 'cs-probes', 'cs-arcs', 'cs-peak'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.textContent = '--'; el.title = 'Not measured: ' + reason; }
+        });
+        var status = document.getElementById('constellation-status');
+        if (status) {
+            status.textContent = 'not measured';
+            status.title = reason;
+        }
     }
 
     async function loadProbes() {
@@ -1201,6 +1263,15 @@
     }
 
     // Resize handled inside initConstellation's event listener
+
+    var rotateBtn = document.getElementById('cx-rotate-btn');
+    if (rotateBtn) {
+        rotateBtn.addEventListener('click', function () {
+            if (!CX.controls) return;
+            CX.controls.autoRotate = !CX.controls.autoRotate;
+            this.textContent = CX.controls.autoRotate ? 'Rotating' : 'Rotate';
+        });
+    }
 
     loadAll();
 

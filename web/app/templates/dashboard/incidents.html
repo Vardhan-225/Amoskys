@@ -463,7 +463,11 @@ function renderIncidents(incidents) {
             + ' &middot; ' + created
             + '</div></div>'
             + '<div style="display:flex;gap:0.5rem;align-items:center;">'
-            + '<a href="/dashboard/timeline-replay?incident_id=' + inc.id + '" title="Timeline Replay" style="color:#00d9ff;font-size:1.1rem;text-decoration:none;padding:0.2rem;" onclick="event.stopPropagation();">&#9654;</a>'
+            // The onclick="event.stopPropagation()" that used to sit here was
+            // dead under production CSP, so clicking the replay arrow also
+            // triggered the row's own handler. data-no-row-click lets the row
+            // listener stand aside without an inline handler.
+            + '<a href="/dashboard/timeline-replay?incident_id=' + encodeURIComponent(inc.id) + '" data-no-row-click="1" title="Timeline Replay" style="color:#00d9ff;font-size:1.1rem;text-decoration:none;padding:0.2rem;">&#9654;</a>'
             + '<span class="status-pill" style="background:' + statColor + '22;color:' + statColor + ';border:1px solid ' + statColor + '55;">' + inc.status + '</span>'
             + '<span class="status-pill" style="background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '55;">' + inc.severity + '</span>'
             + '</div></div>';
@@ -708,6 +712,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cb) toggleSelect(parseInt(cb.getAttribute('data-select-incident')), cb.checked);
     });
     document.getElementById('incidents-list').addEventListener('click', function(e) {
+        // Controls that opt out of the row's own click — the timeline-replay
+        // link, which navigates on its own and should not also open the detail
+        // modal behind the new page.
+        if (e.target.closest('[data-no-row-click]')) return;
         var el = e.target.closest('[data-show-incident]');
         if (el) showIncident(parseInt(el.getAttribute('data-show-incident')));
     });

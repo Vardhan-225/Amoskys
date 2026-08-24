@@ -410,7 +410,19 @@
     background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
     cursor: pointer; transition: all 0.15s;
 }
+.tf-mitre-card { text-decoration: none; color: inherit; }
 .tf-mitre-card:hover { background: rgba(0,217,255,0.08); border-color: rgba(0,217,255,0.2); }
+.tf-mitre-card:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
+
+/* Replaces two inline onmouseover/onmouseout attributes that CSP blocked. */
+.tf-investigate-link {
+    display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem;
+    border-radius: 6px; font-size: 0.78rem; font-weight: 700; text-decoration: none;
+    color: #a78bfa; background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.25); transition: background 0.15s;
+}
+.tf-investigate-link:hover { background: rgba(167,139,250,0.2); }
+.tf-investigate-link:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
 .tf-mitre-card-id { font-size: 0.72rem; font-weight: 800; color: var(--neural-primary); font-family: monospace; min-width: 60px; }
 .tf-mitre-card-body { flex: 1; min-width: 0; }
 .tf-mitre-card-tactic { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #a78bfa; }
@@ -612,6 +624,16 @@ class ThreatFeedController {
         document.getElementById('next-btn').addEventListener('click', function() { self.goPage(self.page + 1); });
         document.getElementById('first-btn').addEventListener('click', function() { self.goPage(1); });
         document.getElementById('last-btn').addEventListener('click', function() { self.goPage(self.totalPages); });
+
+        // Page numbers and the detail close button are rendered into innerHTML
+        // that is replaced on every refresh, so they are delegated on document
+        // rather than bound per element.
+        document.addEventListener('click', function(ev) {
+            if (!ev.target.closest) return;
+            var pageBtn = ev.target.closest('[data-tf-page]');
+            if (pageBtn) { self.goPage(parseInt(pageBtn.getAttribute('data-tf-page'), 10)); return; }
+            if (ev.target.closest('[data-tf-close-detail]')) { self.closeDetail(); }
+        });
         document.getElementById('filter-severity').addEventListener('click', function(e) {
             var pill = e.target.closest('.tf-pill[data-val]');
             if (!pill) return;
@@ -860,7 +882,10 @@ class ThreatFeedController {
         });
         nums.innerHTML = pages.map(function(v) {
             if (v === '...') return '<span class="tf-page-ellipsis">&hellip;</span>';
-            return '<button class="tf-page-num' + (v === p ? ' active' : '') + '" onclick="window.feed.goPage(' + v + ')">' + v + '</button>';
+            // data-page rather than onclick: production CSP is script-src
+            // 'self' with a nonce, and a nonce cannot authorise an on* attribute
+            // — so in production these page numbers were unclickable.
+            return '<button class="tf-page-num' + (v === p ? ' active' : '') + '" data-tf-page="' + v + '">' + v + '</button>';
         }).join('');
     }
 
@@ -913,18 +938,23 @@ class ThreatFeedController {
             body += '<div style="margin-bottom:0.5rem;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">MITRE ATT&CK</div>';
             body += '<div class="tf-mitre-cards">' + t.mitre_techniques.map(m => {
                 var info = MITRE_DB[m] || {};
-                return '<div class="tf-mitre-card" onclick="window.open(\'https://attack.mitre.org/techniques/' + this.esc(m).replace('.', '/') + '/\', \'_blank\')">' +
-                    '<div class="tf-mitre-card-id">' + m + '</div><div class="tf-mitre-card-body">' +
+                // A link, not a scripted window.open. It works under CSP, it
+                // opens in a new tab the way the old handler intended, and it is
+                // reachable from the keyboard — which the div never was.
+                var mitrePath = encodeURIComponent(String(m)).replace(/%2E/gi, '/');
+                return '<a class="tf-mitre-card" href="https://attack.mitre.org/techniques/' + mitrePath +
+                    '/" target="_blank" rel="noopener noreferrer">' +
+                    '<div class="tf-mitre-card-id">' + this.esc(m) + '</div><div class="tf-mitre-card-body">' +
                     '<div class="tf-mitre-card-tactic">' + this.esc(info.tactic || '') + '</div>' +
                     '<div class="tf-mitre-card-desc">' + this.esc(info.desc || '') + '</div></div>' +
-                    '<div class="tf-mitre-card-arrow">&rarr;</div></div>';
+                    '<div class="tf-mitre-card-arrow">&rarr;</div></a>';
             }).join('') + '</div>';
         }
         if (t.id) {
-            body += '<div style="margin-top:0.75rem;"><a href="/dashboard/timeline-replay?event_id=' + encodeURIComponent(t.id) + '&source=' + encodeURIComponent(t.source || 'security') + '" ' +
-                'style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.4rem 0.8rem;border-radius:6px;font-size:0.78rem;font-weight:700;' +
-                'text-decoration:none;color:#a78bfa;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);transition:all 0.15s;"' +
-                ' onmouseover="this.style.background=\'rgba(167,139,250,0.2)\'" onmouseout="this.style.background=\'rgba(167,139,250,0.1)\'">' +
+            // The hover was two inline on* attributes doing what :hover does,
+            // which CSP blocks and a stylesheet does not.
+            body += '<div style="margin-top:0.75rem;"><a class="tf-investigate-link" href="/dashboard/timeline-replay?event_id=' +
+                encodeURIComponent(t.id) + '&source=' + encodeURIComponent(t.source || 'security') + '">' +
                 '&#9654; Investigate Timeline</a></div>';
         }
         body += '<div class="tf-detail-explain" id="detail-explain-' + idx + '"></div>';
@@ -936,7 +966,7 @@ class ThreatFeedController {
             '<div class="tf-detail-inline">' +
                 '<div class="tf-detail-inline-header">' +
                     '<span class="tf-detail-title">' + this.esc(this.fmtType(t.type) + (t.event_action ? ' — ' + t.event_action : '')) + '</span>' +
-                    '<button class="tf-detail-close-btn" onclick="window.feed.closeDetail()">&times;</button>' +
+                    '<button class="tf-detail-close-btn" data-tf-close-detail="1" aria-label="Close detail">&times;</button>' +
                 '</div>' +
                 '<div class="tf-detail-body">' + body + '</div>' +
             '</div></td>';
@@ -1079,7 +1109,10 @@ class ThreatFeedController {
 
     /* ── Helpers ── */
     fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }); }
-    esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // The one escaper, in dashboard-core.js. The div.textContent version here
+    // left the double quote alone while this page interpolated into title= and
+    // data- attributes.
+    esc(s) { return amEsc(s); }
     fmtDate(dt) {
         var m = String(dt.getMonth() + 1).padStart(2, '0');
         var d = String(dt.getDate()).padStart(2, '0');
