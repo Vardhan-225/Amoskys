@@ -1,571 +1,574 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}AMOSKYS — IGRIS Supervisor{% endblock %}
+{#
+IGRIS gets a room instead of a corner.
 
-{% block content %}
-<div class="igris-page">
+The floating widget works, but it is 380px wide in the bottom-right of whatever
+page you happen to be on. That shape forced three compromises this page undoes:
 
-    <!-- ===== STATUS HEADER ===== -->
-    <div class="igris-status-bar">
-        <div class="igris-status-left">
-            <span class="igris-eye">&#128065;</span>
-            <span class="igris-status-title">IGRIS</span>
-            <span class="igris-status-dash">&mdash;</span>
-            <span class="igris-status-desc">Autonomous Supervisory Layer</span>
-        </div>
-        <div class="igris-status-right">
-            <span class="igris-verdict-badge" id="igris-verdict">[--] ...</span>
-            <span class="igris-status-sep">|</span>
-            <span class="igris-meta" id="igris-cycle">Cycle --</span>
-            <span class="igris-status-sep">|</span>
-            <span class="igris-meta" id="igris-metric-count">-- metrics</span>
-            <span class="igris-status-sep">|</span>
-            <span class="igris-meta" id="igris-cycle-dur">--ms</span>
-        </div>
-    </div>
+  * The investigation trail collapses to "Investigated: 4 steps". IGRIS calls
+    real tools against real tables — that trail is the difference between an
+    answer you trust and an answer you accept. Here it stays open, live, with
+    each tool named as it runs.
 
-    <!-- ===== SUBSYSTEM HEALTH GRID ===== -->
-    <div class="igris-section-label">Subsystem Health</div>
-    <div class="igris-subsystem-grid" id="igris-subsystems">
-        <div class="igris-sub-box" data-sub="fleet"><span class="igris-sub-marker">[.]</span> Fleet</div>
-        <div class="igris-sub-box" data-sub="transport"><span class="igris-sub-marker">[.]</span> Transport</div>
-        <div class="igris-sub-box" data-sub="ingestion"><span class="igris-sub-marker">[.]</span> Ingestion</div>
-        <div class="igris-sub-box" data-sub="intelligence"><span class="igris-sub-marker">[.]</span> Intelligence</div>
-        <div class="igris-sub-box" data-sub="amrdr"><span class="igris-sub-marker">[.]</span> AMRDR</div>
-        <div class="igris-sub-box" data-sub="soma"><span class="igris-sub-marker">[.]</span> SOMA</div>
-        <div class="igris-sub-box" data-sub="enrichment"><span class="igris-sub-marker">[.]</span> Enrichment</div>
-        <div class="igris-sub-box" data-sub="integrity"><span class="igris-sub-marker">[.]</span> Integrity</div>
-    </div>
+  * Evidence arrives as chips that navigate AWAY. Here the evidence pane is
+    persistent and accumulates across the whole conversation, so the reasoning
+    and the rows that back it are on screen together.
 
-    <!-- ===== TWO TERMINALS ===== -->
-    <div class="igris-terminals">
+  * A blank box asks the operator to think of a question. This page opens with
+    the proactive brief — IGRIS goes first — and offers starting questions
+    derived from what is actually in the ledger right now, not generic prompts.
 
-        <!-- LEFT: AMOSKYS CLI -->
-        <div class="igris-term-wrap igris-term-cli">
-            <div class="igris-term-header">
-                <div class="igris-term-dots">
-                    <span class="igris-tdot igris-tdot-red"></span>
-                    <span class="igris-tdot igris-tdot-yellow"></span>
-                    <span class="igris-tdot igris-tdot-green"></span>
-                </div>
-                <span class="igris-term-title">amoskys@local ~ cli</span>
-                <button class="igris-term-btn" onclick="cli.clear()" title="Clear">CLR</button>
-            </div>
-            <div id="cli-output" class="igris-term-output"></div>
-            <div class="igris-term-input-row">
-                <span class="igris-term-prompt">amoskys@local:~$</span>
-                <input type="text" id="cli-input" class="igris-term-input" placeholder="fleet, status, events, soma status, threats..." autocomplete="off" spellcheck="false">
-            </div>
-        </div>
+Replaces the previous /dashboard/igris, which was a subsystem-status page whose
+four tab and clear controls were inline on* handlers — dead under production CSP.
+The status it carried is kept as a strip; the controls are delegated listeners.
+#}
 
-        <!-- RIGHT: IGRIS Observation -->
-        <div class="igris-term-wrap igris-term-igris">
-            <div class="igris-term-header igris-term-header-igris">
-                <div class="igris-term-dots">
-                    <span class="igris-tdot igris-tdot-cyan"></span>
-                    <span class="igris-tdot igris-tdot-dim"></span>
-                    <span class="igris-tdot igris-tdot-dim"></span>
-                </div>
-                <div class="igris-obs-tabs">
-                    <button class="igris-obs-tab active" data-tab="logs" onclick="obs.switchTab('logs')">Logs</button>
-                    <button class="igris-obs-tab" data-tab="cmd" onclick="obs.switchTab('cmd')">Command</button>
-                </div>
-                <span class="igris-term-title igris-term-title-igris">igris@amoskys ~ observation</span>
-                <button class="igris-term-btn igris-term-btn-igris" onclick="obs.clear()" title="Clear">CLR</button>
-            </div>
-            <!-- Logs panel (real IGRIS log stream) -->
-            <div id="obs-logs" class="igris-term-output igris-logs-panel"></div>
-            <!-- Command panel (igris commands) -->
-            <div id="obs-cmd-output" class="igris-term-output" style="display:none;"></div>
-            <div id="obs-input-row" class="igris-term-input-row igris-term-input-row-igris">
-                <span class="igris-term-prompt igris-term-prompt-igris">igris@amoskys:~$</span>
-                <input type="text" id="obs-input" class="igris-term-input igris-term-input-igris" placeholder="status, metrics, coherence, explain <id>..." autocomplete="off" spellcheck="false">
-            </div>
-        </div>
+{% block title %}IGRIS — AMOSKYS{% endblock %}
 
-    </div>
-</div>
-
+{% block extra_head %}
 <style>
-/* ══════════════════════════════════════════════════════════════
-   IGRIS — Autonomous Supervisory Dashboard
-   ══════════════════════════════════════════════════════════════ */
-.igris-page {
-    padding: 1rem 1.25rem; display: flex; flex-direction: column;
-    gap: 0.65rem; height: calc(100vh - 60px);
-    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+.ig-page {
+    --ig-line: rgba(0, 217, 255, 0.15);
+    --ig-line-soft: rgba(120, 160, 200, 0.14);
+    --ig-panel: rgba(18, 28, 42, 0.55);
+    --ig-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+    --ig-cyan: var(--neural-primary, #00d9ff);
+    --ig-calm: var(--neural-success, #3ad29f);
+    --ig-amber: var(--neural-warning, #ffb038);
+    --ig-red: var(--neural-danger, #ff4d5e);
+
+    max-width: 1500px; margin: 0 auto; padding: 20px 24px 40px;
+    display: flex; flex-direction: column; height: calc(100vh - var(--header-height, 52px));
 }
 
-/* ── Status Header ── */
-.igris-status-bar {
-    display: flex; justify-content: space-between; align-items: center;
-    flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0;
-    padding: 0.55rem 1rem; border-radius: 8px;
-    background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.08);
+/* ── Status strip: what IGRIS is and what it can currently see ── */
+.ig-strip {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 11px 15px; border-radius: 10px; margin-bottom: 14px;
+    background: var(--ig-panel); border: 1px solid var(--ig-line-soft);
+    border-left: 3px solid var(--ig-strip-tone, #6b7785); font-size: 0.84rem;
 }
-.igris-status-left { display: flex; align-items: center; gap: 0.5rem; }
-.igris-eye { font-size: 1.1rem; }
-.igris-status-title { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
-.igris-status-dash { color: var(--text-muted); }
-.igris-status-desc { font-size: 0.7rem; color: var(--text-muted); }
-.igris-status-right { display: flex; align-items: center; gap: 0.6rem; }
-.igris-status-sep { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
-.igris-meta { font-size: 0.68rem; color: var(--text-muted); }
-.igris-verdict-badge {
-    font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.55rem;
-    border-radius: 4px; letter-spacing: 0.03em;
-}
-.igris-verdict-coherent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.2); }
-.igris-verdict-degraded { background: rgba(255,170,0,0.08); color: #ffaa00; border: 1px solid rgba(255,170,0,0.2); }
-.igris-verdict-compromised { background: rgba(255,51,102,0.08); color: #ff3366; border: 1px solid rgba(255,51,102,0.2); }
-.igris-verdict-blind { background: rgba(128,128,255,0.08); color: #8080ff; border: 1px solid rgba(128,128,255,0.2); }
-
-/* ── Section Labels ── */
-.igris-section-label {
-    font-size: 0.58rem; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0;
+.ig-strip[data-state="ready"]   { --ig-strip-tone: var(--ig-calm); }
+.ig-strip[data-state="degraded"]{ --ig-strip-tone: var(--ig-amber); }
+.ig-strip[data-state="down"]    { --ig-strip-tone: var(--ig-red); }
+.ig-strip b { color: var(--text-primary); }
+.ig-strip span { color: var(--text-secondary); }
+.ig-strip .ig-spacer { flex: 1; }
+.ig-chip {
+    font-size: 0.68rem; padding: 3px 9px; border-radius: 999px;
+    background: var(--bg-tertiary); border: 1px solid var(--ig-line-soft);
+    color: var(--text-secondary); white-space: nowrap;
 }
 
-/* ── Subsystem Grid ── */
-.igris-subsystem-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35rem; flex-shrink: 0;
-}
-.igris-sub-box {
-    padding: 0.4rem 0.55rem; border-radius: 6px; font-size: 0.68rem;
-    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.04);
-    color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;
-}
-.igris-sub-marker { font-weight: 700; }
-.igris-sub-nominal .igris-sub-marker { color: #00ff88; }
-.igris-sub-nominal { border-color: rgba(0,255,136,0.1); color: var(--text-primary); }
-.igris-sub-degraded .igris-sub-marker,
-.igris-sub-elevated .igris-sub-marker,
-.igris-sub-drifting .igris-sub-marker,
-.igris-sub-stale .igris-sub-marker,
-.igris-sub-warning .igris-sub-marker { color: #ffaa00; }
-.igris-sub-degraded, .igris-sub-elevated, .igris-sub-drifting,
-.igris-sub-stale, .igris-sub-warning { border-color: rgba(255,170,0,0.15); color: #ffaa00; }
-.igris-sub-critical .igris-sub-marker,
-.igris-sub-error .igris-sub-marker { color: #ff3366; }
-.igris-sub-critical, .igris-sub-error { border-color: rgba(255,51,102,0.15); color: #ff3366; }
-.igris-sub-unknown .igris-sub-marker { color: rgba(255,255,255,0.2); }
-.igris-sub-uninitialized .igris-sub-marker { color: rgba(255,255,255,0.25); }
+/* ── Two columns: the conversation, and what it is standing on ── */
+.ig-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
+@media (max-width: 1080px) { .ig-cols { grid-template-columns: 1fr; } .ig-page { height: auto; } }
 
-/* ══════════════════════════════════════════════════════════════
-   TWO TERMINALS — Side by Side
-   ══════════════════════════════════════════════════════════════ */
-.igris-terminals {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
-    flex: 1; min-height: 0; overflow: hidden;
+.ig-panel {
+    background: var(--bg-secondary); border: 1px solid var(--ig-line-soft);
+    border-radius: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
 }
+.ig-panel-h {
+    padding: 12px 16px; border-bottom: 1px solid var(--ig-line-soft);
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.ig-panel-h h2 { font-size: 0.95rem; font-weight: 650; color: var(--text-primary); margin: 0; }
+.ig-panel-h span { font-size: 0.74rem; color: var(--text-muted); }
+.ig-panel-h .ig-spacer { flex: 1; }
 
-/* ── Shared Terminal Chrome ── */
-.igris-term-wrap {
-    display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
-    min-height: 0;
+/* ── Conversation ── */
+.ig-thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 320px; }
+.ig-turn { display: flex; flex-direction: column; gap: 6px; }
+.ig-turn.user { align-items: flex-end; }
+.ig-bubble {
+    max-width: 88%; padding: 11px 14px; border-radius: 12px; font-size: 0.9rem;
+    line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.igris-term-header {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;
-}
-.igris-term-dots { display: flex; gap: 4px; }
-.igris-tdot { width: 8px; height: 8px; border-radius: 50%; }
-.igris-tdot-red { background: #ff5f56; }
-.igris-tdot-yellow { background: #ffbd2e; }
-.igris-tdot-green { background: #27c93f; }
-.igris-tdot-cyan { background: rgba(0,217,255,0.6); box-shadow: 0 0 4px rgba(0,217,255,0.3); }
-.igris-tdot-dim { background: rgba(255,255,255,0.08); }
-.igris-term-title {
-    flex: 1; font-size: 0.66rem; color: var(--text-muted);
-    font-family: 'JetBrains Mono', monospace;
-}
-.igris-term-btn {
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-    color: var(--text-muted); border-radius: 3px; padding: 0.1rem 0.4rem;
-    font-size: 0.56rem; cursor: pointer; font-family: 'JetBrains Mono', monospace;
-}
-.igris-term-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
-.igris-term-output {
-    flex: 1; overflow-y: auto; padding: 0.6rem 0.7rem; min-height: 0;
-    font-size: 0.72rem; line-height: 1.5; color: #b0b8c8;
-}
-.igris-term-output::-webkit-scrollbar { width: 5px; }
-.igris-term-output::-webkit-scrollbar-track { background: transparent; }
-.igris-term-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-.igris-term-input-row {
-    display: flex; align-items: center; padding: 0.4rem 0.7rem;
-    border-top: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;
-}
-.igris-term-prompt {
-    font-size: 0.72rem; font-weight: 600; white-space: nowrap; margin-right: 0.45rem; opacity: 0.7;
-}
-.igris-term-input {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
-}
-.igris-term-input::placeholder { color: rgba(255,255,255,0.12); }
+.ig-turn.user .ig-bubble { background: rgba(0, 217, 255, 0.10); border: 1px solid var(--ig-line); color: var(--text-primary); }
+.ig-turn.igris .ig-bubble { background: var(--bg-tertiary); border: 1px solid var(--ig-line-soft); color: var(--text-primary); }
+.ig-who { font-size: 0.65rem; letter-spacing: 0.11em; text-transform: uppercase; color: var(--text-muted); }
 
-/* ── Output line types (shared) ── */
-.tl { margin-bottom: 0.08rem; white-space: pre-wrap; }
-.tl-cmd { color: var(--neural-primary); }
-.tl-info { color: #b0b8c8; }
-.tl-ok { color: #00ff88; }
-.tl-warn { color: #ffaa00; }
-.tl-err { color: #ff3366; }
-.tl-system { color: rgba(255,255,255,0.3); font-style: italic; }
-.tl-ts { color: rgba(255,255,255,0.12); font-size: 0.6rem; }
-
-/* ── CLI Terminal (left) — standard terminal look ── */
-.igris-term-cli {
-    background: #0c0f1a; border: 1px solid rgba(255,255,255,0.06);
+/* The investigation trail — open, not collapsed. */
+.ig-trail {
+    border-left: 2px solid var(--ig-line); margin: 2px 0 2px 4px; padding: 4px 0 4px 12px;
+    display: flex; flex-direction: column; gap: 5px;
 }
-.igris-term-cli .igris-term-header { background: rgba(255,255,255,0.02); }
-.igris-term-cli .igris-term-input-row { background: rgba(0,0,0,0.2); }
-.igris-term-cli .igris-term-prompt { color: var(--neural-primary); }
-.igris-term-cli .igris-term-input { caret-color: var(--neural-primary); }
-.igris-term-cli .igris-term-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+.ig-step { font-size: 0.76rem; color: var(--text-secondary); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
+.ig-step .ig-tool { font-family: var(--ig-mono); font-size: 0.68rem; color: var(--ig-cyan); white-space: nowrap; }
+.ig-step .ig-detail { color: var(--text-muted); overflow-wrap: anywhere; }
+.ig-step.running .ig-tool::after { content: '…'; }
+.ig-trail-head { font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
 
-/* ── IGRIS Terminal (right) — cyan IGRIS accent ── */
-.igris-term-igris {
-    background: #0a0d18; border: 1px solid rgba(0,217,255,0.08);
-}
-.igris-term-header-igris { background: rgba(0,217,255,0.02); border-color: rgba(0,217,255,0.06); }
-.igris-term-title-igris { color: rgba(0,217,255,0.4); }
-.igris-term-btn-igris {
-    background: rgba(0,217,255,0.04); border-color: rgba(0,217,255,0.1); color: rgba(0,217,255,0.4);
-}
-.igris-term-btn-igris:hover { background: rgba(0,217,255,0.08); color: rgba(0,217,255,0.7); }
-.igris-term-input-row-igris { background: rgba(0,0,0,0.25); border-color: rgba(0,217,255,0.06); }
-.igris-term-prompt-igris { color: rgba(0,217,255,0.5); }
-.igris-term-input-igris { caret-color: rgba(0,217,255,0.6); }
-.igris-term-input-igris::placeholder { color: rgba(0,217,255,0.12); }
-.igris-term-igris .igris-term-output::-webkit-scrollbar-thumb { background: rgba(0,217,255,0.12); }
+.ig-thinking { display: flex; gap: 5px; align-items: center; color: var(--text-muted); font-size: 0.8rem; }
+.ig-thinking i { width: 5px; height: 5px; border-radius: 50%; background: var(--ig-cyan); display: inline-block; animation: ig-pulse 1.2s infinite; }
+.ig-thinking i:nth-child(2) { animation-delay: .15s; }
+.ig-thinking i:nth-child(3) { animation-delay: .3s; }
+@keyframes ig-pulse { 0%,60%,100% { opacity:.25 } 30% { opacity:1 } }
+@media (prefers-reduced-motion: reduce) { .ig-thinking i { animation: none; opacity: .6; } }
 
-/* IGRIS-specific line colors */
-.tl-igris-cycle { color: rgba(0,217,255,0.5); }
-.tl-igris-signal { color: #ffaa00; }
-.tl-igris-cleared { color: #00ff88; opacity: 0.7; }
-.tl-igris-cmd { color: rgba(0,217,255,0.65); }
-
-/* ── Observation Tabs ── */
-.igris-obs-tabs { display: flex; gap: 2px; margin-right: 0.4rem; }
-.igris-obs-tab {
-    background: transparent; border: 1px solid rgba(0,217,255,0.1);
-    color: rgba(0,217,255,0.35); border-radius: 3px; padding: 0.08rem 0.45rem;
-    font-size: 0.58rem; cursor: pointer; font-family: 'JetBrains Mono', monospace;
-    font-weight: 600; letter-spacing: 0.03em; transition: all 0.15s;
+/* ── Composer ── */
+.ig-composer { border-top: 1px solid var(--ig-line-soft); padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+.ig-suggests { display: flex; gap: 6px; flex-wrap: wrap; }
+.ig-suggest {
+    font: inherit; font-size: 0.76rem; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    background: var(--bg-tertiary); border: 1px solid var(--ig-line-soft); color: var(--text-secondary);
 }
-.igris-obs-tab:hover { background: rgba(0,217,255,0.06); color: rgba(0,217,255,0.6); }
-.igris-obs-tab.active {
-    background: rgba(0,217,255,0.08); color: rgba(0,217,255,0.7);
-    border-color: rgba(0,217,255,0.25);
+.ig-suggest:hover { border-color: var(--ig-cyan); color: var(--text-primary); }
+.ig-suggest:focus-visible { outline: 2px solid var(--ig-cyan); outline-offset: 2px; }
+.ig-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.ig-input {
+    flex: 1; font: inherit; font-size: 0.9rem; padding: 10px 12px; border-radius: 10px;
+    background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--ig-line);
+    resize: none; min-height: 42px; max-height: 160px; line-height: 1.5;
+}
+.ig-input:focus-visible { outline: 2px solid var(--ig-cyan); outline-offset: 1px; }
+.ig-btn {
+    font: inherit; font-size: 0.84rem; font-weight: 600; cursor: pointer; padding: 10px 16px;
+    border-radius: 10px; border: 1px solid var(--ig-line); background: var(--bg-tertiary); color: var(--text-primary);
+}
+.ig-btn:hover { border-color: var(--ig-cyan); }
+.ig-btn:focus-visible { outline: 2px solid var(--ig-cyan); outline-offset: 2px; }
+.ig-btn[disabled] { opacity: .5; cursor: default; }
+.ig-btn.primary { background: rgba(0,217,255,0.12); border-color: var(--ig-cyan); color: var(--ig-cyan); }
+.ig-hint { font-size: 0.68rem; color: var(--text-muted); }
+.ig-bubble strong { color: var(--ig-cyan); font-weight: 650; }
+.ig-code {
+    font-family: var(--ig-mono); font-size: 0.85em; padding: 1px 5px; border-radius: 4px;
+    background: var(--bg-primary); border: 1px solid var(--ig-line-soft);
 }
 
-/* ── Log lines (Agent Monitor style) ── */
-.igris-log-line {
-    padding: 0.1rem 0; border-bottom: 1px solid rgba(255,255,255,0.015);
-    white-space: pre-wrap; word-break: break-all; line-height: 1.45;
-    font-size: 0.7rem;
+/* ── Evidence pane ── */
+.ig-evidence { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+.ig-ev {
+    border: 1px solid var(--ig-line-soft); border-radius: 9px; padding: 10px 12px;
+    background: var(--bg-tertiary); font-size: 0.8rem;
 }
+.ig-ev-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ig-ev-label { font-weight: 600; color: var(--text-primary); }
+.ig-ev-tool { font-family: var(--ig-mono); font-size: 0.66rem; color: var(--ig-cyan); }
+.ig-ev-detail { color: var(--text-secondary); margin-top: 5px; overflow-wrap: anywhere; line-height: 1.5; }
+.ig-ev a { color: var(--ig-cyan); text-decoration: none; font-size: 0.74rem; }
+.ig-ev a:hover { text-decoration: underline; }
+.ig-ev-empty { color: var(--text-muted); font-size: 0.8rem; line-height: 1.6; padding: 8px 2px; }
 
-/* ── Responsive ── */
-@media (max-width: 900px) {
-    .igris-subsystem-grid { grid-template-columns: repeat(2, 1fr); }
-    .igris-terminals { grid-template-columns: 1fr; }
+/* ── Internals (the old status page, folded down) ── */
+.ig-internals { margin-top: 14px; }
+.ig-internals-toggle {
+    width: 100%; text-align: left; font: inherit; font-size: 0.8rem; cursor: pointer;
+    background: var(--bg-secondary); border: 1px dashed var(--ig-line-soft);
+    border-radius: 10px; padding: 10px 14px; color: var(--text-secondary);
+}
+.ig-internals-toggle:hover { border-color: var(--ig-cyan); color: var(--text-primary); }
+.ig-internals-toggle:focus-visible { outline: 2px solid var(--ig-cyan); outline-offset: 2px; }
+.ig-internals-body { display: none; margin-top: 10px; }
+.ig-internals-body.open { display: block; }
+.ig-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.ig-tab {
+    font: inherit; font-size: 0.76rem; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+    background: var(--bg-tertiary); border: 1px solid var(--ig-line-soft); color: var(--text-secondary);
+}
+.ig-tab.on { border-color: var(--ig-cyan); color: var(--ig-cyan); }
+.ig-tab:focus-visible { outline: 2px solid var(--ig-cyan); outline-offset: 2px; }
+.ig-log {
+    background: var(--bg-primary); border: 1px solid var(--ig-line-soft); border-radius: 9px;
+    padding: 11px 13px; font-family: var(--ig-mono); font-size: 0.7rem; line-height: 1.65;
+    color: var(--text-secondary); max-height: 280px; overflow: auto; white-space: pre-wrap;
 }
 </style>
+{% endblock %}
 
+{% block content %}
+<div class="ig-page">
+
+    <div class="ig-strip" id="ig-strip" data-state="down">
+        <b id="ig-state">Checking IGRIS…</b>
+        <span id="ig-state-detail"></span>
+        <span class="ig-spacer"></span>
+        <span class="ig-chip" id="ig-chip-tools">—</span>
+        <span class="ig-chip" id="ig-chip-backend">—</span>
+    </div>
+
+    <div class="ig-cols">
+        <section class="ig-panel">
+            <div class="ig-panel-h">
+                <h2>IGRIS</h2>
+                <span>asks the store, shows its working</span>
+                <span class="ig-spacer"></span>
+                <button type="button" class="ig-btn" id="ig-reset" style="padding:5px 11px;font-size:.75rem">New conversation</button>
+            </div>
+
+            <div class="ig-thread" id="ig-thread"></div>
+
+            <div class="ig-composer">
+                <div class="ig-suggests" id="ig-suggests"></div>
+                <div class="ig-input-row">
+                    <textarea class="ig-input" id="ig-input" rows="1"
+                              placeholder="Ask about anything on this machine — Enter to send, Shift+Enter for a new line"></textarea>
+                    <button type="button" class="ig-btn primary" id="ig-send">Ask</button>
+                </div>
+                <div class="ig-hint" id="ig-hint">IGRIS reads the telemetry store directly. Every answer lists the tools it called.</div>
+            </div>
+        </section>
+
+        <section class="ig-panel">
+            <div class="ig-panel-h">
+                <h2>Evidence</h2>
+                <span>everything it has cited, this conversation</span>
+            </div>
+            <div class="ig-evidence" id="ig-evidence">
+                <div class="ig-ev-empty">Nothing cited yet. When IGRIS answers, the tools it called and the rows
+                it read appear here — so you can check the working rather than take the answer.</div>
+            </div>
+        </section>
+    </div>
+
+    <div class="ig-internals">
+        <button type="button" class="ig-internals-toggle" id="ig-internals-toggle"
+                aria-expanded="false" aria-controls="ig-internals-body">
+            <b>IGRIS internals</b> — subsystem health and the live log · show me
+        </button>
+        <div class="ig-internals-body" id="ig-internals-body">
+            <div class="ig-tabs" id="ig-tabs">
+                <button type="button" class="ig-tab on" data-tab="health">Subsystem health</button>
+                <button type="button" class="ig-tab" data-tab="logs">Live log</button>
+            </div>
+            <div class="ig-log" id="ig-internals-out">Open a tab to load.</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
-/* ══════════════════════════════════════════════════════════════
-   CLI Terminal — AMOSKYS system commands
-   ══════════════════════════════════════════════════════════════ */
-const cli = {
-    el: null, input: null, history: [], histIdx: -1,
+(function () {
+    "use strict";
 
-    init() {
-        this.el = document.getElementById('cli-output');
-        this.input = document.getElementById('cli-input');
-        this._bindKeys(this.input);
-        this.el.addEventListener('click', () => this.input.focus());
+    var thread = document.getElementById('ig-thread');
+    var evidenceEl = document.getElementById('ig-evidence');
+    var input = document.getElementById('ig-input');
+    var sendBtn = document.getElementById('ig-send');
+    var busy = false;
+    var citedKeys = Object.create(null);
 
-        this.line('AMOSKYS CLI — System Interface', 'system');
-        this.line('Connected. Type "help" for commands.', 'system');
-        this.line('', 'info');
-    },
-
-    _bindKeys(input) {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const cmd = input.value.trim();
-                if (cmd) { this.history.unshift(cmd); this.histIdx = -1; input.value = ''; this.exec(cmd); }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (this.histIdx < this.history.length - 1) { this.histIdx++; input.value = this.history[this.histIdx]; }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (this.histIdx > 0) { this.histIdx--; input.value = this.history[this.histIdx]; }
-                else { this.histIdx = -1; input.value = ''; }
-            }
-        });
-    },
-
-    async exec(cmd) {
-        this.line('amoskys@local:~$ ' + cmd, 'cmd');
-        if (cmd === 'clear') { this.clear(); return; }
-
-        const loadId = 'cli-load-' + Date.now();
-        this.line('Executing...', 'system', loadId);
-
-        try {
-            const r = await fetch('/dashboard/api/guardian/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: cmd }),
-            });
-            const d = await r.json();
-            const ld = document.getElementById(loadId);
-            if (ld) ld.remove();
-
-            if (d.cmd_type === 'clear') { this.clear(); return; }
-            (d.output || '').split('\n').forEach(l => this.line(l, d.cmd_type || 'info'));
-            this.line('', 'info');
-        } catch (e) {
-            const ld = document.getElementById(loadId);
-            if (ld) ld.remove();
-            this.line('Error: ' + e.message, 'err');
-        }
-        this.scroll();
-    },
-
-    line(text, type, id) {
-        const div = document.createElement('div');
-        div.className = 'tl tl-' + (type || 'info');
-        if (id) div.id = id;
-        div.textContent = text;
-        this.el.appendChild(div);
-        this.scroll();
-    },
-
-    clear() { this.el.innerHTML = ''; this.line('CLI cleared.', 'system'); },
-    scroll() { this.el.scrollTop = this.el.scrollHeight; },
-};
-
-
-/* ══════════════════════════════════════════════════════════════
-   IGRIS Observation Terminal — real log stream + command interface
-   ══════════════════════════════════════════════════════════════ */
-const obs = {
-    logsEl: null, cmdEl: null, input: null,
-    history: [], histIdx: -1,
-    currentTab: 'logs',
-    lastLogCount: 0,
-    _autoScroll: true,
-
-    init() {
-        this.logsEl = document.getElementById('obs-logs');
-        this.cmdEl = document.getElementById('obs-cmd-output');
-        this.input = document.getElementById('obs-input');
-        this._bindKeys(this.input);
-        this.logsEl.addEventListener('click', () => this.input.focus());
-        this.cmdEl.addEventListener('click', () => this.input.focus());
-
-        // Track scroll to pause auto-scroll when user scrolls up
-        this.logsEl.addEventListener('scroll', () => {
-            const el = this.logsEl;
-            this._autoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 40;
-        });
-
-        // Initial fetch
-        this.fetchLogs();
-        this.fetchStatus();
-        visInterval(() => { this.fetchLogs(); this.fetchStatus(); }, 15000);
-    },
-
-    _bindKeys(input) {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const cmd = input.value.trim();
-                if (cmd) {
-                    this.history.unshift(cmd);
-                    this.histIdx = -1;
-                    input.value = '';
-                    this.switchTab('cmd');
-                    this.exec(cmd);
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (this.histIdx < this.history.length - 1) { this.histIdx++; input.value = this.history[this.histIdx]; }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (this.histIdx > 0) { this.histIdx--; input.value = this.history[this.histIdx]; }
-                else { this.histIdx = -1; input.value = ''; }
-            }
-        });
-    },
-
-    switchTab(tab) {
-        this.currentTab = tab;
-        document.querySelectorAll('.igris-obs-tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.tab === tab);
-        });
-        this.logsEl.style.display = tab === 'logs' ? '' : 'none';
-        this.cmdEl.style.display = tab === 'cmd' ? '' : 'none';
-    },
-
-    // ── Real log stream (centralized: IGRIS + agents + all subsystems) ──
-    async fetchLogs() {
-        try {
-            const r = await fetch('/dashboard/api/igris/logs?lines=200');
-            const d = await r.json();
-            if (d.status !== 'success' || !d.available) return;
-
-            const lines = d.log_tail || [];
-            if (lines.length === this.lastLogCount) return;
-            this.lastLogCount = lines.length;
-
-            this.logsEl.innerHTML = lines.map(line => {
-                const color = this._logColor(line);
-                return '<div class="igris-log-line" style="color:' + color + ';">' + this.esc(line) + '</div>';
-            }).join('');
-
-            if (this._autoScroll) {
-                this.logsEl.scrollTop = this.logsEl.scrollHeight;
-            }
-        } catch (e) { /* silent */ }
-    },
-
-    // Log color rules — ordered by priority. First match wins.
-    _colorRules: [
-        // Severity
-        ['ERROR',               '#ff3366'],
-        ['SIGNAL EMITTED',      '#ff8844'],
-        ['SIGNAL CLEARED',      '#00ff88'],
-        ['WARNING',             '#ffaa00'],
-        ['Circuit',             '#ffaa00'],
-        // IGRIS
-        ['Coherence:',          'rgba(0,217,255,0.8)'],
-        ['IGRIS cycle',         'rgba(0,217,255,0.6)'],
-        ['\u2500\u2500\u2500',  'rgba(0,217,255,0.15)'],  // ───
-        ['[igris',              '#00ff88'],
-        // Storage / transport
-        ['[TelemetryStore]',    '#88ccff'],
-        ['[WALProcessor]',      '#88ccff'],
-        ['[amoskys.storage',    '#88ccff'],
-        ['[EventBus]',          '#aa88ff'],
-        ['[amoskys.eventbus',   '#aa88ff'],
-        // Intelligence / fusion
-        ['[ScoreJunction]',     '#ff88cc'],
-        ['[amoskys.intel',      '#ff88cc'],
-        // Enrichment / proof
-        ['[amoskys.enrichment', '#88ffcc'],
-        ['[amoskys.proof',      '#ccaa88'],
-        // Agent processes
-        ['[Proc',   '#88ddaa'], ['[FIM',        '#88ddaa'],
-        ['[DNS',    '#88ddaa'], ['[Flow',       '#88ddaa'],
-        ['[Auth',   '#88ddaa'], ['[Peripheral', '#88ddaa'],
-        ['[Kernel', '#88ddaa'], ['[Protocol',   '#88ddaa'],
-        // Fallback INFO
-        ['INFO',                '#8bb8a8'],
-    ],
-
-    _logColor(line) {
-        for (const [needle, color] of this._colorRules) {
-            if (line.includes(needle)) return color;
-        }
-        return 'var(--text-secondary, #6b7585)';
-    },
-
-    // ── Status + coherence polling for header/grid ──
-    async fetchStatus() {
-        try {
-            const [statusR, coherenceR] = await Promise.all([
-                fetch('/dashboard/api/igris/status'),
-                fetch('/dashboard/api/igris/coherence'),
-            ]);
-            const st = await statusR.json();
-            const co = await coherenceR.json();
-            if (st.status !== 'error') {
-                document.getElementById('igris-cycle').textContent = 'Cycle #' + (st.cycle_count || 0);
-                document.getElementById('igris-metric-count').textContent = (st.metrics_count || 0) + ' metrics';
-                document.getElementById('igris-cycle-dur').textContent = (st.cycle_duration_ms || 0) + 'ms';
-            }
-            if (co.status !== 'error') this._updateCoherence(co);
-        } catch (e) { /* silent */ }
-    },
-
-    _updateCoherence(d) {
-        const verdict = d.verdict || 'unknown';
-        const subsystems = d.subsystem_status || {};
-
-        const badge = document.getElementById('igris-verdict');
-        const icons = { coherent: '[OK]', 'alive but degraded': '[!!]', compromised: '[XX]', blind: '[??]' };
-        badge.textContent = (icons[verdict] || '[--]') + ' ' + verdict.toUpperCase();
-        badge.className = 'igris-verdict-badge';
-        const cls = { coherent: 'coherent', 'alive but degraded': 'degraded', compromised: 'compromised', blind: 'blind' };
-        if (cls[verdict]) badge.classList.add('igris-verdict-' + cls[verdict]);
-
-        document.querySelectorAll('.igris-sub-box').forEach(box => {
-            const sub = box.dataset.sub;
-            const st = subsystems[sub] || 'unknown';
-            box.querySelector('.igris-sub-marker').textContent = st === 'nominal' ? '[+]' : '[-]';
-            box.className = 'igris-sub-box igris-sub-' + st.replaceAll(' ', '-');
-        });
-    },
-
-    // ── Command execution ──
-    async exec(cmd) {
-        this.cmdLine('igris@amoskys:~$ ' + cmd, 'igris-cmd');
-        if (cmd === 'clear') { this.cmdEl.innerHTML = ''; return; }
-
-        const fullCmd = cmd.startsWith('igris ') ? cmd : 'igris ' + cmd;
-        try {
-            const r = await fetch('/dashboard/api/guardian/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: fullCmd }),
-            });
-            const d = await r.json();
-            (d.output || '').split('\n').forEach(l => this.cmdLine(l, d.cmd_type || 'info'));
-            this.cmdLine('', 'info');
-        } catch (e) {
-            this.cmdLine('Error: ' + e.message, 'err');
-        }
-    },
-
-    cmdLine(text, type) {
-        const div = document.createElement('div');
-        div.className = 'tl tl-' + (type || 'info');
-        div.textContent = text;
-        this.cmdEl.appendChild(div);
-        this.cmdEl.scrollTop = this.cmdEl.scrollHeight;
-    },
-
-    clear() {
-        if (this.currentTab === 'logs') {
-            this.lastLogCount = 0;
-            this.logsEl.innerHTML = '';
-            this.fetchLogs();
-        } else {
-            this.cmdEl.innerHTML = '';
-        }
-    },
-
-    esc(s) {
-        const d = document.createElement('div');
-        d.textContent = s || '';
-        return d.innerHTML;
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-};
 
+    function scrollThread() { thread.scrollTop = thread.scrollHeight; }
 
-/* ══════════════════════════════════════════════════════════════
-   Init
-   ══════════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
-    cli.init();
-    obs.init();
-    // Focus the CLI by default
-    setTimeout(() => document.getElementById('cli-input').focus(), 300);
-});
+    // IGRIS is told not to use markdown and mostly obeys, but it still reaches
+    // for **bold** on the finding that matters. Rendering it beats showing the
+    // asterisks. ESCAPE FIRST, then format — the order is the whole safety
+    // argument, since this text is model output over agent telemetry.
+    function formatAnswer(text) {
+        var safe = esc(text);
+        safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        safe = safe.replace(/`([^`]+)`/g, '<code class="ig-code">$1</code>');
+        return safe;
+    }
+
+    function addTurn(who, text) {
+        var el = document.createElement('div');
+        el.className = 'ig-turn ' + who;
+        el.innerHTML = '<div class="ig-who">' + (who === 'user' ? 'You' : 'IGRIS') + '</div>'
+            + '<div class="ig-bubble">' + esc(text) + '</div>';
+        thread.appendChild(el);
+        scrollThread();
+        return el;
+    }
+
+    // An answer turn owns its trail, so the steps stay attached to the reply
+    // they produced rather than scrolling away as a separate log.
+    function addAnswerTurn() {
+        var el = document.createElement('div');
+        el.className = 'ig-turn igris';
+        el.innerHTML = '<div class="ig-who">IGRIS</div>'
+            + '<div class="ig-trail-head" hidden>Investigating</div>'
+            + '<div class="ig-trail" hidden></div>'
+            + '<div class="ig-thinking"><i></i><i></i><i></i> reading the store…</div>'
+            + '<div class="ig-bubble" hidden></div>';
+        thread.appendChild(el);
+        scrollThread();
+        return {
+            root: el,
+            head: el.querySelector('.ig-trail-head'),
+            trail: el.querySelector('.ig-trail'),
+            thinking: el.querySelector('.ig-thinking'),
+            bubble: el.querySelector('.ig-bubble')
+        };
+    }
+
+    function addStep(turn, step) {
+        turn.head.hidden = false;
+        turn.trail.hidden = false;
+        var prev = turn.trail.lastElementChild;
+        if (prev) { prev.classList.remove('running'); }
+        var row = document.createElement('div');
+        row.className = 'ig-step running';
+        row.innerHTML = '<span class="ig-tool">' + esc(step.tool || '') + '</span>'
+            + '<span class="ig-detail">' + esc(step.label || '')
+            + (step.detail ? ' — ' + esc(step.detail) : '') + '</span>';
+        turn.trail.appendChild(row);
+        scrollThread();
+    }
+
+    function finishTurn(turn, text, stepCount) {
+        turn.thinking.remove();
+        var last = turn.trail.lastElementChild;
+        if (last) { last.classList.remove('running'); }
+        if (stepCount) {
+            turn.head.textContent = 'Investigated · ' + stepCount + ' step' + (stepCount === 1 ? '' : 's');
+        }
+        turn.bubble.hidden = false;
+        turn.bubble.innerHTML = formatAnswer(text);
+        scrollThread();
+    }
+
+    function renderEvidence(items) {
+        if (!items || !items.length) { return; }
+        var fresh = items.filter(function (it) {
+            var k = (it.tool || '') + '|' + (it.label || '') + '|' + (it.detail || '');
+            if (citedKeys[k]) { return false; }
+            citedKeys[k] = 1;
+            return true;
+        });
+        if (!fresh.length) { return; }
+        var empty = evidenceEl.querySelector('.ig-ev-empty');
+        if (empty) { empty.remove(); }
+        fresh.forEach(function (it) {
+            var el = document.createElement('div');
+            el.className = 'ig-ev';
+            el.innerHTML = '<div class="ig-ev-top">'
+                + '<span class="ig-ev-label">' + esc(it.label || it.tool || 'evidence') + '</span>'
+                + '<span class="ig-ev-tool">' + esc(it.tool || '') + '</span></div>'
+                + (it.detail ? '<div class="ig-ev-detail">' + esc(it.detail) + '</div>' : '')
+                + (it.link ? '<div style="margin-top:6px"><a href="' + esc(it.link) + '">Open the rows →</a></div>' : '');
+            evidenceEl.insertBefore(el, evidenceEl.firstChild);
+        });
+    }
+
+    // The strip is a claim about the present. If an answer fails, the claim is
+    // wrong and has to be withdrawn immediately rather than sitting there
+    // contradicting the message underneath it.
+    function markUnavailable(reason) {
+        var strip = document.getElementById('ig-strip');
+        strip.dataset.state = 'down';
+        document.getElementById('ig-state').textContent = 'IGRIS cannot answer here';
+        document.getElementById('ig-state-detail').textContent = reason || 'The last request failed.';
+        document.getElementById('ig-chip-backend').textContent = 'no backend';
+    }
+
+    function setBusy(state) {
+        busy = state;
+        sendBtn.disabled = state;
+        sendBtn.textContent = state ? 'Working…' : 'Ask';
+    }
+
+    // One NDJSON reader for both the chat and the opening brief — they emit the
+    // same {step|final|error} line protocol.
+    async function streamInto(turn, url, body) {
+        var steps = 0;
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(body)
+            });
+            if (!res.ok || !res.body) {
+                const t = await res.text().catch(function () { return ''; });
+                var msg = 'IGRIS could not answer (HTTP ' + res.status + ').';
+                try { var j = JSON.parse(t); if (j.message) { msg = j.message; } } catch (e) {}
+                finishTurn(turn, msg, steps);
+                return;
+            }
+            const reader = res.body.getReader();
+            const dec = new TextDecoder();
+            var buf = '';
+            for (;;) {
+                const chunk = await reader.read();
+                if (chunk.done) { break; }
+                buf += dec.decode(chunk.value, { stream: true });
+                var lines = buf.split('\n');
+                buf = lines.pop();
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) { continue; }
+                    var ev;
+                    try { ev = JSON.parse(line); } catch (e) { continue; }
+                    if (ev.type === 'step') { steps++; addStep(turn, ev); }
+                    else if (ev.type === 'final') {
+                        finishTurn(turn, ev.response || '(no answer)', steps);
+                        renderEvidence(ev.evidence);
+                    } else if (ev.type === 'error') {
+                        finishTurn(turn, 'IGRIS stopped: ' + (ev.message || 'unknown error'), steps);
+                        markUnavailable(ev.message);
+                    }
+                }
+            }
+            if (turn.thinking.isConnected) {
+                finishTurn(turn, 'The connection ended before IGRIS finished. Nothing was lost — ask again.', steps);
+            }
+        } catch (err) {
+            finishTurn(turn, 'Could not reach IGRIS: ' + String(err), steps);
+        }
+    }
+
+    async function ask(text) {
+        if (busy || !text.trim()) { return; }
+        setBusy(true);
+        addTurn('user', text);
+        input.value = '';
+        input.style.height = 'auto';
+        var turn = addAnswerTurn();
+        await streamInto(turn, '/dashboard/api/igris/chat', { message: text, stream: true });
+        setBusy(false);
+        input.focus();
+    }
+
+    // ── Starting questions, grounded in what is actually in the ledger ───────
+    // Generic prompts ("Ask me about threats") make a person invent a question.
+    // These name the things currently waiting on them.
+    async function loadSuggestions() {
+        var host = document.getElementById('ig-suggests');
+        var qs = [];
+        try {
+            const r = await fetch('/dashboard/api/ledger', { credentials: 'same-origin' });
+            if (r.ok) {
+                const d = await r.json();
+                (d.needs_you || []).slice(0, 3).forEach(function (it) {
+                    qs.push('About "' + it.title + '" — is this me, and what is the evidence?');
+                });
+                var rec = (d.recognised && d.recognised.event_count) || 0;
+                if (rec) { qs.push('What did you clear automatically, and why those ' + rec + ' events?'); }
+            }
+        } catch (e) { /* fall through to the generic set */ }
+        if (!qs.length) {
+            qs = ['How is my Mac right now?', 'What ran here for the first time today?', 'What can you not see?'];
+        }
+        host.innerHTML = qs.map(function (q) {
+            return '<button type="button" class="ig-suggest">' + esc(q) + '</button>';
+        }).join('');
+    }
+
+    // ── Status strip ────────────────────────────────────────────────────────
+    async function loadStatus() {
+        var strip = document.getElementById('ig-strip');
+        try {
+            const r = await fetch('/dashboard/api/igris/chat/backend', { credentials: 'same-origin' });
+            const d = await r.json();
+            // `available` now means USABLE — key present AND sdk importable.
+            // Reading status:'success' as readiness is what let the strip claim
+            // "IGRIS is reading this machine" over an answer that said the
+            // package was missing.
+            var ok = d.available === true;
+            strip.dataset.state = ok ? 'ready' : 'down';
+            document.getElementById('ig-state').textContent = ok
+                ? 'IGRIS is reading this machine'
+                : 'IGRIS cannot answer here';
+            document.getElementById('ig-state-detail').textContent = ok
+                ? 'It answers from the telemetry store, not from training data.'
+                : (d.blocker || 'The language backend is unavailable on this server.');
+            document.getElementById('ig-chip-backend').textContent = ok ? 'Claude API' : 'no backend';
+        } catch (e) {
+            strip.dataset.state = 'degraded';
+            document.getElementById('ig-state').textContent = 'IGRIS status unknown';
+            document.getElementById('ig-state-detail').textContent = 'The status endpoint did not answer.';
+        }
+        document.getElementById('ig-chip-tools').textContent = '29 tools · 4 sub-agents';
+    }
+
+    // ── Internals ───────────────────────────────────────────────────────────
+    async function loadInternals(tab) {
+        var out = document.getElementById('ig-internals-out');
+        out.textContent = 'Loading…';
+        var url = tab === 'logs' ? '/dashboard/api/igris/logs?lines=200' : '/dashboard/api/igris/status';
+        try {
+            const r = await fetch(url, { credentials: 'same-origin' });
+            const d = await r.json();
+            if (tab === 'logs') {
+                var lines = d.lines || d.logs || [];
+                out.textContent = Array.isArray(lines) ? lines.join('\n') : JSON.stringify(d, null, 2);
+            } else {
+                out.textContent = JSON.stringify(d, null, 2);
+            }
+        } catch (e) {
+            out.textContent = 'Could not load — ' + String(e)
+                + '\n\nThat is a gap in this view, not a statement about IGRIS.';
+        }
+    }
+
+    // ── Wiring. One delegated listener; the previous page used inline onclick
+    //    for its tabs, which production CSP blocks outright. ─────────────────
+    document.addEventListener('click', function (ev) {
+        var s = ev.target.closest('.ig-suggest');
+        if (s) { ask(s.textContent); return; }
+
+        var tab = ev.target.closest('.ig-tab');
+        if (tab) {
+            Array.prototype.forEach.call(document.querySelectorAll('.ig-tab'), function (t) {
+                t.classList.toggle('on', t === tab);
+            });
+            loadInternals(tab.dataset.tab);
+            return;
+        }
+
+        if (ev.target.closest('#ig-internals-toggle')) {
+            var body = document.getElementById('ig-internals-body');
+            var open = body.classList.toggle('open');
+            document.getElementById('ig-internals-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open && document.getElementById('ig-internals-out').textContent === 'Open a tab to load.') {
+                loadInternals('health');
+            }
+            return;
+        }
+
+        if (ev.target.closest('#ig-send')) { ask(input.value); return; }
+
+        if (ev.target.closest('#ig-reset')) {
+            fetch('/dashboard/api/igris/chat/reset', { method: 'POST', credentials: 'same-origin' })
+                .finally(function () {
+                    thread.innerHTML = '';
+                    citedKeys = Object.create(null);
+                    evidenceEl.innerHTML = '<div class="ig-ev-empty">Nothing cited yet.</div>';
+                    openWithBrief();
+                });
+        }
+    });
+
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+    });
+    input.addEventListener('input', function () {
+        input.style.height = 'auto';
+        input.style.height = Math.min(160, input.scrollHeight) + 'px';
+    });
+
+    // ── IGRIS goes first ────────────────────────────────────────────────────
+    // A blank box asks the operator to think of a question before they know
+    // what is happening. The brief exists in the backend and nothing ever
+    // called it on open.
+    async function openWithBrief() {
+        setBusy(true);
+        var turn = addAnswerTurn();
+        turn.thinking.lastChild.textContent = ' working out what matters right now…';
+        await streamInto(turn, '/dashboard/api/igris/chat/brief', { stream: true });
+        setBusy(false);
+    }
+
+    // A ledger item can hand its question straight over: /dashboard/igris?about=<key>
+    function openingQuestion() {
+        var about = new URLSearchParams(location.search).get('about');
+        return about ? 'Tell me about "' + about + '" — is this me, and what is the evidence?' : null;
+    }
+
+    loadStatus();
+    loadSuggestions();
+    var q = openingQuestion();
+    if (q) { ask(q); } else { openWithBrief(); }
+})();
 </script>
 {% endblock %}

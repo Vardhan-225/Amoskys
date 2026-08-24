@@ -163,6 +163,7 @@
     padding: 0.42rem 0.85rem; border-radius: 7px; border: 1px solid var(--border-color);
     background: var(--bg-tertiary); color: var(--text-primary);
 }
+.lg-btn { text-decoration: none; display: inline-block; }
 .lg-btn:hover { border-color: var(--neural-primary); }
 .lg-btn:focus-visible { outline: 2px solid var(--neural-primary); outline-offset: 2px; }
 .lg-btn.mine    { border-color: rgba(58,210,159,0.45); color: #3ad29f; }
@@ -457,6 +458,10 @@
                         ? '<button type="button" class="lg-btn" data-act="evidence">Show me the events</button>'
                         : '<span class="lg-btn-note">Built from flow aggregates — no individual rows to open.</span>') +
                     '<button type="button" class="lg-btn" data-act="act">What can I do about it?</button>' +
+                    // Hands the item straight to IGRIS, which opens already
+                    // investigating it rather than showing a blank box.
+                    '<a class="lg-btn" href="/dashboard/igris?about=' + encodeURIComponent(item.title) +
+                        '">Ask IGRIS about this</a>' +
                 '</div>' +
                 '<div class="lg-evidence" hidden></div>' +
                 '<div class="lg-act" hidden></div>' +

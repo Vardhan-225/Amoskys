@@ -479,12 +479,17 @@ def _drop_igris_chat() -> bool:
         return _CHAT_SESSIONS.pop(sid, None) is not None
 
 
-def _ndjson_chat_stream(chat, message: str) -> Response:
+def _ndjson_chat_stream(chat, message: str, mode: str = "chat") -> Response:
     """Run chat in a worker thread, streaming step events as NDJSON lines.
 
     chat() is blocking, so on_step events go into a queue consumed by the
     response generator: steps are emitted as they arrive, then the final
     (or error) object terminates the stream.
+
+    ``mode="brief"`` runs proactive_brief() instead. That method has always
+    accepted an on_step callback and the route simply never passed one, so the
+    opening briefing — the first thing a person sees — could not show its work
+    while every other answer could.
     """
     from amoskys.igris.chat import tool_label
 
@@ -503,7 +508,10 @@ def _ndjson_chat_stream(chat, message: str) -> Response:
 
     def worker():
         try:
-            response = chat.chat(message, on_step=on_step)
+            if mode == "brief":
+                response = chat.proactive_brief(on_step=on_step)
+            else:
+                response = chat.chat(message, on_step=on_step)
             q.put(
                 {
                     "type": "final",
@@ -619,6 +627,9 @@ def igris_proactive_brief():
             503,
         )
 
+    if bool((request.get_json(silent=True) or {}).get("stream")):
+        return _ndjson_chat_stream(chat, "", mode="brief")
+
     try:
         response = chat.proactive_brief()
         return jsonify(
@@ -636,14 +647,45 @@ def igris_proactive_brief():
 @dashboard_bp.route("/api/igris/chat/backend", methods=["GET"])
 @require_login
 def igris_chat_backend():
-    """Get IGRIS LLM backend status."""
-    claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
+    """Get IGRIS LLM backend status.
+
+    "Available" has to mean USABLE. This checked only that ANTHROPIC_API_KEY was
+    set, so on a host where the `anthropic` package is not installed it reported
+    the backend as available and the UI said "IGRIS is reading this machine" —
+    directly above an answer that read "anthropic package required". A key
+    without a client is not a backend, and a status endpoint that cannot tell
+    the difference is worse than none.
+    """
+    key_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
+    try:
+        import anthropic  # noqa: F401
+
+        sdk_ok = True
+        sdk_detail = ""
+    except Exception as exc:
+        sdk_ok = False
+        sdk_detail = f"{type(exc).__name__}: {exc}"[:160]
+    claude_ok = key_ok and sdk_ok
+
+    if claude_ok:
+        blocker = None
+    elif not key_ok and not sdk_ok:
+        blocker = "No ANTHROPIC_API_KEY, and the anthropic package is not installed."
+    elif not key_ok:
+        blocker = "ANTHROPIC_API_KEY is not set on this server."
+    else:
+        blocker = f"The anthropic package is not importable here — {sdk_detail}"
+
     from amoskys.igris.backends import AGENT_MODEL, COMMANDER_MODEL
 
     return jsonify(
         {
             "status": "success",
             "current": "claude",
+            "available": claude_ok,
+            "key_present": key_ok,
+            "sdk_present": sdk_ok,
+            "blocker": blocker,
             "commander_model": COMMANDER_MODEL,
             "agent_model": AGENT_MODEL,
             "backends": {
