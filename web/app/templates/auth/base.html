@@ -29,6 +29,28 @@
             --text-primary: #ffffff;
             --text-secondary: #b4bcd0;
             --text-muted: #6b7a99;
+
+            /* The dashboard shell names its palette --neural-*; this shell
+               names the same colours after the colours. Four auth templates
+               reach for the dashboard vocabulary — ten uses in total — and
+               every one of them resolved to nothing, because an undefined
+               custom property makes the whole declaration invalid.
+
+               The most visible casualty was the verify-email spinner:
+               stroke="var(--neural-primary)" left the circle with no stroke at
+               all, so the page someone stares at while their account is being
+               verified showed an empty box. "Email Verified!" lost its colour
+               the same way.
+
+               Aliased rather than renamed, so both vocabularies work and a
+               fifth template borrowing a --neural- name does not break next
+               time. */
+            --neural-primary: var(--cyan-bright);
+            --neural-secondary: var(--cyan-glow);
+            --neural-success: var(--green-secure);
+            --neural-warning: var(--orange-warning);
+            --neural-danger: var(--red-alert);
+            --neural-critical: var(--red-alert);
         }
 
         * {
@@ -618,6 +640,87 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--green-secure);
         }
+
+        /* ── Recovered from static/css/auth.css ───────────────────────────
+           That file held 705 lines and was linked by nothing. When this shell
+           was rewritten to match the defense-room design it took over the card,
+           input and button styles but left behind the utility and component
+           classes — and the <link> went with it.
+
+           So the auth pages have been rendering unstyled fragments ever since:
+           .toggle-password had no rules, which is why the password reveal
+           control on the sign-in page looked like a raw grey browser button
+           sitting inside the field; .form-checkbox had none, so "Remember me"
+           was a default checkbox; .btn-block had none, so full-width buttons
+           were not; and the signup password-strength meter had no bar, no fill
+           and no label.
+
+           Ported here rather than re-linked, because the two files also
+           overlapped on .auth-card, .form-input, .btn and .particles — one
+           source of truth is the point. auth.css is deleted in the same
+           commit. Only the classes this shell did NOT already define appear
+           below. */
+
+        .input-wrapper { position: relative; }
+        .input-wrapper .form-input { padding-right: 3rem; }
+
+        .toggle-password {
+            position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: var(--text-muted);
+            cursor: pointer; padding: 0.25rem; transition: color 0.15s ease;
+            display: flex; align-items: center;
+        }
+        .toggle-password:hover { color: var(--cyan-bright); }
+        .toggle-password:focus-visible { outline: 2px solid var(--cyan-bright); outline-offset: 2px; border-radius: 4px; }
+
+        .btn-block { width: 100%; }
+        .btn-text { display: inline-block; }
+        .btn-secondary {
+            background: transparent; border: 1px solid var(--cyan-glow); color: var(--cyan-glow);
+        }
+        .btn-secondary:hover:not(:disabled) { background: var(--cyan-glow); color: var(--navy-dark); }
+
+        .form-link { color: var(--cyan-bright); font-size: 0.9rem; text-decoration: none; transition: color 0.15s ease; }
+        .form-link:hover { color: var(--green-secure); text-decoration: underline; }
+
+        .form-checkbox { display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; }
+        .form-checkbox input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--cyan-bright); cursor: pointer; }
+        .form-checkbox span { color: var(--text-secondary); font-size: 0.9rem; }
+        .form-checkbox a { color: var(--cyan-bright); }
+
+        .password-requirements {
+            margin-top: 1rem; padding: 1rem; background: rgba(0, 170, 255, 0.1);
+            border-radius: 8px; font-size: 0.85rem;
+        }
+        .password-requirements h4 { color: var(--cyan-glow); margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .password-requirements ul { list-style: none; color: var(--text-secondary); }
+        .password-requirements li { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+        .password-requirements li::before { content: '\25CB'; color: var(--text-muted); }
+        .password-requirements li.valid::before { content: '\25CF'; color: var(--green-secure); }
+
+        .strength-bar {
+            height: 4px; background: var(--navy-light); border-radius: 2px;
+            overflow: hidden; margin-bottom: 0.25rem;
+        }
+        .strength-fill { height: 100%; width: 0; border-radius: 2px; transition: width 0.25s ease, background 0.25s ease; }
+        .strength-fill.weak   { width: 25%;  background: var(--red-alert); }
+        .strength-fill.fair   { width: 50%;  background: var(--orange-warning); }
+        .strength-fill.good   { width: 75%;  background: var(--cyan-glow); }
+        .strength-fill.strong { width: 100%; background: var(--green-secure); }
+        .strength-text { font-size: 0.75rem; color: var(--text-muted); }
+
+        .auth-form { display: block; }
+        .loader { display: flex; justify-content: center; }
+
+        .text-center { text-align: center; }
+        .text-muted { color: var(--text-muted); }
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        .mt-4 { margin-top: 2rem; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
     </style>
 </head>
 <body>

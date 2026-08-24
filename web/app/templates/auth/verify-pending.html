@@ -84,11 +84,29 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             const data = await response.json();
-            
-            // Always show success to prevent enumeration
-            resendSuccess.style.display = 'block';
-            startCooldown(60);
-            
+
+            // "✓ Verification email sent!" used to print regardless of the
+            // response — including on a 500 from a mail service that never
+            // sent anything. Someone who cannot get into their account is
+            // exactly the person who most needs to be told to try again, and
+            // this told them the opposite.
+            //
+            // Enumeration resistance is about the ACCOUNT, and a 2xx still
+            // looks identical whether the address is known or not. A server
+            // error says nothing about any account, so it can be reported.
+            if (response.ok) {
+                resendSuccess.style.display = 'block';
+                startCooldown(60);
+            } else if (response.status === 429) {
+                showError('Too many requests. Wait a minute before resending.');
+                startCooldown(60);
+            } else if (response.status >= 500) {
+                showError('The email could not be sent — that is a problem on our side, not with ' +
+                          'your address. Please try again in a few minutes.');
+            } else {
+                showError((data && data.error) || 'The request was rejected. Please try again.');
+            }
+
         } catch (error) {
             console.error('Resend error:', error);
             showError('Network error. Please try again.');
