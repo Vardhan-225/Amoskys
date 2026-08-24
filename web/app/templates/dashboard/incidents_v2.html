@@ -1,172 +1,415 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AMOSKYS — Incidents</title>
-<link rel="stylesheet" href="/static/css/amoskys.css">
+{% extends "dashboard/base.html" %}
+
+{#
+Ported out of the second application shell.
+
+Four things had to change beyond moving the markup:
+
+  * It loaded /static/css/amoskys.css, which is UN-NAMESPACED — it sets
+    `*{margin:0;padding:0}`, `a{color:inherit;text-decoration:none}`, a
+    scrollbar rule and `body.amoskys{...}` at global scope. Under base.html the
+    bare `a` rule alone would have stripped the shared nav's link colours. Its
+    70 lines are folded in here with an `iq-` prefix and the file is deleted;
+    this was its only consumer.
+
+  * `body class="amoskys"` no longer applies — base has no body_class block —
+    so anything that depended on it is now explicit.
+
+  * The flyout sat at z-index 80. base's sticky header is 1000, the IGRIS
+    widget 9999 and the command palette 10000, so as-written the header would
+    have covered the flyout's own title and its ✕. It now sits above all of it.
+
+  * Its verdict buttons said "Pattern learning ships with the suppression
+    store". That store shipped — verdict_store.py, POST
+    /dashboard/api/ledger/verdict — so the buttons now write through it and the
+    copy states what actually happened rather than what was planned.
+#}
+
+{% block title %}Incidents — AMOSKYS{% endblock %}
+
+{% block extra_head %}
 <style>
-.filters{display:flex;gap:8px;margin:0 2px 16px;flex-wrap:wrap}
-.fbtn{font-size:12.5px;padding:8px 15px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
-  color:var(--ink-2);cursor:pointer;font-family:inherit;transition:.15s}
-.fbtn:hover{border-color:var(--line-2)} .fbtn.on{border-color:var(--cyan);color:var(--cyan);background:rgba(53,224,240,.08)}
-.queue{display:flex;flex-direction:column;gap:11px}
-.empty{color:var(--ink-3);text-align:center;padding:60px;font-size:14px}
-.scrim{position:fixed;inset:0;background:rgba(3,5,9,.6);backdrop-filter:blur(3px);opacity:0;pointer-events:none;
-  transition:opacity .25s;z-index:70}.scrim.on{opacity:1;pointer-events:auto}
-.flyout{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);z-index:80;background:linear-gradient(180deg,var(--bg1),var(--bg0));
-  border-left:1px solid var(--line-2);transform:translateX(100%);transition:transform .32s cubic-bezier(.4,0,.1,1);
-  display:flex;flex-direction:column;box-shadow:-30px 0 80px rgba(0,0,0,.5)}.flyout.on{transform:translateX(0)}
-.fly-h{padding:22px 24px 18px;border-bottom:1px solid var(--line)}
-.fly-h .close{float:right;background:var(--bg2);border:1px solid var(--line);color:var(--ink-2);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px}
-.fly-h h2{font-size:20px;font-weight:700;margin-right:44px;line-height:1.25}
-.fly-b{padding:22px 24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:20px}
-.fly-b .h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px}
-.why{font-size:14px;line-height:1.6;color:var(--ink-2)}
-.band-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin:0 0 10px}
-.factors{display:flex;flex-wrap:wrap;gap:6px}
-.verdict-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.vbtn{padding:13px;border-radius:11px;border:1px solid var(--line-2);background:var(--bg2);color:var(--ink);cursor:pointer;
-  font-family:inherit;font-size:13px;font-weight:600;text-align:left;transition:.15s;display:flex;flex-direction:column;gap:3px}
-.vbtn small{font-weight:400;color:var(--ink-3);font-size:11px}
-.vbtn:hover{border-color:var(--cyan)} .vbtn.sel{border-color:var(--cyan);background:rgba(53,224,240,.10)}
-.vbtn.exp:hover,.vbtn.exp.sel{border-color:var(--calm);background:var(--calm-bg)}
-.vbtn.threat:hover,.vbtn.threat.sel{border-color:var(--red);background:var(--red-bg)}
+.iq-wrap {
+    /* Scoped, never :root — base owns the global palette. */
+    --iq-line: rgba(120, 160, 200, 0.14);
+    --iq-line-2: rgba(120, 160, 200, 0.28);
+    --iq-panel: rgba(18, 28, 42, 0.55);
+    --iq-bg2: #0e1622;
+    --iq-cyan: var(--neural-primary, #35e0f0);
+    --iq-violet: #8b7bff;
+    --iq-calm: var(--neural-success, #3ad29f);
+    --iq-amber: var(--neural-warning, #ffb038);
+    --iq-red: var(--neural-danger, #ff4d5e);
+    --iq-calm-bg: rgba(58, 210, 159, 0.12);
+    --iq-amber-bg: rgba(255, 176, 56, 0.12);
+    --iq-red-bg: rgba(255, 77, 94, 0.12);
+
+    max-width: 1320px; margin: 0 auto; padding: 24px 26px 90px;
+}
+.iq-tnum { font-variant-numeric: tabular-nums; }
+
+.iq-sec-h { display: flex; align-items: baseline; gap: 12px; margin: 6px 2px 14px; flex-wrap: wrap; }
+.iq-sec-h h2 { font-size: 18px; font-weight: 680; letter-spacing: -.01em; color: var(--text-primary); }
+.iq-sec-h span { color: var(--text-muted); font-size: 13px; }
+
+.iq-filters { display: flex; gap: 8px; margin: 0 2px 16px; flex-wrap: wrap; }
+.iq-fbtn {
+    font-size: 12.5px; padding: 8px 15px; border-radius: 999px;
+    border: 1px solid var(--iq-line); background: var(--iq-panel);
+    color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: .15s;
+}
+.iq-fbtn:hover { border-color: var(--iq-line-2); }
+.iq-fbtn.on { border-color: var(--iq-cyan); color: var(--iq-cyan); background: rgba(53,224,240,.08); }
+.iq-fbtn:focus-visible { outline: 2px solid var(--iq-cyan); outline-offset: 2px; }
+
+.iq-queue { display: flex; flex-direction: column; gap: 11px; }
+.iq-empty { color: var(--text-muted); text-align: center; padding: 60px; font-size: 14px; }
+
+/* severity primitives (folded in from amoskys.css) */
+.iq-vpill { font-size: 11.5px; font-weight: 650; padding: 5px 11px; border-radius: 999px; white-space: nowrap; }
+.iq-vpill.calm  { background: var(--iq-calm-bg);  color: var(--iq-calm); }
+.iq-vpill.amber { background: var(--iq-amber-bg); color: var(--iq-amber); }
+.iq-vpill.red   { background: var(--iq-red-bg);   color: var(--iq-red); }
+.iq-chip  { font-size: 11px;   padding: 4px 9px; border-radius: 7px; background: var(--iq-bg2); border: 1px solid var(--iq-line); color: var(--text-secondary); }
+.iq-mchip { font-size: 10.5px; padding: 3px 8px; border-radius: 6px; background: var(--iq-bg2); border: 1px solid var(--iq-line); color: var(--text-muted); }
+.iq-mchip.mitre { color: var(--iq-violet); border-color: rgba(139,123,255,.3); }
+
+/* incident row */
+.iq-inc {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+    background: var(--iq-panel); border: 1px solid var(--iq-line); border-left-width: 3px;
+    border-radius: 16px; padding: 16px 20px; cursor: pointer; text-align: left;
+    width: 100%; font: inherit; color: inherit;
+    transition: border-color .18s, background .18s;
+}
+.iq-inc:hover { background: rgba(24,36,54,.7); border-color: var(--iq-line-2); }
+.iq-inc:focus-visible { outline: 2px solid var(--iq-cyan); outline-offset: 2px; }
+.iq-inc.calm  { border-left-color: var(--iq-calm); }
+.iq-inc.amber { border-left-color: var(--iq-amber); }
+.iq-inc.red   { border-left-color: var(--iq-red); }
+.iq-inc .iq-sev { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 18px; }
+.iq-inc.calm .iq-sev  { background: var(--iq-calm-bg); }
+.iq-inc.amber .iq-sev { background: var(--iq-amber-bg); }
+.iq-inc.red .iq-sev   { background: var(--iq-red-bg); }
+.iq-inc .iq-t { font-size: 15px; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary); }
+.iq-inc .iq-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; align-items: center; }
+.iq-inc .iq-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.iq-inc .iq-cnt { font-size: 11px; color: var(--text-muted); }
+
+/* The flyout. base's chrome is header 1000, IGRIS 9999, palette 10000 — a
+   dialog at the old z-index 80 would have opened UNDERNEATH the header, which
+   is exactly where its title and close button live. */
+.iq-scrim {
+    position: fixed; inset: 0; background: rgba(3,5,9,.66); backdrop-filter: blur(3px);
+    opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 10050;
+}
+.iq-scrim.on { opacity: 1; pointer-events: auto; }
+.iq-flyout {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(560px, 94vw); z-index: 10051;
+    background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+    border-left: 1px solid var(--iq-line-2); transform: translateX(100%);
+    transition: transform .32s cubic-bezier(.4,0,.1,1);
+    display: flex; flex-direction: column; box-shadow: -30px 0 80px rgba(0,0,0,.5);
+}
+.iq-flyout.on { transform: translateX(0); }
+.iq-fly-h { padding: 22px 24px 18px; border-bottom: 1px solid var(--iq-line); }
+.iq-fly-h .iq-close {
+    float: right; background: var(--iq-bg2); border: 1px solid var(--iq-line);
+    color: var(--text-secondary); width: 32px; height: 32px; border-radius: 9px;
+    cursor: pointer; font-size: 16px;
+}
+.iq-fly-h .iq-close:focus-visible { outline: 2px solid var(--iq-cyan); outline-offset: 2px; }
+.iq-fly-h h2 { font-size: 20px; font-weight: 700; margin-right: 44px; line-height: 1.25; color: var(--text-primary); }
+.iq-fly-b { padding: 22px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+.iq-fly-b .iq-h { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 9px; }
+.iq-why { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.iq-band-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600; margin: 0 0 10px; }
+.iq-factors { display: flex; flex-wrap: wrap; gap: 6px; }
+.iq-verdict-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.iq-vbtn {
+    padding: 13px; border-radius: 11px; border: 1px solid var(--iq-line-2);
+    background: var(--iq-bg2); color: var(--text-primary); cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600; text-align: left;
+    transition: .15s; display: flex; flex-direction: column; gap: 3px;
+}
+.iq-vbtn small { font-weight: 400; color: var(--text-muted); font-size: 11px; }
+.iq-vbtn:hover { border-color: var(--iq-cyan); }
+.iq-vbtn:focus-visible { outline: 2px solid var(--iq-cyan); outline-offset: 2px; }
+.iq-vbtn.sel { border-color: var(--iq-cyan); background: rgba(53,224,240,.10); }
+.iq-vbtn.exp:hover, .iq-vbtn.exp.sel { border-color: var(--iq-calm); background: var(--iq-calm-bg); }
+.iq-vbtn.threat:hover, .iq-vbtn.threat.sel { border-color: var(--iq-red); background: var(--iq-red-bg); }
+.iq-vbtn[disabled] { opacity: .55; cursor: default; }
+.iq-vfeed { font-size: 12px; color: var(--text-muted); margin-top: 10px; min-height: 16px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+    .iq-scrim, .iq-flyout, .iq-inc, .iq-fbtn, .iq-vbtn { transition: none !important; }
+}
 </style>
-</head>
-<body class="amoskys">
-<nav class="amk-nav">
-  <a class="amk-brand" href="/dashboard/" title="Back to the dashboard"><span class="dot"></span>AMOSKYS</a>
-  <a class="amk-link" href="/dashboard/">Overview</a>
-  <a class="amk-link" href="/dashboard/ledger">Ledger</a>
-  <a class="amk-link on" href="/dashboard/incidents-view">Incidents</a>
-  <a class="amk-link" href="/dashboard/device-view">Device</a>
-  <div class="amk-grow"></div>
-  <div class="pill" id="updated">updated —</div>
-</nav>
+{% endblock %}
 
-<div class="wrap">
-  <div class="sec-h"><h2>Incidents</h2><span id="sub">the prioritized, correlated queue</span></div>
-  <div class="filters" id="filters">
-    <button class="fbtn on" data-f="all">All</button>
-    <button class="fbtn" data-f="red">Act now</button>
-    <button class="fbtn" data-f="amber">Worth a look</button>
-    <button class="fbtn" data-f="calm">Expected</button>
-  </div>
-  <div class="queue" id="queue"></div>
+{% block content %}
+<div class="iq-wrap">
+    <div class="iq-sec-h">
+        <h2>Incidents</h2>
+        <span id="iq-sub">the prioritized, correlated queue</span>
+        <span class="iq-chip" id="iq-updated" style="margin-left:auto">updated —</span>
+    </div>
 
-  <div id="brainSec" style="display:none;margin-top:34px;">
-    <div class="sec-h"><h2>Correlated incidents</h2><span id="brainSub">cross-device correlations from the IGRIS brain — open one to investigate</span></div>
-    <div class="queue" id="brainQueue"></div>
-  </div>
+    <div class="iq-filters" id="iq-filters">
+        <button class="iq-fbtn on" data-f="all">All</button>
+        <button class="iq-fbtn" data-f="red">Act now</button>
+        <button class="iq-fbtn" data-f="amber">Worth a look</button>
+        <button class="iq-fbtn" data-f="calm">Expected</button>
+    </div>
+    <div class="iq-queue" id="iq-queue"></div>
+
+    <div id="iq-brain-sec" style="display:none;margin-top:34px;">
+        <div class="iq-sec-h">
+            <h2>Correlated incidents</h2>
+            <span id="iq-brain-sub">cross-device correlations from the IGRIS brain — open one to investigate</span>
+        </div>
+        <div class="iq-queue" id="iq-brain-queue"></div>
+    </div>
 </div>
 
-<div class="scrim" id="scrim"></div>
-<div class="flyout" id="flyout" role="dialog" aria-modal="true">
-  <div class="fly-h"><button class="close" id="flyClose" aria-label="Close">✕</button>
-    <div class="band-chip" id="fband"></div><h2 id="ftitle">—</h2></div>
-  <div class="fly-b" id="flybody"></div>
+<div class="iq-scrim" id="iq-scrim"></div>
+<div class="iq-flyout" id="iq-flyout" role="dialog" aria-modal="true" aria-labelledby="iq-ftitle">
+    <div class="iq-fly-h">
+        <button class="iq-close" id="iq-fly-close" aria-label="Close">✕</button>
+        <div class="iq-band-chip" id="iq-fband"></div>
+        <h2 id="iq-ftitle">—</h2>
+    </div>
+    <div class="iq-fly-b" id="iq-flybody"></div>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
-let INCIDENTS=[], FILTER='all', selV={};
-const $=s=>document.querySelector(s);
-const SEV={calm:'✓',amber:'!',red:'▲'};
-const bandBg=b=>b==='red'?'var(--red-bg)':b==='amber'?'var(--amber-bg)':'var(--calm-bg)';
-const bandC=b=>b==='red'?'var(--red)':b==='amber'?'var(--amber)':'var(--calm)';
-const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+(function () {
+    "use strict";
 
-function render(){
-  const list = FILTER==='all'?INCIDENTS:INCIDENTS.filter(i=>i.band===FILTER);
-  $('#sub').textContent = INCIDENTS.filter(i=>i.band!=='calm').length+' to review · '+INCIDENTS.filter(i=>i.band==='calm').length+' expected';
-  $('#queue').innerHTML = list.length ? list.map((i)=>{
-    const gi=INCIDENTS.indexOf(i);
-    const mitre=(i.mitre||[]).slice(0,3).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join('');
-    const facts=(i.factors||[]).slice(0,3).map(f=>'<span class="mchip">'+esc(f)+'</span>').join('');
-    // CSP: inline onclick can never be nonce-authorised, so the row index
-    // rides on data-ix and #queue's delegated listener opens the flyout.
-    return '<div class="inc '+i.band+'" data-ix="'+gi+'"><div class="sev">'+SEV[i.band]+'</div>'
-      +'<div><div class="t">'+esc(i.title)+'</div><div class="meta">'+mitre+facts+'</div></div>'
-      +'<div class="right"><span class="vpill '+i.band+'">'+esc(i.verdict_label)+'</span>'
-      +'<span class="cnt tnum">'+i.count+' event'+(i.count!==1?'s':'')+'</span></div></div>';
-  }).join('') : '<div class="empty">Nothing in this filter. That’s good news.</div>';
-}
-function setFilter(f){FILTER=f;[...document.querySelectorAll('.fbtn')].forEach(b=>b.classList.toggle('on',b.dataset.f===f));render();}
-document.getElementById('filters').addEventListener('click',e=>{if(e.target.dataset.f)setFilter(e.target.dataset.f);});
-// #queue is re-rendered wholesale but the container node survives, so one
-// delegated listener covers every incident row.
-$('#queue').addEventListener('click',e=>{const r=e.target.closest('.inc');if(r&&r.dataset.ix!==undefined)openFly(+r.dataset.ix);});
+    var INCIDENTS = [], FILTER = 'all', selV = {};
+    var $ = function (s) { return document.querySelector(s); };
+    var SEV = { calm: '✓', amber: '!', red: '▲' };
 
-function openFly(ix){
-  const i=INCIDENTS[ix]; const c=bandC(i.band);
-  const fb=$('#fband');fb.style.background=bandBg(i.band);fb.style.color=c;fb.textContent=esc((i.verdict_label||'').toUpperCase());
-  $('#ftitle').textContent=i.title;
-  const mitre=(i.mitre||[]).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join(' ')||'—';
-  const facts=(i.factors||[]).map(f=>'<span class="chip">'+esc(f)+'</span>').join('');
-  const sel=selV[i.id]||i.verdict;
-  const vb=(k,cls,lab,sub)=>'<button class="vbtn '+cls+(sel===k?' sel':'')+'" data-vid="'+esc(i.id)+'" data-v="'+k+'"><span>'+lab+'</span><small>'+sub+'</small></button>';
-  $('#flybody').innerHTML=
-    '<div><div class="h">The correlation</div><div class="why">'+esc(i.why)+'</div></div>'
-    +'<div><div class="h">Evidence</div><div class="chip">'+i.count+' events</div> <div class="chip">MITRE '+mitre+'</div></div>'
-    +'<div><div class="h">Signals</div><div class="factors">'+facts+'</div></div>'
-    +'<div><div class="h">Your verdict — teaches AMOSKYS</div><div class="verdict-btns">'
-      +vb('expected','exp','Expected activity','suppress this pattern')+vb('suspicious','','Suspicious','keep watching')
-      +vb('threat','threat','Threat','escalate + alert')+vb('dismiss','','Not now','leave unset')
-    +'</div><div id="vfeed" style="font-size:12px;color:var(--ink-3);margin-top:10px;min-height:16px"></div></div>';
-  $('#scrim').classList.add('on');$('#flyout').classList.add('on');
-}
-function setV(id,k,el){selV[id]=k;[...el.parentNode.children].forEach(b=>b.classList.remove('sel'));el.classList.add('sel');
-  // Honest: verdicts are noted in this view only until the suppression
-  // store ships a real write path — never claim AMOSKYS "learned".
-  const m={expected:'✓ Noted in this view. Pattern learning ships with the suppression store.',
-    suspicious:'◐ Noted in this view — kept visible.',
-    threat:'▲ Noted in this view. Escalation wiring is in progress.',
-    dismiss:'Left unset.'}[k];
-  $('#vfeed').textContent=m;$('#vfeed').style.color=k==='expected'?'var(--calm)':k==='threat'?'var(--red)':'var(--ink-3)';}
-function closeFly(){$('#scrim').classList.remove('on');$('#flyout').classList.remove('on');}
-$('#flybody').addEventListener('click',e=>{const b=e.target.closest('.vbtn');if(b)setV(b.dataset.vid,b.dataset.v,b);});
-$('#scrim').addEventListener('click',closeFly);
-$('#flyClose').addEventListener('click',closeFly);
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFly();});
+    var bandBg = function (b) {
+        return b === 'red' ? 'var(--iq-red-bg)' : b === 'amber' ? 'var(--iq-amber-bg)' : 'var(--iq-calm-bg)';
+    };
+    var bandC = function (b) {
+        return b === 'red' ? 'var(--iq-red)' : b === 'amber' ? 'var(--iq-amber)' : 'var(--iq-calm)';
+    };
+    var esc = function (s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
 
-async function load(){
-  try{const r=await fetch('/dashboard/api/insight',{cache:'no-store',headers:{'Accept':'application/json'}});
-    if(r.ok){const d=await r.json(); INCIDENTS=d.incidents||[];
-      $('#updated').textContent='updated '+(d.generated_at?new Date(d.generated_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—');}}
-  catch(e){console.warn(e);}
-  render();
-  loadBrainIncidents();
-}
+    function render() {
+        var list = FILTER === 'all' ? INCIDENTS : INCIDENTS.filter(function (i) { return i.band === FILTER; });
+        $('#iq-sub').textContent =
+            INCIDENTS.filter(function (i) { return i.band !== 'calm'; }).length + ' to review · '
+            + INCIDENTS.filter(function (i) { return i.band === 'calm'; }).length + ' expected';
 
-// DB-backed correlated incidents (fleet_incidents / incidents table).
-// Unlike the synthesized stories above, these have real IDs and a full
-// investigation page behind them.
-const sevBand=s=>({critical:'red',high:'red',medium:'amber',low:'calm'}[String(s||'').toLowerCase()]||'amber');
-async function loadBrainIncidents(){
-  try{
-    const r=await fetch('/dashboard/api/incidents?per_page=25',{cache:'no-store',headers:{'Accept':'application/json'}});
-    if(!r.ok)return;
-    const d=await r.json();
-    const rows=(d.incidents||[]).filter(i=>i&&i.id!=null);
-    if(!rows.length)return;
-    const open=rows.filter(i=>String(i.status||'open').toLowerCase()!=='resolved').length;
-    $('#brainSub').textContent=open+' open · '+(rows.length-open)+' resolved — open one to investigate';
-    $('#brainQueue').innerHTML=rows.map(i=>{
-      const band=sevBand(i.severity);
-      const when=(i.created_at||'').replace('T',' ').split('.')[0];
-      const mitre=(()=>{try{return JSON.parse(i.mitre_techniques||'[]');}catch(e){return [];}})()
-        .slice(0,3).map(m=>'<span class="mchip mitre">'+esc(m)+'</span>').join('');
-      const meta=[when&&('<span class="mchip">'+esc(when)+'</span>'),
-        i.occurrence_count>1&&('<span class="mchip">seen '+i.occurrence_count+'×</span>')].filter(Boolean).join('');
-      return '<a class="inc '+band+'" href="/dashboard/investigation/'+encodeURIComponent(i.id)+'" style="text-decoration:none;color:inherit;">'
-        +'<div class="sev">'+SEV[band]+'</div>'
-        +'<div><div class="t">'+esc(i.title)+'</div><div class="meta">'+mitre+meta+'</div></div>'
-        +'<div class="right"><span class="vpill '+band+'">'+esc(String(i.status||'open'))+'</span></div></a>';
-    }).join('');
-    $('#brainSec').style.display='';
-  }catch(e){console.warn(e);}
-}
-load();
+        $('#iq-queue').innerHTML = list.length ? list.map(function (i) {
+            var gi = INCIDENTS.indexOf(i);
+            var mitre = (i.mitre || []).slice(0, 3).map(function (m) {
+                return '<span class="iq-mchip mitre">' + esc(m) + '</span>';
+            }).join('');
+            var facts = (i.factors || []).slice(0, 3).map(function (f) {
+                return '<span class="iq-mchip">' + esc(f) + '</span>';
+            }).join('');
+            // A real <button>: focusable and reachable from the keyboard, which
+            // a <div> with a click handler never was.
+            return '<button type="button" class="iq-inc ' + esc(i.band) + '" data-ix="' + gi + '">'
+                + '<span class="iq-sev">' + SEV[i.band] + '</span>'
+                + '<span><span class="iq-t">' + esc(i.title) + '</span>'
+                + '<span class="iq-meta">' + mitre + facts + '</span></span>'
+                + '<span class="iq-right"><span class="iq-vpill ' + esc(i.band) + '">' + esc(i.verdict_label) + '</span>'
+                + '<span class="iq-cnt iq-tnum">' + esc(i.count) + ' event' + (i.count !== 1 ? 's' : '') + '</span></span>'
+                + '</button>';
+        }).join('') : '<div class="iq-empty">Nothing in this filter. That’s good news.</div>';
+    }
+
+    function setFilter(f) {
+        FILTER = f;
+        Array.prototype.forEach.call(document.querySelectorAll('.iq-fbtn'), function (b) {
+            b.classList.toggle('on', b.dataset.f === f);
+        });
+        render();
+    }
+
+    function openFly(ix) {
+        var i = INCIDENTS[ix];
+        if (!i) { return; }
+        var c = bandC(i.band);
+        var fb = $('#iq-fband');
+        fb.style.background = bandBg(i.band);
+        fb.style.color = c;
+        fb.textContent = (i.verdict_label || '').toUpperCase();
+        $('#iq-ftitle').textContent = i.title;
+
+        var mitre = (i.mitre || []).map(function (m) {
+            return '<span class="iq-mchip mitre">' + esc(m) + '</span>';
+        }).join(' ') || '—';
+        var facts = (i.factors || []).map(function (f) {
+            return '<span class="iq-chip">' + esc(f) + '</span>';
+        }).join('');
+        var sel = selV[i.id] || i.verdict;
+        var vb = function (k, cls, lab, sub) {
+            return '<button type="button" class="iq-vbtn ' + cls + (sel === k ? ' sel' : '')
+                + '" data-vid="' + esc(i.id) + '" data-v="' + k + '">'
+                + '<span>' + lab + '</span><small>' + sub + '</small></button>';
+        };
+
+        $('#iq-flybody').innerHTML =
+            '<div><div class="iq-h">The correlation</div><div class="iq-why">' + esc(i.why) + '</div></div>'
+            + '<div><div class="iq-h">Evidence</div><span class="iq-chip">' + esc(i.count) + ' events</span> '
+              + '<span class="iq-chip">MITRE ' + mitre + '</span></div>'
+            + '<div><div class="iq-h">Signals</div><div class="iq-factors">' + facts + '</div></div>'
+            + '<div><div class="iq-h">Your verdict — teaches AMOSKYS</div><div class="iq-verdict-btns">'
+              + vb('expected', 'exp', 'Expected activity', 'recognise this as yours')
+              + vb('suspicious', '', 'Suspicious', 'keep it in front of me')
+              + vb('threat', 'threat', 'Threat', 'keep it and flag the probe')
+              + vb('dismiss', '', 'Clear my answer', 'back to undecided')
+            + '</div><div class="iq-vfeed" id="iq-vfeed"></div></div>';
+
+        $('#iq-scrim').classList.add('on');
+        $('#iq-flyout').classList.add('on');
+        $('#iq-fly-close').focus();
+    }
+
+    function closeFly() {
+        $('#iq-scrim').classList.remove('on');
+        $('#iq-flyout').classList.remove('on');
+    }
+
+    // The verdict now WRITES. This used to say "Pattern learning ships with the
+    // suppression store" — that store shipped (verdict_store.py, POST
+    // /dashboard/api/ledger/verdict), so the four-way choice maps onto it and
+    // the message reports what actually landed rather than what was planned.
+    var VERDICT_MAP = { expected: 'mine', suspicious: 'not_mine', threat: 'not_mine', dismiss: 'clear' };
+
+    async function setV(id, k, el) {
+        selV[id] = k;
+        Array.prototype.forEach.call(el.parentNode.children, function (b) { b.classList.remove('sel'); });
+        el.classList.add('sel');
+        var feed = $('#iq-vfeed');
+        feed.textContent = 'Saving…';
+        feed.style.color = 'var(--text-muted)';
+
+        var buttons = el.parentNode.querySelectorAll('.iq-vbtn');
+        Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
+        try {
+            const res = await fetch('/dashboard/api/ledger/verdict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ key: id, verdict: VERDICT_MAP[k] || 'clear' })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                feed.textContent = data.detail || data.error || ('Did not save (HTTP ' + res.status + ')');
+                feed.style.color = 'var(--iq-red)';
+                return;
+            }
+            if (k === 'dismiss') {
+                feed.textContent = data.message || 'Cleared — this is back in the queue.';
+                feed.style.color = 'var(--text-muted)';
+            } else if (data.upstream === 'applied') {
+                feed.textContent = data.message + ' The detector was updated: ' + (data.upstream_detail || '');
+                feed.style.color = k === 'expected' ? 'var(--iq-calm)' : 'var(--iq-amber)';
+            } else {
+                feed.textContent = data.message + ' ' + (data.upstream_detail || '');
+                feed.style.color = 'var(--text-muted)';
+            }
+        } catch (err) {
+            feed.textContent = 'Did not save: ' + String(err);
+            feed.style.color = 'var(--iq-red)';
+        } finally {
+            Array.prototype.forEach.call(buttons, function (b) { b.disabled = false; });
+        }
+    }
+
+    document.getElementById('iq-filters').addEventListener('click', function (e) {
+        var b = e.target.closest('.iq-fbtn');
+        if (b && b.dataset.f) { setFilter(b.dataset.f); }
+    });
+    $('#iq-queue').addEventListener('click', function (e) {
+        var r = e.target.closest('.iq-inc');
+        if (r && r.dataset.ix !== undefined) { openFly(+r.dataset.ix); }
+    });
+    $('#iq-flybody').addEventListener('click', function (e) {
+        var b = e.target.closest('.iq-vbtn');
+        if (b) { setV(b.dataset.vid, b.dataset.v, b); }
+    });
+    $('#iq-scrim').addEventListener('click', closeFly);
+    $('#iq-fly-close').addEventListener('click', closeFly);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && $('#iq-flyout').classList.contains('on')) { closeFly(); }
+    });
+
+    var sevBand = function (s) {
+        return ({ critical: 'red', high: 'red', medium: 'amber', low: 'calm' })[String(s || '').toLowerCase()] || 'amber';
+    };
+
+    // DB-backed correlated incidents — unlike the synthesized stories above,
+    // these have real IDs and a full investigation page behind them.
+    async function loadBrainIncidents() {
+        try {
+            const r = await fetch('/dashboard/api/incidents?per_page=25', {
+                cache: 'no-store', credentials: 'same-origin', headers: { 'Accept': 'application/json' }
+            });
+            if (!r.ok) { return; }
+            const d = await r.json();
+            var rows = (d.incidents || []).filter(function (i) { return i && i.id !== null && i.id !== undefined; });
+            if (!rows.length) { return; }
+            var open = rows.filter(function (i) { return String(i.status || 'open').toLowerCase() !== 'resolved'; }).length;
+            $('#iq-brain-sub').textContent = open + ' open · ' + (rows.length - open) + ' resolved — open one to investigate';
+            $('#iq-brain-queue').innerHTML = rows.map(function (i) {
+                var band = sevBand(i.severity);
+                var when = (i.created_at || '').replace('T', ' ').split('.')[0];
+                var techs = [];
+                try { techs = JSON.parse(i.mitre_techniques || '[]'); } catch (e) { techs = []; }
+                var mitre = techs.slice(0, 3).map(function (m) {
+                    return '<span class="iq-mchip mitre">' + esc(m) + '</span>';
+                }).join('');
+                var meta = [
+                    when && ('<span class="iq-mchip">' + esc(when) + '</span>'),
+                    i.occurrence_count > 1 && ('<span class="iq-mchip">seen ' + esc(i.occurrence_count) + '×</span>')
+                ].filter(Boolean).join('');
+                return '<a class="iq-inc ' + band + '" href="/dashboard/investigation/' + encodeURIComponent(i.id) + '"'
+                    + ' style="text-decoration:none;color:inherit;">'
+                    + '<span class="iq-sev">' + SEV[band] + '</span>'
+                    + '<span><span class="iq-t">' + esc(i.title) + '</span>'
+                    + '<span class="iq-meta">' + mitre + meta + '</span></span>'
+                    + '<span class="iq-right"><span class="iq-vpill ' + band + '">' + esc(String(i.status || 'open')) + '</span></span></a>';
+            }).join('');
+            $('#iq-brain-sec').style.display = '';
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+
+    async function load() {
+        try {
+            const r = await fetch('/dashboard/api/insight', {
+                cache: 'no-store', credentials: 'same-origin', headers: { 'Accept': 'application/json' }
+            });
+            if (r.ok) {
+                const d = await r.json();
+                INCIDENTS = d.incidents || [];
+                $('#iq-updated').textContent = 'updated ' + (d.generated_at
+                    ? new Date(d.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : '—');
+            }
+        } catch (e) {
+            console.warn(e);
+        }
+        render();
+        loadBrainIncidents();
+    }
+
+    load();
+})();
 </script>
-</body>
-</html>
+{% endblock %}
