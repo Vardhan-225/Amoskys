@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.amoskys.sentinel</string>
+
+    <!-- The signed + provisioned ESF client. MONITOR by default.
+
+         PERSISTENCE IN MONITOR IS NOT THE RISK THAT DEFERRED IT. The reason
+         this daemon was held back was ENFORCE mode: a security agent that
+         blocks the wrong binary at boot is a very bad day. With
+         AMOSKYS_ENFORCE unset the Sentinel logs WOULD-DENY and blocks nothing,
+         so running it persistently costs nothing and is in fact REQUIRED — the
+         week-long clean-run gate cannot be satisfied by a process that dies
+         with the terminal that launched it.
+
+         Flip to ENFORCE only after a measured false-positive rate. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/athanneeru/Amoskys_recovered/macos-esf-shim/AmoskysSentinel.app/Contents/MacOS/amoskys-sentinel</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- <key>AMOSKYS_ENFORCE</key><string>1</string> -->
+    </dict>
+
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <!-- ESF clients must not be throttled at respawn. -->
+    <key>ThrottleInterval</key><integer>5</integer>
+
+    <!-- STDOUT AND STDERR MUST NOT SHARE A FILE.
+         stdout is the NDJSON event stream the collector tails; stderr is human
+         status text and WOULD-DENY lines. The previous version of this plist
+         pointed both at sentinel.log, which interleaved a machine-parsed
+         stream with prose. The collector skips non-JSON lines so it would have
+         limped along, but every future reader of that file would have to
+         rediscover why it is half one thing and half another. -->
+    <key>StandardOutPath</key><string>/Users/athanneeru/Amoskys_recovered/logs/sentinel_stream.ndjson</string>
+    <key>StandardErrorPath</key><string>/Users/athanneeru/Amoskys_recovered/logs/sentinel_monitor.log</string>
+
+    <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>

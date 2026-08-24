@@ -780,3 +780,150 @@ class ESFForensicsMixin:
                 "sentinel_start.subscriptions before reading this as quiet."
             ),
         }
+
+    # ── 10. Cross-sensor reconciliation ───────────────────────────────────
+    def esf_reconcile(self, *, hours: int = 24) -> Dict[str, Any]:
+        """Where the two sensors DISAGREE — which is the detector, not the bug.
+
+        Measured on this machine over one overlap window: 457 binaries visible
+        only to polling, 420 pids visible only to ESF. Almost perfectly
+        symmetric, and neither number shrinks with tuning. No poll interval
+        catches a process that exits in three milliseconds; no Sentinel restart
+        recovers a process that started yesterday.
+
+        So these are not two implementations of one sensor. ESF observes CHANGE
+        — perfect fidelity on transitions, zero knowledge of anything predating
+        it. Polling observes STATE — a complete inventory at each sample, blind
+        between them. You cannot integrate change into state without an initial
+        condition, and you cannot differentiate a sampled state without losing
+        everything faster than the sample rate. That is arithmetic, not an
+        architectural preference, and it means the polling tier is permanent
+        rather than legacy.
+
+        THE INTERESTING PART IS THE DISAGREEMENT. A process that polling can
+        see RUNNING but ESF never witnessed STARTING is one of exactly two
+        things:
+
+          - it predates the Sentinel, which is expected and decays as uptime
+            grows, or
+          - it began without an exec the kernel reported, which should not
+            happen
+
+        The first is boring and quantifiable; the second is extraordinary.
+        Separating them requires both sensors, so this check exists only
+        because neither tier was retired.
+        """
+        with self._read_pool.connection() as db:
+            db.row_factory = __import__("sqlite3").Row
+            win = db.execute(
+                "SELECT MIN(timestamp_ns) a, MAX(timestamp_ns) b FROM esf_exec_events"
+            ).fetchone()
+            if not win or not win["a"]:
+                return {
+                    "available": False,
+                    "note": (
+                        "No ESF exec stream, so there is nothing to reconcile "
+                        "against. This is not agreement — it is one sensor."
+                    ),
+                }
+            s_ns = max(win["a"], time.time_ns() - hours * 3600 * 1_000_000_000)
+            e_ns = win["b"]
+
+            # CLOCK AGREEMENT IS A PRECONDITION, not a detail.
+            #
+            # Comparing two sensors across a shared timeline is meaningless if
+            # they do not share a clock, and the failure is silent and
+            # spectacular: with the ESF stream running 17.5 hours behind
+            # wall-clock after a sleep, this method reported 10,490
+            # "unwitnessed starts" — /bin/sleep and /usr/bin/log among them,
+            # which are AMOSKYS's own probes and unquestionably exec.
+            #
+            # It was measuring clock skew and calling it evidence. A detector
+            # that cannot verify its own precondition will confidently report
+            # the artifact instead of the phenomenon, so this refuses rather
+            # than guesses.
+            esf_lag_s = (time.time_ns() - e_ns) / 1e9
+            poll_newest = db.execute(
+                "SELECT MAX(timestamp_ns) FROM process_events "
+                "WHERE collection_agent='macos_process'").fetchone()[0] or 0
+            poll_lag_s = (time.time_ns() - poll_newest) / 1e9
+            skew_s = abs(esf_lag_s - poll_lag_s)
+            if skew_s > 300:
+                return {
+                    "available": False,
+                    "clock_skew_seconds": round(skew_s),
+                    "esf_newest_age_s": round(esf_lag_s),
+                    "polling_newest_age_s": round(poll_lag_s),
+                    "note": (
+                        f"REFUSING TO RECONCILE: the two sensors disagree about "
+                        f"the time by {skew_s/3600:.1f} hours. The ESF stream's "
+                        f"newest event is {esf_lag_s/3600:.1f}h old while "
+                        f"polling's is {poll_lag_s/60:.0f} minutes old. Any "
+                        f"comparison across that gap measures the skew, not the "
+                        f"machine — this method would report thousands of "
+                        f"phantom 'unwitnessed' processes. Fix the clock first: "
+                        f"a Sentinel started before a sleep stamps events with a "
+                        f"stale boot-epoch offset."
+                    ),
+                }
+
+            witnessed = {r[0] for r in db.execute(
+                "SELECT DISTINCT pid FROM esf_exec_events "
+                "WHERE timestamp_ns BETWEEN ? AND ?", (s_ns, e_ns))}
+            # create_time lets us tell "predates the Sentinel" from "started
+            # during the window but was never witnessed" — the whole point.
+            # NO UPPER BOUND on the polling side, and this is not sloppiness.
+            #
+            # A polling row is timestamped when the SAMPLE was taken, not when
+            # the process started, so its rows are always newer than the last
+            # ESF event — bounding them by the ESF window's end excluded every
+            # single one, and the method returned zeros for all three
+            # categories while reporting available=True. A confident nothing.
+            #
+            # What matters for reconciliation is create_time (when the process
+            # began), which is compared against the window below.
+            sampled = [dict(r) for r in db.execute(
+                "SELECT DISTINCT pid, exe, create_time FROM process_events "
+                "WHERE timestamp_ns >= ? AND collection_agent='macos_process' "
+                "AND pid IS NOT NULL", (s_ns,))]
+
+        predates, unwitnessed, undatable = [], [], []
+        for r in sampled:
+            if r["pid"] in witnessed:
+                continue
+            ct = r.get("create_time")
+            if ct is None:
+                undatable.append(r)
+            elif float(ct) * 1e9 < s_ns:
+                predates.append(r)
+            else:
+                unwitnessed.append(r)
+
+        return {
+            "available": True,
+            "window_hours": round((e_ns - s_ns) / 3.6e12, 2),
+            "witnessed_pids": len(witnessed),
+            "sampled_pids": len(sampled),
+            "predates_sentinel": len(predates),
+            "undatable": len(undatable),
+            "unwitnessed_starts": [
+                {"pid": r["pid"], "exe": r["exe"], "create_time": r["create_time"]}
+                for r in unwitnessed[:50]
+            ],
+            "unwitnessed_count": len(unwitnessed),
+            "note": (
+                f"{len(predates)} processes predate the Sentinel — expected, and "
+                f"this shrinks as uptime grows. {len(unwitnessed)} appear to have "
+                f"STARTED inside the window without the kernel reporting an exec."
+                + (
+                    " That is the number worth looking at: a process running "
+                    "without a witnessed exec is either a gap in the stream "
+                    "(check kernel drops first) or something that did not exec "
+                    "in the ordinary way."
+                    if unwitnessed else
+                    " Nothing started unwitnessed in this window — every "
+                    "process polling found either predates the stream or was "
+                    "seen starting."
+                )
+            ),
+        }

@@ -341,3 +341,69 @@ def test_empty_baseline_refuses_to_read_as_quiet(store):
     r = s.esf_privilege_anomalies(hours=24)
     assert r["count"] == 0
     assert "subscriptions" in r["note"]
+
+
+# ── cross-sensor reconciliation ──────────────────────────────────────────
+def _poll_row(store, pid, exe, ts, create_time):
+    store.db.execute(
+        "CREATE TABLE IF NOT EXISTS process_events ("
+        "timestamp_ns INTEGER, pid INTEGER, exe TEXT, collection_agent TEXT, create_time REAL)")
+    store.db.execute(
+        "INSERT INTO process_events (timestamp_ns, pid, exe, collection_agent, create_time) "
+        "VALUES (?,?,?,?,?)", (ts, pid, exe, "macos_process", create_time))
+    store.db.commit()
+
+
+def _esf_row(store, pid, exe, ts):
+    store.db.execute(
+        "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash, pid, ppid) "
+        "VALUES (?,?,?,?,?,?)", (ts, "d", exe, "H", pid, 1))
+    store.db.commit()
+
+
+def test_reconciliation_refuses_when_the_clocks_disagree(store):
+    """The precondition, and why it is not a detail.
+
+    With the ESF stream running 17.5 hours behind wall-clock after a sleep,
+    this reported 10,490 'unwitnessed starts' on the live machine — including
+    /bin/sleep and /usr/bin/log, which are AMOSKYS's own probes and
+    unquestionably exec. It was measuring clock skew and calling it evidence.
+    """
+    s = _mixin_store(store)
+    now = time.time_ns()
+    _esf_row(store, 1, "/bin/ls", now - 18 * 3600 * 10**9)   # stale clock
+    _poll_row(store, 2, "/bin/ps", now, now / 1e9)           # current clock
+    r = s.esf_reconcile(hours=24)
+    assert r["available"] is False
+    assert r["clock_skew_seconds"] > 300
+    assert "REFUSING TO RECONCILE" in r["note"]
+
+
+def test_reconciliation_separates_predating_from_unwitnessed(store):
+    """The whole value of keeping both sensors.
+
+    A process polling sees running but ESF never saw start is either older than
+    the stream (expected, decays with uptime) or started without a witnessed
+    exec (extraordinary). Telling those apart needs both tiers, which is why
+    neither can be retired.
+    """
+    s = _mixin_store(store)
+    now = time.time_ns()
+    for i in range(3):
+        _esf_row(store, 100 + i, f"/bin/w{i}", now - (60 - i) * 10**9)
+    _poll_row(store, 100, "/bin/w0", now, (now - 60 * 10**9) / 1e9)   # witnessed
+    _poll_row(store, 900, "/bin/old", now, (now - 86400 * 10**9) / 1e9)  # predates
+    _poll_row(store, 901, "/bin/ghost", now, (now - 30 * 10**9) / 1e9)   # unwitnessed
+    r = s.esf_reconcile(hours=24)
+    assert r["available"] is True, r.get("note")
+    assert r["predates_sentinel"] == 1
+    assert r["unwitnessed_count"] == 1
+    assert r["unwitnessed_starts"][0]["exe"] == "/bin/ghost"
+
+
+def test_no_esf_stream_is_not_agreement(store):
+    """One sensor is not consensus."""
+    s = _mixin_store(store)
+    r = s.esf_reconcile(hours=24)
+    assert r["available"] is False
+    assert "one sensor" in r["note"]
