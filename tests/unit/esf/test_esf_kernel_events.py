@@ -407,3 +407,48 @@ def test_no_esf_stream_is_not_agreement(store):
     r = s.esf_reconcile(hours=24)
     assert r["available"] is False
     assert "one sensor" in r["note"]
+
+
+# ── pid reuse ────────────────────────────────────────────────────────────
+def test_pid_reuse_does_not_clear_an_unwitnessed_process(store):
+    """A bare pid is not an identity — macOS recycles them.
+
+    Pid-only matching is wrong in BOTH directions: a witnessed exec clears an
+    unrelated earlier process holding the same number, and an unwitnessed one
+    is excused by a later namesake. Seen live: pid 20299 carried a create_time
+    23 hours older than the session it was judged against.
+    """
+    from amoskys.storage._ts_hybrid_coverage import HybridCoverageMixin
+
+    class S(HybridCoverageMixin):
+        _read_pool = store._read_pool
+        db = store.db
+
+    now = time.time_ns()
+    store.db.execute(
+        "CREATE TABLE IF NOT EXISTS process_events ("
+        "timestamp_ns INTEGER, pid INTEGER, exe TEXT, collection_agent TEXT, create_time REAL)")
+    store.db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, device_id, dropped, note) "
+        "VALUES (?,?,0,'session_start subscriptions=8')", (now - 3600 * 10**9, "d"))
+    # Witnessed exec for pid 500, now.
+    store.db.execute(
+        "INSERT INTO esf_exec_events (timestamp_ns, device_id, exe, cdhash, pid, ppid) "
+        "VALUES (?,?,?,?,?,?)", (now, "d", "/bin/new", "H", 500, 1))
+    # A DIFFERENT process that held pid 500 earlier and was never witnessed.
+    store.db.execute(
+        "INSERT INTO process_events VALUES (?,?,?,?,?)",
+        (now, 500, "/tmp/ghost", "macos_process", (now - 1800 * 10**9) / 1e9))
+    # And the legitimate current occupant.
+    store.db.execute(
+        "INSERT INTO process_events VALUES (?,?,?,?,?)",
+        (now, 500, "/bin/new", "macos_process", now / 1e9))
+    store.db.commit()
+
+    r = S().esf_unwitnessed_origins(hours=24)
+    assert r["available"] is True, r.get("note")
+    exes = {v["exe"] for v in r["violations"]}
+    assert "/tmp/ghost" in exes, (
+        "the earlier occupant of a recycled pid was wrongly cleared by a later "
+        "witnessed exec")
+    assert "/bin/new" not in exes, "the genuinely witnessed process must not be flagged"

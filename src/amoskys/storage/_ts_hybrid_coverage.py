@@ -194,16 +194,39 @@ class HybridCoverageMixin:
                     ),
                 }
 
-            witnessed = {r[0] for r in db.execute(
-                "SELECT DISTINCT pid FROM esf_exec_events WHERE timestamp_ns >= ?",
-                (attach,))}
+            # MATCH ON (pid, WHEN) — a bare pid is not an identity.
+            #
+            # macOS recycles pids, so pid-only matching is wrong in BOTH
+            # directions: a witnessed exec clears an unrelated earlier process
+            # that happened to hold the same number, and an unwitnessed one is
+            # excused by a later namesake. Seen here — pid 20299 carried a
+            # create_time 23 hours older than the session it was being judged
+            # against, because process_events held rows from a previous
+            # occupant of that number.
+            #
+            # An exec witnessed at time T should correspond to a process whose
+            # create_time is near T. The tolerance absorbs the gap between the
+            # kernel stamping the exec and psutil reading create_time, without
+            # being wide enough to span a realistic pid recycle.
+            witnessed_execs = {}
+            for pid, ts in db.execute(
+                "SELECT pid, timestamp_ns FROM esf_exec_events WHERE timestamp_ns >= ?",
+                (attach,)):
+                witnessed_execs.setdefault(pid, []).append(ts)
             candidates = [dict(r) for r in db.execute(
                 "SELECT DISTINCT pid, exe, create_time FROM process_events "
                 "WHERE collection_agent='macos_process' AND timestamp_ns >= ? "
                 "AND pid IS NOT NULL AND create_time IS NOT NULL "
                 "AND create_time * 1000000000 >= ?", (cutoff, attach))]
 
-        violations = [c for c in candidates if c["pid"] not in witnessed]
+        MATCH_TOLERANCE_NS = 5 * 1_000_000_000
+        violations = []
+        for c in candidates:
+            born_ns = float(c["create_time"]) * 1e9
+            execs = witnessed_execs.get(c["pid"], ())
+            if any(abs(t - born_ns) <= MATCH_TOLERANCE_NS for t in execs):
+                continue
+            violations.append(c)
         for v in violations:
             v["started_at"] = v.pop("create_time")
         return {
