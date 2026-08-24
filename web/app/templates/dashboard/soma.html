@@ -322,8 +322,13 @@
                 <span class="soma-g-pill" title="Minimum 200 evidence events">min 200 evidence</span>
             </div>
         </div>
+        {# This said "No adjustments yet" permanently: the server hardcoded
+           "calibrations": [] and no code ever wrote to this element. Meanwhile
+           the Auto-Calibrations tile at the top of the same page read the real
+           count off /api/soma/brain — 209 on this machine — so the page
+           contradicted itself in two places at once. #}
         <div id="calibrator-log" class="calibrator-log">
-            <div class="soma-empty">No adjustments yet. AutoCalibrator activates when sufficient evidence accumulates.</div>
+            <div class="soma-empty">Loading the adjustment log…</div>
         </div>
     </div>
 
@@ -451,15 +456,27 @@
 .pipeline-flow { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 1rem 0; }
 .pipe-stage {
     display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
-    padding: 0.8rem 1.2rem; border-radius: 10px; min-width: 110px; text-align: center;
+    padding: 0.8rem 1.2rem; border-radius: 10px; min-width: 110px; max-width: 175px; text-align: center;
     position: relative; cursor: default; transition: all 0.3s;
 }
 .pipe-stage.active {
     background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.2);
     box-shadow: 0 0 15px rgba(0,255,136,0.05);
 }
-.pipe-stage.inactive {
+.pipe-stage.inactive, .pipe-stage.stale, .pipe-stage.idle {
     background: rgba(255,170,0,0.04); border: 1px solid rgba(255,170,0,0.15);
+}
+.pipe-stage.down {
+    background: rgba(255,51,102,0.05); border: 1px solid rgba(255,51,102,0.2);
+}
+/* Unknown is deliberately colourless: we did not measure it, so it gets
+   neither the reassurance of green nor the alarm of red. */
+.pipe-stage.unknown {
+    background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.14);
+}
+.pipe-stage-detail {
+    font-size: 0.62rem; color: var(--text-muted); line-height: 1.35;
+    max-width: 150px; margin-top: 2px;
 }
 .pipe-stage:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
 .pipe-stage-name { font-size: 0.78rem; font-weight: 700; color: var(--text-primary); }
@@ -468,7 +485,11 @@
     text-transform: uppercase; letter-spacing: 0.3px;
 }
 .pipe-stage-status.active { background: rgba(0,255,136,0.15); color: #00ff88; }
-.pipe-stage-status.inactive { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.pipe-stage-status.inactive,
+.pipe-stage-status.stale,
+.pipe-stage-status.idle { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.pipe-stage-status.down { background: rgba(255,51,102,0.15); color: #ff3366; }
+.pipe-stage-status.unknown { background: rgba(255,255,255,0.06); color: var(--text-muted); }
 .pipe-arrow {
     flex-shrink: 0; display: flex; align-items: center; padding: 0 0.15rem;
 }
@@ -683,16 +704,74 @@
     }
 
     // ─── Pipeline ────────────────────────────────────────
+    // Five of these six stages used to be reported "active" from a Python
+    // literal — the server said so whether or not anything was running. Each
+    // one now carries a measurement and the sentence behind it, shown on hover
+    // and read out by screen readers, so a green stage can be checked rather
+    // than believed.
+    var STAGE_STATES = { active: 1, stale: 1, idle: 1, down: 1, unknown: 1 };
+
+    // The .cal-entry rules have been in this stylesheet since the panel was
+    // designed; the renderer that would use them was never written.
+    var CAL_REASONS = {
+        never_escalated: 'this category has fired repeatedly and never once escalated',
+        oscillating: 'the classification kept flipping between benign and suspicious',
+        analyst_dismissed: 'analysts dismissed it consistently',
+    };
+
+    function renderCalibrator(learn) {
+        var box = document.getElementById('calibrator-log');
+        if (!box) return;
+        var entries = (learn && learn.calibrations) || [];
+
+        if (!entries.length) {
+            var note = (learn && learn.calibrations_note) ||
+                'No adjustment log is available.';
+            box.innerHTML = '<div class="soma-empty">' + esc(note) + '</div>';
+            return;
+        }
+
+        box.innerHTML = entries.map(function (e) {
+            var when = e.timestamp ? new Date(e.timestamp) : null;
+            var whenTxt = when && !isNaN(when) ? when.toLocaleString() : 'unknown time';
+            var reason = CAL_REASONS[e.reason] || esc(String(e.reason || 'unspecified'));
+            var evidence = e.evidence_count != null ? e.evidence_count : '?';
+            return '<div class="cal-entry">' +
+                '<div class="cal-entry-header">' +
+                    '<span class="cal-entry-type">' + esc(e.category || 'unknown category') +
+                        (e.action && e.action !== e.category ? ' / ' + esc(e.action) : '') +
+                    '</span>' +
+                    '<span class="cal-entry-time">' + esc(whenTxt) + '</span>' +
+                '</div>' +
+                '<div class="cal-entry-detail">' +
+                    'Scored down because ' + reason + '. ' +
+                    '<span class="cal-g5-badge">' + esc(evidence) + ' events of evidence</span>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        // The list is capped server-side; say so rather than implying it is all.
+        var total = learn.calibrations_total;
+        if (typeof total === 'number' && total > entries.length) {
+            box.insertAdjacentHTML('beforeend',
+                '<div class="soma-empty" style="text-align:left;">Showing the ' +
+                entries.length + ' most recent of ' + total + ' adjustments.</div>');
+        }
+    }
+
     function renderPipeline(stages) {
         var c = document.getElementById('pipeline-flow');
         if (!c || !stages.length) return;
         var arrowSvg = '<svg width="28" height="16" viewBox="0 0 28 16"><path d="M2 8h20M18 3l6 5-6 5" fill="none" stroke="rgba(0,255,136,0.3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/></path></svg>';
         c.innerHTML = stages.map(function(s, i) {
-            var isActive = s.status === 'active';
+            // An unrecognised status must not fall through to the green branch.
+            var state = STAGE_STATES[s.status] ? s.status : 'unknown';
+            var detail = s.detail || '';
             return (i > 0 ? '<div class="pipe-arrow">' + arrowSvg + '</div>' : '') +
-                '<div class="pipe-stage ' + (isActive ? 'active' : 'inactive') + '">' +
+                '<div class="pipe-stage ' + state + '" title="' + amEsc(detail) + '">' +
                     '<div class="pipe-stage-name">' + esc(s.name) + '</div>' +
-                    '<div class="pipe-stage-status ' + s.status + '">' + s.status + '</div>' +
+                    '<div class="pipe-stage-status ' + state + '">' + esc(state) + '</div>' +
+                    (detail ? '<div class="pipe-stage-detail">' + esc(detail) + '</div>' : '') +
                 '</div>';
         }).join('');
         document.getElementById('pipeline-ts').textContent = new Date().toLocaleTimeString();
@@ -954,6 +1033,7 @@
             document.getElementById('emb-dim-overview').textContent = learn.embedder_dim ? learn.embedder_dim + 'd' : '--';
             document.getElementById('emb-variance').textContent = learn.embedder_variance != null ? (learn.embedder_variance * 100).toFixed(0) + '%' : '--';
 
+            renderCalibrator(learn);
             renderAgents(d.agents || []);
         } catch (e) { console.error('Overview error:', e); }
     }

@@ -12,9 +12,12 @@
             <span class="es-subtitle">All agents — real-time collective view</span>
         </div>
         <div class="es-header-right">
-            <span class="es-live-dot"></span>
+        {# The dot pulsed green unconditionally — it was decoration, not a
+           status. When the stream request failed, the body said "Failed to
+           load events" while the header beside it still read as live. #}
+            <span class="es-live-dot" id="es-live-dot" title="Waiting for the first response"></span>
             <span class="es-count" id="es-total">--</span>
-            <span class="es-count-label">events</span>
+            <span class="es-count-label" id="es-count-label">events</span>
         </div>
     </div>
 
@@ -83,7 +86,10 @@
 .es-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
 .es-subtitle { font-size: 0.8rem; color: var(--text-muted); }
 .es-header-right { display: flex; align-items: center; gap: 0.5rem; }
-.es-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neural-success); animation: es-pulse 2s ease infinite; }
+.es-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+.es-live-dot.live { background: var(--neural-success); animation: es-pulse 2s ease infinite; }
+.es-live-dot.down { background: var(--neural-danger, #ff4d5e); animation: none; }
+@media (prefers-reduced-motion: reduce) { .es-live-dot.live { animation: none; } }
 @keyframes es-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px var(--neural-success); } 50% { opacity: 0.5; box-shadow: 0 0 12px var(--neural-success); } }
 .es-count { font-size: 1.3rem; font-weight: 700; color: var(--neural-primary); }
 .es-count-label { font-size: 0.8rem; color: var(--text-muted); }
@@ -338,13 +344,42 @@ const esApp = {
         try {
             const d = await DashboardCache.fetch(url, 10);
             this.events = d.events || [];
-            this.total = d.total || 0;
-            document.getElementById('es-total').textContent = this.fmtNum(this.total);
+            // `d.total || 0` printed a confident "0 events" whenever the field
+            // was absent. A count nobody sent is not a count of zero.
+            this.total = typeof d.total === 'number' ? d.total : null;
+            const totalEl = document.getElementById('es-total');
+            if (this.total === null) {
+                totalEl.textContent = '--';
+                totalEl.title = 'The response carried no total.';
+            } else {
+                totalEl.textContent = this.fmtNum(this.total);
+                totalEl.title = '';
+            }
+            this.setStreamState('live', 'Last refreshed ' + new Date().toLocaleTimeString() + '.');
             this.renderEvents();
             this.renderPagination();
         } catch (e) {
-            container.innerHTML = '<div class="es-empty"><div class="es-empty-icon">&#9888;</div><div class="es-empty-msg">Failed to load events</div></div>';
+            this.setStreamState('down', 'The last event-stream request failed: ' + (e && e.message ? e.message : e));
+            const totalEl = document.getElementById('es-total');
+            totalEl.textContent = '--';
+            totalEl.title = 'Not measured — the request failed.';
+            container.innerHTML = '<div class="es-empty"><div class="es-empty-icon">&#9888;</div>' +
+                '<div class="es-empty-msg">The event stream could not be read.</div>' +
+                '<div class="es-empty-msg" style="font-size:0.75rem;opacity:0.8;margin-top:0.4rem;">' +
+                'This is a gap in what AMOSKYS can show you, not a quiet hour.</div></div>';
         }
+    },
+
+    // The header dot reports the outcome of the last request instead of
+    // pulsing green forever.
+    setStreamState(state, why) {
+        const dot = document.getElementById('es-live-dot');
+        if (!dot) return;
+        dot.classList.remove('live', 'down');
+        if (state === 'live' || state === 'down') dot.classList.add(state);
+        dot.title = why || '';
+        const label = document.getElementById('es-count-label');
+        if (label) label.textContent = state === 'down' ? 'events — stream unreadable' : 'events';
     },
 
     async loadTimeline() {

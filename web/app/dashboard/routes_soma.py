@@ -150,6 +150,283 @@ def _get_classification_stats(store):
     return classification, total
 
 
+# The pipeline stages, measured.
+#
+# Five of these six used to be Python literals:
+#
+#     {"name": "Agents",         "status": "active"},
+#     {"name": "WAL Processor",  "status": "active"},
+#     {"name": "Enrichment",     "status": "active"},
+#     {"name": "Scoring Engine", "status": "active"},
+#     ...
+#     {"name": "Incidents",      "status": "active"},
+#
+# so the SOMA page rendered five green stages on a machine with no agents
+# running, no store to read and nothing ingested — the one screen whose entire
+# job is to say whether the pipeline is moving. Measured against this
+# developer's own store, "WAL Processor: active" was already false: wal_archive
+# held zero rows.
+#
+# Every stage now answers from a number, and says which number.
+
+# Raw collection: agents write here directly.
+_AGENT_TABLES = (
+    "process_events",
+    "flow_events",
+    "dns_events",
+    "fim_events",
+    "persistence_events",
+    "peripheral_events",
+)
+
+# Agents report on their own cadences — some every few seconds, the slower
+# snapshot sensors every few minutes. Ten minutes of total silence across ALL
+# of them is a stopped pipeline, not a quiet one.
+_STAGE_FRESH_SECONDS = 600
+
+
+def _stage(name, status, detail):
+    return {"name": name, "status": status, "detail": detail}
+
+
+def _age_words(age_seconds):
+    if age_seconds is None:
+        return "never"
+    if age_seconds < 90:
+        return f"{int(age_seconds)}s ago"
+    if age_seconds < 5400:
+        return f"{int(age_seconds // 60)}m ago"
+    if age_seconds < 172800:
+        return f"{int(age_seconds // 3600)}h ago"
+    return f"{int(age_seconds // 86400)}d ago"
+
+
+def _scalar(store, sql, params=()):
+    """One value, or None. A missing table is a legitimate answer here."""
+    try:
+        row = store.db.execute(sql, params).fetchone()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
+def _calibrator_log(limit=25):
+    """The AutoCalibrator's own adjustment history, which nobody was reading.
+
+    ``"calibrations": []`` was hardcoded in the overview payload, and the
+    AutoCalibrator panel on the SOMA page has no code that would fill it — so
+    it showed "No adjustments yet. AutoCalibrator activates when sufficient
+    evidence accumulates." permanently, as a promise rather than a report.
+
+    The calibrator has been writing to data/intel/models/auto_calibrator_log.json
+    all along (soma_brain.py::AutoCalibrator._save_log). On this machine that
+    file holds 46KB of real adjustments. Read it.
+
+    Returns (entries, note, total). ``note`` is non-None when the list is empty
+    for a reason worth stating — the page must be able to tell "it has not
+    adjusted anything" from "its record could not be read". ``total`` is the
+    length of the log, NOT brain_metrics["auto_calibrator"]["total_adjustments"]:
+    that counter is per-training-run and reads 0 on a machine whose log holds
+    209 entries, so using it would have made the panel understate itself.
+    """
+    path = os.path.join("data", "intel", "models", "auto_calibrator_log.json")
+    if not os.path.exists(path):
+        return (
+            [],
+            "No calibration log has been written yet. The AutoCalibrator writes "
+            "one the first time it adjusts a category.",
+            0,
+        )
+    try:
+        with open(path) as handle:
+            history = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("calibrator log unreadable: %s", exc)
+        return [], f"The calibration log exists but could not be read ({exc}).", None
+
+    if not isinstance(history, list):
+        return [], "The calibration log is not in the expected format.", None
+    if not history:
+        return [], "The AutoCalibrator has not adjusted anything yet.", 0
+
+    # Newest first — the panel is a change log, and the last change is the one
+    # an operator needs to see.
+    return list(reversed(history))[:limit], None, len(history)
+
+
+def _pipeline_stages(store, engine):
+    import time as _time
+
+    if store is None:
+        # Not "inactive" — unknown. We did not reach the thing we would be
+        # judging, and the difference matters on this page more than most.
+        return [
+            _stage(n, "unknown", "The telemetry store could not be opened.")
+            for n in (
+                "Agents",
+                "WAL Processor",
+                "Enrichment",
+                "Scoring Engine",
+                "FusionEngine",
+                "Incidents",
+            )
+        ]
+
+    now_ns = _time.time_ns()
+    stages = []
+
+    # ── Agents ── newest raw row across every collection table.
+    newest = None
+    for table in _AGENT_TABLES:
+        ts = _scalar(store, f"SELECT MAX(timestamp_ns) FROM {table}")  # noqa: S608
+        if ts and (newest is None or ts > newest):
+            newest = ts
+    if newest is None:
+        stages.append(_stage("Agents", "down", "No agent has ever written to this store."))
+    else:
+        age = (now_ns - newest) / 1e9
+        stages.append(
+            _stage(
+                "Agents",
+                "active" if age <= _STAGE_FRESH_SECONDS else "stale",
+                f"Last agent write {_age_words(age)}.",
+            )
+        )
+
+    # ── WAL Processor ── the archive is what it writes once a batch is durable.
+    archived = _scalar(store, "SELECT MAX(archived_at) FROM wal_archive")
+    dead = _scalar(store, "SELECT COUNT(*) FROM wal_dead_letter") or 0
+    dead_note = f" {dead} envelope(s) in the dead-letter queue." if dead else ""
+    if archived is None:
+        stages.append(
+            _stage(
+                "WAL Processor",
+                "idle",
+                "Nothing in the WAL archive. Either no batch has been sealed yet "
+                "or the processor is not running." + dead_note,
+            )
+        )
+    else:
+        # archived_at is seconds, unlike the ns timestamps beside it.
+        age = _time.time() - archived
+        stages.append(
+            _stage(
+                "WAL Processor",
+                "active" if age <= _STAGE_FRESH_SECONDS else "stale",
+                f"Last archive {_age_words(age)}." + dead_note,
+            )
+        )
+
+    # ── Enrichment ── geo/ASN/threat-intel decoration of scored events.
+    enriched = _scalar(
+        store,
+        "SELECT MAX(timestamp_ns) FROM security_events WHERE enrichment_status = 'enriched'",
+    )
+    pending = (
+        _scalar(
+            store,
+            "SELECT COUNT(*) FROM security_events "
+            "WHERE enrichment_status IS NULL OR enrichment_status != 'enriched'",
+        )
+        or 0
+    )
+    if enriched is None:
+        stages.append(
+            _stage("Enrichment", "idle", "No event has been enriched in this store.")
+        )
+    else:
+        age = (now_ns - enriched) / 1e9
+        pending_note = f" {pending} still unenriched." if pending else ""
+        stages.append(
+            _stage(
+                "Enrichment",
+                "active" if age <= _STAGE_FRESH_SECONDS else "stale",
+                f"Last enriched event {_age_words(age)}." + pending_note,
+            )
+        )
+
+    # ── Scoring Engine ── a security_event carrying the three probe scores.
+    scored = _scalar(
+        store,
+        "SELECT MAX(timestamp_ns) FROM security_events "
+        "WHERE behavioral_score IS NOT NULL OR temporal_score IS NOT NULL",
+    )
+    if scored is None:
+        stages.append(
+            _stage("Scoring Engine", "idle", "No scored event in this store.")
+        )
+    else:
+        age = (now_ns - scored) / 1e9
+        stages.append(
+            _stage(
+                "Scoring Engine",
+                "active" if age <= _STAGE_FRESH_SECONDS else "stale",
+                f"Last scored event {_age_words(age)}.",
+            )
+        )
+
+    # ── FusionEngine ── the only stage that was ever checked, now with its age.
+    if engine is None:
+        stages.append(
+            _stage("FusionEngine", "down", "The fusion engine could not be loaded.")
+        )
+    else:
+        fresh = _fusion_freshness(engine)
+        if fresh.get("age_seconds") is None:
+            stages.append(
+                _stage("FusionEngine", "idle", "Loaded, but it has never written a verdict.")
+            )
+        else:
+            stages.append(
+                _stage(
+                    "FusionEngine",
+                    "stale" if fresh.get("stale") else "active",
+                    f"Last verdict written {_age_words(fresh['age_seconds'])}.",
+                )
+            )
+
+    # ── Incidents ── an empty incident table is a legitimate quiet answer, so
+    # this stage distinguishes "nothing to report" from "cannot be read".
+    incident_count = _scalar(store, "SELECT COUNT(*) FROM incidents")
+    if incident_count is None:
+        stages.append(
+            _stage("Incidents", "unknown", "The incidents table could not be read.")
+        )
+    elif incident_count == 0:
+        stages.append(
+            _stage("Incidents", "idle", "Reachable, and holding no incidents.")
+        )
+    else:
+        # incidents keeps ISO strings, not the ns timestamps its neighbours
+        # use — asking for timestamp_ns here silently produced no age at all.
+        latest = _scalar(store, "SELECT MAX(created_at) FROM incidents")
+        age = None
+        if latest:
+            try:
+                from datetime import datetime, timezone
+
+                ts = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                age = (datetime.now(timezone.utc) - ts).total_seconds()
+            except ValueError:
+                age = None
+        if age is None:
+            detail = f"{incident_count} incident(s); age of the newest is unreadable."
+            stages.append(_stage("Incidents", "unknown", detail))
+        else:
+            detail = f"{incident_count} incident(s); newest {_age_words(age)}."
+            stages.append(
+                _stage(
+                    "Incidents",
+                    "active" if age <= _STAGE_FRESH_SECONDS else "idle",
+                    detail,
+                )
+            )
+
+    return stages
+
+
 def _get_agent_explanations(engine):
     """Get AMRDR agent reliability explanations from FusionEngine."""
     if engine is None:
@@ -265,14 +542,7 @@ def soma_overview():
     store = get_telemetry_store()
     engine = _get_fusion_engine()
 
-    pipeline_stages = [
-        {"name": "Agents", "status": "active"},
-        {"name": "WAL Processor", "status": "active"},
-        {"name": "Enrichment", "status": "active"},
-        {"name": "Scoring Engine", "status": "active"},
-        {"name": "FusionEngine", "status": "active" if engine else "inactive"},
-        {"name": "Incidents", "status": "active"},
-    ]
+    pipeline_stages = _pipeline_stages(store, engine)
 
     classification, events_processed = _get_classification_stats(store)
     agents = _get_agent_explanations(engine)
@@ -296,6 +566,8 @@ def soma_overview():
     except Exception:
         pass
 
+    calibrations, calibrations_note, calibrations_total = _calibrator_log()
+
     gbc = brain_metrics.get("gradient_boost", {})
     embedder = brain_metrics.get("embedder", {})
     high_trust = brain_metrics.get("high_trust_label_count", 0)
@@ -314,7 +586,9 @@ def soma_overview():
                 "fp_rate": fp_rate,
                 "confirmed_malicious": confirmed_malicious,
                 "total_flagged": total_flagged,
-                "calibrations": [],
+                "calibrations": calibrations,
+                "calibrations_note": calibrations_note,
+                "calibrations_total": calibrations_total,
                 "gbc_status": gbc.get("status", "cold_start"),
                 "gbc_reason": gbc.get("reason"),
                 "high_trust_labels": high_trust,

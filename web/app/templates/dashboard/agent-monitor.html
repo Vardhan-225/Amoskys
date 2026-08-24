@@ -266,11 +266,44 @@
     ];
 
     // Legacy ID mapping (for backward compatibility with old links)
+    // This map was written when the agent registry used macos_* ids. The
+    // registry has since moved to short ids (proc, flow, fim, auth,
+    // persistence) — so the map now translates a VALID id into one the API no
+    // longer has, and six of its eight entries break the very lookup they
+    // exist to help. The result: on the six most important agents the probe
+    // panel silently rendered nothing, because
+    // deepData.agents.find(a => a.id === agentId) returned undefined and
+    // updateProbePanel() returns early on a falsy overviewData.
+    //
+    // It is kept, because old links and bookmarks still carry these names —
+    // but it is now consulted only as a FALLBACK, after the id has failed to
+    // match the registry as given. See resolveAgentId.
     var LEGACY_MAP = {
         'proc': 'macos_process', 'auth': 'macos_auth', 'flow': 'macos_network',
         'fim': 'macos_filesystem', 'dns': 'macos_dns', 'persistence': 'macos_persistence',
         'macos_security_monitor': 'macos_realtime_sensor', 'net_scanner': 'network_sentinel',
     };
+
+    // The same map read the other way, for links that carry the old spelling.
+    var LEGACY_MAP_REVERSE = (function () {
+        var out = {};
+        Object.keys(LEGACY_MAP).forEach(function (k) { out[LEGACY_MAP[k]] = k; });
+        return out;
+    })();
+
+    // Resolve against what the registry ACTUALLY returned: as given first,
+    // then either direction of the alias map. Returns null when the registry
+    // genuinely has no such agent, which the caller must report rather than
+    // quietly showing an empty panel.
+    function resolveAgentId(registryAgents, id) {
+        if (!registryAgents || !registryAgents.length) return null;
+        var have = {};
+        registryAgents.forEach(function (a) { have[a.id] = true; });
+        if (have[id]) return id;
+        if (LEGACY_MAP[id] && have[LEGACY_MAP[id]]) return LEGACY_MAP[id];
+        if (LEGACY_MAP_REVERSE[id] && have[LEGACY_MAP_REVERSE[id]]) return LEGACY_MAP_REVERSE[id];
+        return null;
+    }
 
     // Domain data columns per agent
     var DOMAIN_COLS = {
@@ -285,7 +318,9 @@
     };
 
     var rawAgentParam = new URLSearchParams(location.search).get('agent') || 'macos_process';
-    var agentId = LEGACY_MAP[rawAgentParam] || rawAgentParam;
+    // Left as given. It is reconciled against the registry once deep-overview
+    // has answered — translating it up front is exactly what broke this page.
+    var agentId = rawAgentParam;
     var catalogId = agentId;
     var agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
     var streamBuffer = [];
@@ -376,23 +411,75 @@
         });
     }
 
+    // /api/agents/deep-overview returns each probe as
+    //   {name, description, fields, issues, mitre, status}
+    // and this page was reading p.verdict and p.mitre_techniques — keys that
+    // endpoint has never sent. Every probe therefore rendered grey with the
+    // verdict "UNKNOWN" and no MITRE chips, on the page whose entire purpose
+    // is to show which probes are real, degraded or broken. Ten probes per
+    // agent, twenty-one agents, all reported as unknown, and nothing about the
+    // page looked broken enough to notice.
+    //
+    // Both spellings are accepted so this keeps working if another endpoint
+    // ever answers with the other one.
+    function probeStatus(p) {
+        return String((p && (p.status || p.verdict)) || 'UNKNOWN').toUpperCase();
+    }
+
+    function probeMitre(p) {
+        if (!p) return [];
+        var m = p.mitre || p.mitre_techniques || [];
+        return Array.isArray(m) ? m : [];
+    }
+
+    function probeColor(status) {
+        if (status === 'REAL') return '#00ff88';
+        if (status === 'DEGRADED') return '#ffaa00';
+        if (status === 'BROKEN') return '#ff3366';
+        return '#555';
+    }
+
     function setupToggleBtn() {
         document.getElementById('am-toggle-btn').addEventListener('click', function() {
             var btn = this;
-            if (btn.textContent === 'Stop') {
-                btn.textContent = 'Stopping...';
-                btn.disabled = true;
-                fetch('/dashboard/api/agents/' + catalogId + '/stop', { method: 'POST' })
-                    .then(function() { setTimeout(pollLiveData, 1500); })
-                    .finally(function() { btn.disabled = false; });
-            } else {
-                btn.textContent = 'Starting...';
-                btn.disabled = true;
-                fetch('/dashboard/api/agents/' + catalogId + '/start', { method: 'POST' })
-                    .then(function() { setTimeout(pollLiveData, 2000); })
-                    .finally(function() { btn.disabled = false; });
-            }
+            var stopping = btn.textContent === 'Stop';
+            var verb = stopping ? 'stop' : 'start';
+            btn.textContent = stopping ? 'Stopping\u2026' : 'Starting\u2026';
+            btn.disabled = true;
+
+            // fetch RESOLVES on HTTP 400. The old .then() therefore fired for a
+            // REFUSED start or stop exactly as it did for a successful one, the
+            // page re-polled, and the agent was simply in the same state as
+            // before with nothing said about why. All fourteen agents on this
+            // machine share one collector process, so the per-agent endpoint
+            // refuses most of these requests — meaning the failure path was the
+            // COMMON path, and it was the silent one.
+            fetch('/dashboard/api/agents/' + encodeURIComponent(catalogId) + '/' + verb, { method: 'POST' })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+                .then(function (res) {
+                    if (res.ok) { setTimeout(pollLiveData, stopping ? 1500 : 2000); return; }
+                    var why = (res.body && (res.body.message || res.body.status)) || ('HTTP ' + verb + ' refused');
+                    showToggleProblem(btn, 'Refused', String(why));
+                })
+                .catch(function (err) {
+                    showToggleProblem(btn, 'Failed', 'The request did not reach the server: ' + err);
+                })
+                .finally(function () { btn.disabled = false; });
         });
+    }
+
+    function showToggleProblem(btn, label, why) {
+        btn.textContent = label;
+        btn.title = why;
+        var note = document.getElementById('am-toggle-note');
+        if (!note) {
+            note = document.createElement('div');
+            note.id = 'am-toggle-note';
+            note.style.cssText = 'font-size:0.68rem;color:#ffaa00;margin-top:0.3rem;max-width:280px;line-height:1.4;';
+            btn.parentNode.appendChild(note);
+        }
+        note.textContent = why;
+        setTimeout(function () { pollLiveData(); if (note) note.textContent = ''; }, 8000);
     }
 
     function loadAll() {
@@ -418,7 +505,11 @@
 
             // Deep overview (probes) — also sync AGENTS list from registry
             if (deepData.status === 'success' && deepData.agents) {
-                overviewData = deepData.agents.find(function(a) { return a.id === agentId; });
+                var resolved = resolveAgentId(deepData.agents, agentId);
+                if (resolved && resolved !== agentId) { agentId = resolved; catalogId = resolved; }
+                overviewData = resolved
+                    ? deepData.agents.find(function(a) { return a.id === resolved; })
+                    : null;
                 updateProbePanel();
                 // Sync agent list from registry (single source of truth)
                 if (deepData.agents.length > AGENTS.length) {
@@ -494,26 +585,56 @@
 
     function updateProcessPanel(liveData, agentStatus) {
         var proc = (liveData && liveData.process) || {};
-        // All 14 agents run inside a single collector_main process.
-        // Check daemon health via pipeline status or presence of any recent data.
-        var isRunning = true;  // Default: daemon runs via launchd, always alive
-        if (liveData && liveData.status === 'error') isRunning = false;
 
-        // Status badge
-        var badge = document.getElementById('am-status-badge');
-        if (isRunning) {
-            badge.textContent = 'ONLINE';
-            badge.style.background = 'rgba(0,255,136,0.15)';
-            badge.style.color = '#00ff88';
+        // This used to read:
+        //
+        //     var isRunning = true;  // Default: daemon runs via launchd, always alive
+        //
+        // ONLINE was the assumption, not the measurement. The badge went green
+        // on a machine where the collector had been dead for days, because the
+        // only thing that could ever turn it red was the API explicitly
+        // answering {"status": "error"}.
+        //
+        // The evidence was already in the payload the page had in hand: a live
+        // process reports a pid, and a pid is the difference between "I can see
+        // it running" and "I assume it is". Three states, because "I could not
+        // tell" is a real answer and must not be shown as either of the others.
+        var pid = proc.pid || (agentStatus && agentStatus.pid) || null;
+        var state, badgeText, badgeBg, badgeFg, badgeWhy;
+        if (liveData && liveData.status === 'error') {
+            state = 'unknown';
+            badgeText = 'NOT OBSERVED';
+            badgeBg = 'rgba(255,255,255,0.06)'; badgeFg = 'var(--text-muted)';
+            badgeWhy = 'The agent API returned an error, so the collector\u2019s state is unknown.';
+        } else if (pid) {
+            state = 'running';
+            badgeText = 'ONLINE';
+            badgeBg = 'rgba(0,255,136,0.15)'; badgeFg = '#00ff88';
+            badgeWhy = 'Measured: the collector reported process ' + pid + '.';
         } else {
-            badge.textContent = 'OFFLINE';
-            badge.style.background = 'rgba(255,51,102,0.15)';
-            badge.style.color = '#ff3366';
+            state = 'stopped';
+            badgeText = 'NO PROCESS';
+            badgeBg = 'rgba(255,51,102,0.15)'; badgeFg = '#ff3366';
+            badgeWhy = 'The collector reported no process. Nothing is being collected.';
         }
+        var isRunning = state === 'running';
+
+        var badge = document.getElementById('am-status-badge');
+        badge.textContent = badgeText;
+        badge.style.background = badgeBg;
+        badge.style.color = badgeFg;
+        badge.title = badgeWhy;
 
         // Toggle button
         var toggleBtn = document.getElementById('am-toggle-btn');
         toggleBtn.textContent = isRunning ? 'Stop' : 'Start';
+        if (state === 'unknown') {
+            toggleBtn.disabled = true;
+            toggleBtn.title = badgeWhy;
+        } else {
+            toggleBtn.disabled = false;
+            toggleBtn.title = '';
+        }
 
         // CPU/Memory
         var cpuVal = proc.cpu_percent != null ? proc.cpu_percent.toFixed(1) + '%' : '--';
@@ -545,8 +666,23 @@
     }
 
     function updateProbePanel() {
-        if (!overviewData) return;
-        var ps = overviewData.probe_summary;
+        if (!overviewData) {
+            // Was a bare `return`, which left the Probe Health card blank and
+            // indistinguishable from an agent that simply has no probes.
+            var emptyList = document.getElementById('am-probe-list');
+            if (emptyList) {
+                emptyList.innerHTML =
+                    '<div style="font-size:0.7rem;color:var(--neural-warning);padding:0.5rem 0;line-height:1.5;">' +
+                    'No agent named &ldquo;' + escapeHtml(agentId) + '&rdquo; is in the registry, so its probe ' +
+                    'health cannot be shown.</div>';
+            }
+            var emptyLegend = document.getElementById('am-probe-legend');
+            if (emptyLegend) emptyLegend.innerHTML = '';
+            var emptyBar = document.getElementById('am-probe-bar');
+            if (emptyBar) emptyBar.innerHTML = '';
+            return;
+        }
+        var ps = overviewData.probe_summary || { total: 0, real: 0, degraded: 0, broken: 0, disabled: 0 };
         var total = ps.total || 1;
 
         // Bar
@@ -570,8 +706,8 @@
         var list = document.getElementById('am-probe-list');
         if (overviewData.probes && overviewData.probes.length > 0) {
             list.innerHTML = overviewData.probes.map(function(p) {
-                var dotColor = p.verdict === 'REAL' ? '#00ff88' : p.verdict === 'DEGRADED' ? '#ffaa00' : p.verdict === 'BROKEN' ? '#ff3366' : '#555';
-                var mitre = (p.mitre_techniques || []).slice(0, 2).map(function(t) {
+                var dotColor = probeColor(probeStatus(p));
+                var mitre = probeMitre(p).slice(0, 2).map(function(t) {
                     return '<span style="font-size:0.6rem;padding:0.1rem 0.3rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;">' + escapeHtml(t) + '</span>';
                 }).join(' ');
                 return '<div class="am-probe-item">' +
@@ -710,14 +846,15 @@
             return;
         }
         content.innerHTML = overviewData.probes.map(function(p) {
-            var dotColor = p.verdict === 'REAL' ? '#00ff88' : p.verdict === 'DEGRADED' ? '#ffaa00' : p.verdict === 'BROKEN' ? '#ff3366' : '#555';
-            var mitre = (p.mitre_techniques || []).map(function(t) {
+            var pStatus = probeStatus(p);
+            var dotColor = probeColor(pStatus);
+            var mitre = probeMitre(p).map(function(t) {
                 return '<span style="font-size:0.62rem;padding:0.1rem 0.3rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;margin-right:2px;">' + escapeHtml(t) + '</span>';
             }).join('');
             return '<div style="padding:0.5rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;gap:0.5rem;">' +
                 '<span class="am-probe-dot" style="background:' + dotColor + ';"></span>' +
                 '<span style="font-weight:600;color:var(--text-primary);font-size:0.78rem;min-width:180px;">' + escapeHtml(p.name || p.probe_id) + '</span>' +
-                '<span style="font-size:0.68rem;padding:0.15rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.05);color:' + dotColor + ';font-weight:600;">' + (p.verdict || 'UNKNOWN') + '</span>' +
+                '<span style="font-size:0.68rem;padding:0.15rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.05);color:' + dotColor + ';font-weight:600;">' + escapeHtml(pStatus) + '</span>' +
                 '<span style="flex:1;font-size:0.7rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(p.description || '') + '</span>' +
                 '<span>' + mitre + '</span>' +
                 '</div>';
