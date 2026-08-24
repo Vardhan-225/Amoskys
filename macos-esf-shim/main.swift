@@ -355,6 +355,33 @@ func handleNotify(_ msg: UnsafePointer<es_message_t>) {
     let ts = machToEpochNanos(m.mach_time)
     let cdhash = cdhashHex(proc)
 
+    // NOTIFY_EXEC is the forensic record. Handled before the transition
+    // switch because it is not a state change — it is the same observation
+    // AUTH_EXEC makes, minus the caching that makes AUTH incomplete.
+    if m.event_type == ES_EVENT_TYPE_NOTIFY_EXEC {
+        let target = m.event.exec.target
+        let tpath = tok(target.pointee.executable.pointee.path)
+        let tflags = target.pointee.codesigning_flags
+        let tplat = target.pointee.is_platform_binary
+        let tcd = cdhashHex(target)
+        let targv = argvOf(msg)
+        let tatok = target.pointee.audit_token
+        // The decision is RECOMPUTED rather than carried over from AUTH.
+        // shouldDeny is a pure function of path, signing flags, platform status
+        // and cdhash, so it yields the identical verdict without needing the
+        // AUTH message — which, being cached, may never have arrived.
+        let (deny, why) = shouldDeny(path: tpath, csFlags: tflags,
+                                     isPlatform: tplat, cdhash: tcd)
+        emitExec(path: tpath, argv: targv,
+                 pid: Int32(bitPattern: tatok.val.5), ppid: target.pointee.ppid,
+                 uid: tatok.val.1, cdhash: tcd, csFlags: tflags,
+                 isPlatform: tplat,
+                 signingID: signingIDOf(target), teamID: teamIDOf(target),
+                 decision: deny ? (ENFORCE ? "denied" : "would_deny") : "allow",
+                 reason: why, tsNs: machToEpochNanos(m.mach_time))
+        return
+    }
+
     var kind = ""
     var detail = ""
 
@@ -479,16 +506,12 @@ func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
             FileHandle.standardError.write(Data(
                 "\(ENFORCE ? "DENIED" : "WOULD-DENY") exec \(path) — \(why)\n".utf8))
         }
-        // EVERY exec, not just denials. A forensic timeline built only from
-        // things the policy disliked cannot answer the question that actually
-        // matters after an incident — "what else ran?" — and a rule that has
-        // not been written yet catches nothing retroactively. Recording the
-        // allows is what makes reconstruction possible later.
-        let decision = deny ? (ENFORCE ? "denied" : "would_deny") : "allow"
-        emitExec(path: path, argv: argv, pid: epid, ppid: parentPid, uid: euid,
-                 cdhash: cdhash, csFlags: csFlags, isPlatform: isPlatform,
-                 signingID: signingID, teamID: teamID, decision: decision,
-                 reason: why, tsNs: eventTs)
+        // The forensic record is NOT emitted here any more. AUTH responses are
+        // cached, so this path sees only the FIRST execution of each binary —
+        // emitting from here produced a record that silently omitted every
+        // repeat. ES_EVENT_TYPE_NOTIFY_EXEC is uncached and now carries the
+        // complete stream; see the subscription list. AUTH keeps the decision
+        // and the WOULD-DENY line above, which is what it is for.
         es_release_message(msg)
     }
 }
@@ -585,7 +608,26 @@ func run() {
     // not thousands a second, so Phase 2 adds real coverage without adding the
     // volume risk that filled this SSD to 99% in August.
     var events: [es_event_type_t] = [
-        ES_EVENT_TYPE_AUTH_EXEC,            // existing, blocking, unchanged
+        ES_EVENT_TYPE_AUTH_EXEC,            // the blocking decision (cached)
+        // THE COMPLETE EXEC RECORD, and the reason it is separate.
+        //
+        // es_respond_auth_result(..., cache: true) means, in Apple's words,
+        // "a cache hit leads to no AUTH event being produced". So the SECOND
+        // and every later execution of the same binary never reaches us at
+        // all. Measured here: /usr/bin/log was witnessed once, then cached,
+        // while polling saw four more executions in the same window that ESF
+        // never reported.
+        //
+        // For a blocking client that is correct and fast. For a FORENSIC
+        // record it is fatal — it means an attacker's repeat executions are
+        // invisible by design, and "every process has a witnessed origin"
+        // becomes unprovable.
+        //
+        // NOTIFY events are never cached, so this carries the complete stream
+        // while AUTH_EXEC keeps its fast path. The forensic record is emitted
+        // from HERE only; AUTH emits nothing, so there is exactly one record
+        // per execution rather than two for the first and none thereafter.
+        ES_EVENT_TYPE_NOTIFY_EXEC,
         ES_EVENT_TYPE_NOTIFY_SETUID,        // privilege change, at the instant
         ES_EVENT_TYPE_NOTIFY_SETGID,
         ES_EVENT_TYPE_NOTIFY_KEXTLOAD,      // kernel extension load
