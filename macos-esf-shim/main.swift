@@ -505,15 +505,41 @@ func handle(_ client: OpaquePointer, _ msg: UnsafePointer<es_message_t>) {
 ///
 /// Captured once at startup: the offset is fixed for the life of the process,
 /// and sampling it per event would add jitter for no benefit.
-let bootEpochOffsetNs: UInt64 = {
-    let nowEpochNs = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
-    let uptimeNs = machToNanos(mach_absolute_time())
-    return nowEpochNs > uptimeNs ? nowEpochNs - uptimeNs : 0
-}()
+/// REFRESHED, not captured once — and this cost 17.5 hours of correct timestamps.
+///
+/// mach_absolute_time() is SUSPENDED while the Mac sleeps. An offset computed
+/// at startup is therefore wrong by the full sleep duration the moment the
+/// machine wakes, and stays wrong forever after. Measured on this machine after
+/// one overnight sleep: every event was stamped exactly 17.46 hours in the
+/// past — still a perfectly plausible epoch value, which is why the collector's
+/// range check (2020 < t < 2100) did not catch it and could not have.
+///
+/// The damage is not cosmetic. Misdated events break correlation with every
+/// other sensor, fall outside "last N minutes" queries entirely, and sit in the
+/// retention window far longer than they should.
+///
+/// Refreshed when older than REFRESH_S, so drift is bounded by that interval
+/// rather than by uptime. The cost is one clock read every few seconds.
+private let OFFSET_REFRESH_S: Double = 5.0
+private var _offsetNs: UInt64 = 0
+private var _offsetAt: Double = -1e9
+private let offsetLock = NSLock()
+
+func currentEpochOffsetNs() -> UInt64 {
+    offsetLock.lock(); defer { offsetLock.unlock() }
+    let now = Date().timeIntervalSince1970
+    if now - _offsetAt > OFFSET_REFRESH_S {
+        let nowEpochNs = UInt64(now * 1_000_000_000)
+        let uptimeNs = machToNanos(mach_absolute_time())
+        _offsetNs = nowEpochNs > uptimeNs ? nowEpochNs - uptimeNs : 0
+        _offsetAt = now
+    }
+    return _offsetNs
+}
 
 @inline(__always)
 func machToEpochNanos(_ mach: UInt64) -> UInt64 {
-    return bootEpochOffsetNs + machToNanos(mach)
+    return currentEpochOffsetNs() + machToNanos(mach)
 }
 
 func machToNanos(_ mach: UInt64) -> UInt64 {

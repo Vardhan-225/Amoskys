@@ -156,6 +156,7 @@ def stream_health(window_hours: int = 24) -> dict:
         ),
         "events_24h": 0,
         "dropped": 0,
+        "kernel_dropped": 0,
         "enforce_mode": None,
         "last_beat_age_seconds": None,
     }
@@ -180,6 +181,23 @@ def stream_health(window_hours: int = 24) -> dict:
             ).fetchone()[0]
             or 0
         )
+        # KERNEL-SIDE LOSS, read here because `db` is closed in the finally
+        # below. The first version of this ran after the close, raised
+        # ProgrammingError — a subclass of sqlite3.Error — and was silently
+        # swallowed by its own defensive except, reporting zero kernel drops
+        # forever. A broad exception handler written to survive an old schema
+        # ended up hiding a placement bug instead, which is the more common way
+        # that kind of handler earns its keep in reverse.
+        try:
+            kernel_dropped = int(db.execute(
+                "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
+                "WHERE timestamp_ns >= ?", (cutoff,)
+            ).fetchone()[0] or 0)
+        except sqlite3.OperationalError:
+            # Narrowed on purpose: OperationalError is "no such table", which
+            # is the only condition this fallback is for. Anything else is a
+            # bug and should surface rather than be absorbed.
+            kernel_dropped = 0
     except sqlite3.Error:
         return absent
     finally:
@@ -230,6 +248,35 @@ def stream_health(window_hours: int = 24) -> dict:
             "polling sensor happened to sample."
         )
 
+    # KERNEL-SIDE LOSS, counted separately from ours.
+    #
+    # `dropped` above comes from esf_stream_health, which records what the
+    # Sentinel's OWN buffer discarded. It says nothing about events the KERNEL
+    # dropped before the Sentinel ever saw them — detected from gaps in the
+    # per-event-type seq_num the kernel stamps on every message.
+    #
+    # Without this, a kernel-side drop would render as "Watching, and the
+    # record is intact": the most reassuring status this function can produce,
+    # emitted at the exact moment the timeline had holes in it.
+    #
+    # The two are not summed. They have opposite remedies — a larger userspace
+    # buffer versus a lighter subscription — and merging them hides which half
+    # is failing.
+    # Matched against the actual status vocabulary of this module, not an
+    # assumed one. The first version compared to "watching"; this module says
+    # "witnessing", so the branch never fired and kernel-side loss stayed
+    # invisible in the verdict even once it was being counted correctly.
+    if kernel_dropped and status in ("witnessing", "watching"):
+        status = "gapped"
+        headline = "Watching, but the kernel itself dropped events"
+        detail = (
+            f"{kernel_dropped:,} events were discarded inside the kernel before "
+            "the Sentinel could see them, detected from gaps in the sequence "
+            "numbers the kernel stamps on every message. These are "
+            "unrecoverable, and a lighter subscription or tighter muting is the "
+            "fix — not a bigger queue."
+        )
+
     return {
         "present": True,
         "watching": watching,
@@ -238,8 +285,96 @@ def stream_health(window_hours: int = 24) -> dict:
         "detail": detail,
         "events_24h": events,
         "dropped": int(dropped),
+        "kernel_dropped": kernel_dropped,
         "enforce_mode": enforce,
         "last_beat_age_seconds": beat_age,
+    }
+
+
+def transitions(hours: int = 24, limit: int = 40) -> dict:
+    """State CHANGES the kernel witnessed — not processes starting, but things changing.
+
+    A privilege change, a signature going invalid, a volume attaching. No
+    polling sensor produces any of these at any interval, because there is
+    nothing to sample: an instant either had a witness or it did not happen as
+    far as the record is concerned.
+
+    Ranked by how rare the kind is rather than by recency, because a signature
+    invalidation from an hour ago matters more than a mount from a minute ago,
+    and a feed sorted newest-first would bury it.
+    """
+    absent = {
+        "present": False,
+        "count": 0,
+        "by_kind": {},
+        "events": [],
+        "headline": "No kernel state-change record",
+        "detail": (
+            "The Sentinel is not subscribed to transition events, or none have "
+            "occurred. Check the subscription count in its start record before "
+            "reading this as quiet — an empty list looks the same either way."
+        ),
+    }
+    db = _open()
+    if db is None:
+        return absent
+    try:
+        cutoff = time.time_ns() - hours * 3600 * NS
+        # RANK IN SQL, not after the fetch.
+        #
+        # Fetching the most RECENT n and then sorting them by severity only
+        # reorders within the recency window — a rare event outside it never
+        # enters the candidate set at all. Measured here: the 40 most recent
+        # transitions were all setuid/setgid, so the two kextload events in the
+        # same window were invisible. The docstring above claimed this function
+        # avoids burying rare events in a newest-first feed, and the
+        # implementation did exactly that, one level up.
+        #
+        # The weights live in SQL so the LIMIT applies after ranking.
+        rows = [dict(r) for r in db.execute(
+            "SELECT timestamp_ns, kind, pid, euid, exe, cdhash, is_platform, detail, "
+            "  CASE kind "
+            "    WHEN 'cs_invalidated' THEN 100 "
+            "    WHEN 'kextload'       THEN 90 "
+            "    WHEN 'setuid'         THEN 60 "
+            "    WHEN 'setgid'         THEN 55 "
+            "    WHEN 'mount'          THEN 50 "
+            "    WHEN 'unmount'        THEN 30 "
+            "    ELSE 70 END AS severity "
+            "FROM esf_kernel_events WHERE timestamp_ns >= ? "
+            "ORDER BY severity DESC, timestamp_ns DESC LIMIT ?", (cutoff, limit))]
+        by_kind = {k: n for k, n in db.execute(
+            "SELECT kind, COUNT(*) FROM esf_kernel_events WHERE timestamp_ns >= ? "
+            "GROUP BY kind", (cutoff,))}
+    except sqlite3.Error:
+        return absent
+    if not rows and not by_kind:
+        return absent
+
+    # Severity floor per kind. Deliberately NOT frequency-derived: the first
+    # signature invalidation ever seen would otherwise score as the most common
+    # thing in its own table, which is exactly backwards for the rarest event
+    # the Sentinel can report.
+    for r in rows:
+        r["trust"] = "platform" if r.get("is_platform") else "third-party"
+        if r.get("detail"):
+            try:
+                r["detail"] = json.loads(r["detail"])
+            except (ValueError, TypeError):
+                pass
+
+    total = sum(by_kind.values())
+    return {
+        "present": True,
+        "count": total,
+        "by_kind": by_kind,
+        "events": rows,
+        "headline": f"{total:,} state changes witnessed at the kernel",
+        "detail": (
+            "Privilege changes, volume attachments and signature invalidations, "
+            "recorded at the instant they happened. Nothing that samples on an "
+            "interval can produce these."
+        ),
     }
 
 
