@@ -644,7 +644,7 @@
             const newHtml = events.map(e => {
                 const riskLevel = e.risk_score >= 0.8 ? 'critical' : e.risk_score >= 0.6 ? 'high' : e.risk_score >= 0.3 ? 'medium' : 'low';
                 const time = (e.timestamp || '').slice(11, 16);
-                return `<div class="cc-feed-row cc-feed-risk-${riskLevel}" data-id="${e.id}">
+                return `<div class="cc-feed-row cc-feed-risk-${riskLevel}" data-id="${escAttr(e.id)}">
                     <span class="cc-feed-time">${time}</span>
                     <span class="cc-feed-cat">${esc(e.category)}</span>
                     <span class="cc-feed-device">${esc(e.hostname)}</span>
@@ -715,18 +715,16 @@
         document.getElementById('cc-drilldown').style.display = 'none';
     });
 
+    // Both now delegate to the one escaper in dashboard-core.js, which handles
+    // all five characters. escAttr was this page's local patch for the quote
+    // gap; it is kept as an alias so the call sites that document their intent
+    // by name keep doing so, but there is no longer a difference in behaviour.
     function esc(s) {
-        if (!s) return '';
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
+        return amEsc(s);
     }
 
-    // esc() escapes & < > but NOT the double quote, so it is not safe on its
-    // own inside a quoted attribute value — a hostname containing " would
-    // break out of data-hostname="…". Escape the quote too.
     function escAttr(s) {
-        return esc(s).replace(/"/g, '&quot;');
+        return amEsc(s);
     }
 
     // Delegated: the fleet map's innerHTML is replaced every 15s, but the

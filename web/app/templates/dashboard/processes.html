@@ -344,6 +344,28 @@ const DEV_Q = (window.AMOSKYS_DEVICE_ID && window.AMOSKYS_DEVICE_ID !== 'None')
     ? ((u) => u + (u.indexOf('?') >= 0 ? '&' : '?') + 'device_id=' + encodeURIComponent(window.AMOSKYS_DEVICE_ID))
     : ((u) => u);
 
+// Same contract as the peripheral API: HTTP 200 with an empty list and a
+// `message` when the store cannot be read, HTTP 500 with `error` when it is
+// outright missing. "No processes found" is a true sentence about the response
+// and a false one about the machine.
+function blindNotice(text) {
+    return '<p style="color: var(--neural-warning, #ffb038); text-align: center; ' +
+           'padding: 2rem; line-height:1.6;"><strong>Not observed.</strong> ' +
+           amEsc(text) + '<br><span style="color:var(--text-muted);font-size:0.85em;">' +
+           'AMOSKYS could not read the process stream. Nothing here rules anything out.' +
+           '</span></p>';
+}
+
+function isBlind(response, data) {
+    return !response.ok || !data || typeof data.message === 'string' || typeof data.error === 'string';
+}
+
+function blindReason(response, data) {
+    if (data && data.error) return String(data.error);
+    if (data && data.message) return String(data.message);
+    return 'The process telemetry API returned HTTP ' + response.status + '.';
+}
+
 class ProcessDashboard {
     constructor() {
         this.updateInterval = 5000; // 5 seconds
@@ -488,17 +510,26 @@ class ProcessDashboard {
 
             const container = document.getElementById('top-executables-list');
 
-            if (data.executables.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No executable data available</p>';
+            if (isBlind(response, data)) {
+                container.innerHTML = blindNotice(blindReason(response, data));
                 return;
             }
 
+            if (data.executables.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">' +
+                    'The stream is reporting, and no executable ran in this window.</p>';
+                return;
+            }
+
+            // exe.name is a filename off disk. Anything that can write a file
+            // can choose it, and this list ranks exactly the executables an
+            // operator has not vouched for yet.
             const exesHtml = data.executables.map(exe => `
                 <div class="top-exe-item">
-                    <div class="top-exe-name">${exe.name}</div>
+                    <div class="top-exe-name">${amEsc(exe.name)}</div>
                     <div class="top-exe-stats">
-                        <span class="top-exe-count">${exe.count} occurrences</span>
-                        <span class="top-exe-percentage">${exe.percentage}%</span>
+                        <span class="top-exe-count">${amEsc(exe.count)} occurrences</span>
+                        <span class="top-exe-percentage">${amEsc(exe.percentage)}%</span>
                     </div>
                 </div>
             `).join('');
@@ -507,6 +538,8 @@ class ProcessDashboard {
 
         } catch (error) {
             console.error('Top executables update failed:', error);
+            document.getElementById('top-executables-list').innerHTML =
+                blindNotice('The top-executables request failed: ' + (error && error.message ? error.message : error));
         } finally {
             document.getElementById('top-exes-loading').style.display = 'none';
         }
@@ -526,8 +559,14 @@ class ProcessDashboard {
 
             const tbody = document.getElementById('process-stream-body');
 
+            if (isBlind(response, data)) {
+                tbody.innerHTML = '<tr><td colspan="7">' + blindNotice(blindReason(response, data)) + '</td></tr>';
+                return;
+            }
+
             if (data.processes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No processes found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">' +
+                    'The stream is reporting, and no process matched this filter.</td></tr>';
                 return;
             }
 
@@ -536,19 +575,28 @@ class ProcessDashboard {
                 const timestamp = proc.timestamp_dt ? new Date(proc.timestamp_dt).toLocaleTimeString() : 'N/A';
 
                 // Handle null/undefined values
-                const userType = proc.user_type || 'unknown';
-                const processClass = proc.process_class || 'unknown';
+                // userType and processClass are interpolated into CLASS
+                // attributes, so they are constrained to the character set a
+                // class name may hold rather than merely escaped — otherwise a
+                // process could name itself into another row's styling.
+                const userType = String(proc.user_type || 'unknown').replace(/[^a-zA-Z0-9_-]+/g, '') || 'unknown';
+                const processClass = String(proc.process_class || 'unknown').replace(/[^a-zA-Z0-9_-]+/g, '') || 'unknown';
                 const ageSeconds = proc.age_seconds !== null && proc.age_seconds !== undefined ? proc.age_seconds : '?';
 
+                // The full path goes into title="...". A single double quote in
+                // an executable path — legal on APFS — closed that attribute and
+                // handed the rest of the path to the parser as markup. The path
+                // is the one field on this page an intruder fully controls: they
+                // chose where to drop the binary and what to call it.
                 return `
                 <tr>
-                    <td>${timestamp}</td>
-                    <td>${proc.pid || 'N/A'}</td>
-                    <td>${proc.ppid || 'N/A'}</td>
-                    <td class="exe-truncate" title="${proc.exe || 'unknown'}">${proc.exe_basename || proc.exe || 'unknown'}</td>
-                    <td class="user-type-${userType}">${userType}</td>
-                    <td class="process-class-${processClass}">${processClass}</td>
-                    <td>${ageSeconds}s ago</td>
+                    <td>${amEsc(timestamp)}</td>
+                    <td>${amEsc(proc.pid || 'N/A')}</td>
+                    <td>${amEsc(proc.ppid || 'N/A')}</td>
+                    <td class="exe-truncate" title="${amEsc(proc.exe || 'unknown')}">${amEsc(proc.exe_basename || proc.exe || 'unknown')}</td>
+                    <td class="user-type-${userType}">${amEsc(proc.user_type || 'unknown')}</td>
+                    <td class="process-class-${processClass}">${amEsc(proc.process_class || 'unknown')}</td>
+                    <td>${amEsc(ageSeconds)}s ago</td>
                 </tr>
             `}).join('');
 
@@ -556,6 +604,9 @@ class ProcessDashboard {
 
         } catch (error) {
             console.error('Process stream update failed:', error);
+            document.getElementById('process-stream-body').innerHTML = '<tr><td colspan="7">' +
+                blindNotice('The process stream request failed: ' + (error && error.message ? error.message : error)) +
+                '</td></tr>';
         }
     }
 

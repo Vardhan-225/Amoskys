@@ -727,7 +727,7 @@ class PersistenceDashboard {
                 card.className = 'metric-card';
                 card.innerHTML = `
                     <div class="metric-value">${mechanisms[mech].toLocaleString()}</div>
-                    <div class="metric-label">${this.formatMechanismName(mech)}</div>
+                    <div class="metric-label">${amEsc(this.formatMechanismName(mech))}</div>
                 `;
                 statsGrid.appendChild(card);
             });
@@ -784,10 +784,10 @@ class PersistenceDashboard {
             const total = risks.critical + risks.high + risks.medium + risks.low || 1;
 
             return `
-                <div class="mechanism-card" data-mechanism="${mech}">
+                <div class="mechanism-card" data-mechanism="${amEsc(mech)}">
                     <div class="mechanism-header">
                         <div class="mechanism-icon">${icon}</div>
-                        <div class="mechanism-name">${this.formatMechanismName(mech)}</div>
+                        <div class="mechanism-name">${amEsc(this.formatMechanismName(mech))}</div>
                     </div>
                     <div class="mechanism-count">${count.toLocaleString()}</div>
                     <div class="mechanism-count-label">entries detected</div>
@@ -883,34 +883,45 @@ class PersistenceDashboard {
 
         const rows = pageItems.map((entry, idx) => {
             const riskClass = this.getRiskClass(entry.risk_score);
-            const changeClass = (entry.change_type || 'unchanged').toLowerCase();
+            // Reduced to the character set a class name may hold, not merely
+            // escaped. A caught XSS proved the difference: amEsc() protected the
+            // badge's TEXT while this value still flowed raw into
+            // class="change-badge ${changeClass}", and a change_type of
+            // '"><img src=x onerror=...>' closed the attribute and injected two
+            // live elements into the analyst's page.
+            const changeClass = String(entry.change_type || 'unchanged')
+                .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 32) || 'unchanged';
             const rowId = `detail-${start + idx}`;
 
+            // entry_id is a launchd Label, and a Label is chosen by whoever
+            // wrote the plist. That is the whole point of this page: it lists
+            // the things that installed themselves to survive a reboot. The
+            // mechanism/user/change_type fields come from the same rows.
             return `
                 <tr class="inventory-row" data-detail="${rowId}">
                     <td><button class="expand-btn" data-target="${rowId}">&#9654;</button></td>
-                    <td><span class="mechanism-badge">${entry.mechanism || '--'}</span></td>
-                    <td style="font-family: monospace; font-size: 0.78rem;">${entry.entry_id || '--'}</td>
-                    <td><span class="path-truncate" title="${this.escapeHtml(entry.path || '')}">${this.escapeHtml(entry.path || '--')}</span></td>
-                    <td><span class="cmd-truncate" title="${this.escapeHtml(entry.command || '')}">${this.escapeHtml(entry.command || '--')}</span></td>
-                    <td>${entry.user || '--'}</td>
-                    <td><span class="change-badge ${changeClass}">${entry.change_type || '--'}</span></td>
+                    <td><span class="mechanism-badge">${amEsc(entry.mechanism || '--')}</span></td>
+                    <td style="font-family: monospace; font-size: 0.78rem;">${amEsc(entry.entry_id || '--')}</td>
+                    <td><span class="path-truncate" title="${amEsc(entry.path || '')}">${amEsc(entry.path || '--')}</span></td>
+                    <td><span class="cmd-truncate" title="${amEsc(entry.command || '')}">${amEsc(entry.command || '--')}</span></td>
+                    <td>${amEsc(entry.user || '--')}</td>
+                    <td><span class="change-badge ${changeClass}">${amEsc(entry.change_type || '--')}</span></td>
                     <td><span class="risk-pill ${riskClass}">${entry.risk_score != null ? entry.risk_score.toFixed(2) : '--'}</span></td>
-                    <td style="white-space: nowrap; font-size: 0.78rem;">${this.formatTimestamp(entry.timestamp)}</td>
+                    <td style="white-space: nowrap; font-size: 0.78rem;">${amEsc(this.formatTimestamp(entry.timestamp))}</td>
                 </tr>
                 <tr class="expanded-detail" id="${rowId}">
                     <td colspan="9">
                         <div class="detail-grid">
-                            <div class="detail-item"><span class="detail-label">Mechanism:</span><span class="detail-value">${entry.mechanism || '--'}</span></div>
-                            <div class="detail-item"><span class="detail-label">Entry ID:</span><span class="detail-value">${entry.entry_id || '--'}</span></div>
-                            <div class="detail-item"><span class="detail-label">Full Path:</span><span class="detail-value">${this.escapeHtml(entry.path || '--')}</span></div>
-                            <div class="detail-item"><span class="detail-label">Command:</span><span class="detail-value">${this.escapeHtml(entry.command || '--')}</span></div>
-                            <div class="detail-item"><span class="detail-label">User:</span><span class="detail-value">${entry.user || '--'}</span></div>
-                            <div class="detail-item"><span class="detail-label">Change Type:</span><span class="detail-value">${entry.change_type || '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Mechanism:</span><span class="detail-value">${amEsc(entry.mechanism || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">Entry ID:</span><span class="detail-value">${amEsc(entry.entry_id || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">Full Path:</span><span class="detail-value">${amEsc(entry.path || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">Command:</span><span class="detail-value">${amEsc(entry.command || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">User:</span><span class="detail-value">${amEsc(entry.user || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">Change Type:</span><span class="detail-value">${amEsc(entry.change_type || '--')}</span></div>
                             <div class="detail-item"><span class="detail-label">Risk Score:</span><span class="detail-value">${entry.risk_score != null ? entry.risk_score.toFixed(4) : '--'}</span></div>
-                            <div class="detail-item"><span class="detail-label">Timestamp:</span><span class="detail-value">${entry.timestamp || '--'}</span></div>
-                            ${entry.hash ? `<div class="detail-item"><span class="detail-label">Hash:</span><span class="detail-value" style="font-family: monospace; font-size: 0.75rem;">${entry.hash}</span></div>` : ''}
-                            ${entry.agent_name ? `<div class="detail-item"><span class="detail-label">Agent:</span><span class="detail-value">${entry.agent_name}</span></div>` : ''}
+                            <div class="detail-item"><span class="detail-label">Timestamp:</span><span class="detail-value">${amEsc(entry.timestamp || '--')}</span></div>
+                            ${entry.hash ? `<div class="detail-item"><span class="detail-label">Hash:</span><span class="detail-value" style="font-family: monospace; font-size: 0.75rem;">${amEsc(entry.hash)}</span></div>` : ''}
+                            ${entry.agent_name ? `<div class="detail-item"><span class="detail-label">Agent:</span><span class="detail-value">${amEsc(entry.agent_name)}</span></div>` : ''}
                         </div>
                     </td>
                 </tr>
@@ -1023,10 +1034,12 @@ class PersistenceDashboard {
         return 'low';
     }
 
+    // Delegates to the one escaper in dashboard-core.js. The div.textContent
+    // trick that lived here handled & < > and left " alone, while its two
+    // callers both interpolated into title="..." — so the one field this page
+    // did protect was protected in the one context where it did not work.
     escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return amEsc(str);
     }
 
     formatTimestamp(ts) {

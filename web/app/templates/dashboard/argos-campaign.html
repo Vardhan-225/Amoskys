@@ -365,11 +365,18 @@
         consentRow.style.display = (modeSel.value === 'report') ? 'none' : 'block';
     });
 
+    // Delegates to the one escaper in dashboard-core.js. The three-character
+    // version here left " and ' alone while two call sites put its output
+    // inside a quoted class attribute.
     function esc(s) {
-        return (s == null ? '' : String(s))
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return amEsc(s);
+    }
+
+    // Class names need reduction, not escaping — see dashboard-core.js.
+    function classToken(s, fallback) {
+        const t = String(s === null || s === undefined ? '' : s)
+            .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 32);
+        return t || fallback;
     }
 
     function setStage(stage, state) {
@@ -428,7 +435,7 @@
                 </div>
                 <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
                     <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Max severity</div>
-                    <div class="v"><span class="sev-badge ${esc(report.max_severity)}">${esc(report.max_severity)}</span></div>
+                    <div class="v"><span class="sev-badge ${classToken(report.max_severity, 'unknown')}">${esc(report.max_severity)}</span></div>
                 </div>
                 <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
                     <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Consent</div>
@@ -471,7 +478,7 @@
                         <span class="chain-name">${esc(c.name)}</span>
                         <span class="chain-cvss">CVSS ${Number(c.cvss_estimate || 0).toFixed(1)}</span>
                     </div>
-                    <div><span class="sev-badge ${esc(c.severity)}">${esc(c.severity)}</span> <span style="color: var(--text-muted); margin-left: 0.5rem;">confidence ${esc(c.confidence)}%</span></div>
+                    <div><span class="sev-badge ${classToken(c.severity, 'unknown')}">${esc(c.severity)}</span> <span style="color: var(--text-muted); margin-left: 0.5rem;">confidence ${esc(c.confidence)}%</span></div>
                     <div class="chain-narrative">${esc(c.narrative)}</div>
                     <div style="margin-top: 0.5rem; color: var(--neural-warning); font-size: 0.78rem;">
                         Business impact: ${esc(c.business_impact)}

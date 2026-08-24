@@ -520,9 +520,18 @@ const API = {
 };
 
 /* ── helpers — delegating to dashboard-core.js shared utilities ─ */
+// Returns HTML, not text — every caller assigns it into innerHTML.
+//
+// Domains on this page are, by construction, strings an ADVERSARY chose: the
+// DGA panel exists to list names an algorithm generated and someone registered,
+// and the beaconing panel lists the ones their malware is calling. Rendering
+// those raw was the page contradicting its own premise. Truncation happens on
+// the raw string and escaping after it, so a clip can never cut an entity in
+// half.
 function truncDomain(d, max) {
     max = max || 32;
-    return d && d.length > max ? d.substring(0, max) + '...' : (d || '');
+    const s = (d === null || d === undefined) ? '' : String(d);
+    return amEsc(s.length > max ? s.substring(0, max) + '...' : s);
 }
 
 function dgaColor(score) {
@@ -545,12 +554,32 @@ function shortTs(ts) {
 }
 
 /* ── Stats + NLP Summary ─────────────────────────────────────── */
+// A KPI with no reading behind it shows the page's own "not measured" glyph
+// rather than a confident zero. `|| 0` turned every unreachable store into five
+// tiles of reassuring zeroes.
+function kpi(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value === null || value === undefined) { el.textContent = '--'; el.title = 'Not measured'; }
+    else { el.textContent = formatNumber(value); el.title = ''; }
+}
+
 function renderStats(s) {
-    document.getElementById('statTotalQueries').textContent = formatNumber(s.total_queries || 0);
-    document.getElementById('statUniqueDomains').textContent = formatNumber(s.unique_domains || 0);
-    document.getElementById('statDgaSuspects').textContent = formatNumber(s.dga_suspects || 0);
-    document.getElementById('statBeaconing').textContent = formatNumber(s.beaconing_domains || 0);
-    document.getElementById('statNxdomain').textContent = formatNumber(s.nxdomain_count || 0);
+    const blind = !s || s.available === false || s.total_queries === null || s.total_queries === undefined;
+
+    kpi('statTotalQueries', blind ? null : s.total_queries);
+    kpi('statUniqueDomains', blind ? null : (s.unique_domains || 0));
+    kpi('statDgaSuspects',  blind ? null : (s.dga_suspects || 0));
+    kpi('statBeaconing',    blind ? null : (s.beaconing_domains || 0));
+    kpi('statNxdomain',     blind ? null : (s.nxdomain_count || 0));
+
+    if (blind) {
+        document.getElementById('dnsSummary').innerHTML =
+            '<strong style="color:var(--neural-warning);">DNS resolution was not observed.</strong> ' +
+            amEsc((s && s.error) ? s.error : 'The DNS telemetry store could not be read.') +
+            ' No statement about this machine\u2019s DNS behaviour can be made from this view.';
+        return;
+    }
 
     renderNlpSummary(s);
 }
@@ -564,8 +593,21 @@ function renderNlpSummary(s) {
 
     const parts = [];
 
+    // A window with no queries in it cannot support ANY of the sentences
+    // below — including the negative ones. Saying "no DGA domains were
+    // detected" over an empty window is true of the search and false of the
+    // machine, and it is the reassuring half that a reader remembers. Stop
+    // here and say only what is known.
+    if (total === 0) {
+        document.getElementById('dnsSummary').innerHTML =
+            '<strong style="color:var(--neural-warning);">No DNS queries were recorded in the last 24 hours.</strong> ' +
+            'A machine that is switched on resolves names constantly, so an empty window is a gap in collection ' +
+            'rather than quiet behaviour. Nothing on this page rules anything out until the stream is reporting again.';
+        return;
+    }
+
     // Opening sentence with query volume assessment
-    const qpsApprox = total > 0 ? (total / 24).toFixed(0) : 0;
+    const qpsApprox = (total / 24).toFixed(0);
     parts.push(
         `Over the last <strong>24 hours</strong>, AMOSKYS observed <strong>${formatNumber(total)}</strong> DNS queries ` +
         `(~${formatNumber(qpsApprox)}/hr) resolving <strong>${formatNumber(unique)}</strong> unique domains.`
@@ -619,9 +661,13 @@ function renderNlpSummary(s) {
         }
     }
 
-    // Clean bill if nothing suspicious
-    if (dga === 0 && beacon === 0 && (nxd === 0 || nxd / total <= 0.05)) {
-        parts.push('DNS resolution patterns appear <strong style="color:var(--neural-success);">healthy</strong> with no anomalous activity detected.');
+    // A clean bill is now a statement about the tests that ran, not a verdict
+    // on the machine. The old sentence — "DNS resolution patterns appear
+    // healthy with no anomalous activity detected" — asked only "did I find
+    // anything bad?", which is equally true of a store that was never opened.
+    // The empty-window case is handled above and never reaches here.
+    if (dga === 0 && beacon === 0 && nxd / total <= 0.05) {
+        parts.push('Across those queries, none matched the DGA, beaconing or NXDOMAIN-burst patterns AMOSKYS tests for.');
     }
 
     document.getElementById('dnsSummary').innerHTML = parts.join(' ');
@@ -643,7 +689,7 @@ function renderDGA(data) {
         const tr = document.createElement('tr');
         if (score > 0.7) tr.className = 'row-danger';
         tr.innerHTML = `
-            <td title="${row.domain || ''}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 28)}</td>
+            <td title="${amEsc(row.domain || '')}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 28)}</td>
             <td>
                 <div class="dga-bar-wrapper">
                     <div class="dga-bar-track">
@@ -652,8 +698,8 @@ function renderDGA(data) {
                     <span class="dga-bar-value" style="color:${color};">${score.toFixed(2)}</span>
                 </div>
             </td>
-            <td style="font-size:0.8rem;">${row.process_name || '—'}</td>
-            <td style="font-family:monospace;font-size:0.75rem;white-space:nowrap;">${shortTs(row.timestamp)}</td>
+            <td style="font-size:0.8rem;">${amEsc(row.process_name || '—')}</td>
+            <td style="font-family:monospace;font-size:0.75rem;white-space:nowrap;">${amEsc(shortTs(row.timestamp))}</td>
         `;
         body.appendChild(tr);
     });
@@ -674,9 +720,9 @@ function renderBeaconing(data) {
         li.className = 'beacon-item';
         li.innerHTML = `
             <span class="beacon-dot"></span>
-            <span class="beacon-domain" title="${b.domain || ''}">${truncDomain(b.domain, 36)}</span>
+            <span class="beacon-domain" title="${amEsc(b.domain || '')}">${truncDomain(b.domain, 36)}</span>
             <div class="beacon-meta">
-                <span><span class="label">Interval: </span><span class="value">${b.interval_seconds || b.interval || '—'}s</span></span>
+                <span><span class="label">Interval: </span><span class="value">${amEsc(b.interval_seconds || b.interval || '—')}s</span></span>
                 <span><span class="label">Queries: </span><span class="value">${formatNumber(b.query_count || 0)}</span></span>
             </div>
         `;
@@ -791,9 +837,9 @@ function renderDomainPage() {
             const tr = document.createElement('tr');
             if (score > 0.7) tr.className = 'row-danger';
             tr.innerHTML = `
-                <td title="${row.domain || ''}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 30)}</td>
+                <td title="${amEsc(row.domain || '')}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 30)}</td>
                 <td style="font-weight:600;color:var(--neural-primary);">${formatNumber(row.count || 0)}</td>
-                <td style="font-size:0.8rem;">${row.process_name || '—'}</td>
+                <td style="font-size:0.8rem;">${amEsc(row.process_name || '—')}</td>
                 <td>
                     <div class="dga-bar-wrapper">
                         <div class="dga-bar-track" style="min-width:40px;">
@@ -854,7 +900,7 @@ function renderRcodeChart(stats) {
         const li = document.createElement('li');
         li.innerHTML = `
             <span class="legend-swatch" style="background:${palette[i % palette.length]};"></span>
-            <span>${label}</span>
+            <span>${amEsc(label)}</span>
             <span class="legend-count">${formatNumber(values[i])}</span>
         `;
         legend.appendChild(li);

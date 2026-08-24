@@ -203,6 +203,55 @@ function timeAgo(ns) {
 }
 
 
+// ── The escaper ────────────────────────────────────────────────────
+/**
+ * Escape a value for interpolation into HTML — text nodes AND attributes.
+ *
+ * Five characters, not three. Two idioms were in use across the Observatory
+ * and both are wrong for attributes:
+ *
+ *   div.textContent = s; return div.innerHTML   // leaves " and ' alone
+ *   s.replace(/[&<>]/g, ...)                    // same gap, spelled out
+ *
+ * That gap matters here more than on an ordinary web page. These pages exist
+ * to display strings that hostile hardware and hostile software chose: a USB
+ * device's self-declared iProduct, a launch agent's Label, a DGA domain, an
+ * executable path. Every one of those is rendered into a title="..." somewhere,
+ * and a value carrying one double quote closes the attribute and starts markup
+ * inside the analyst's authenticated session.
+ *
+ * Single quotes are escaped too — the templates mix quote styles.
+ *
+ * `null` and `undefined` become ''. Everything else is stringified, so 0 and
+ * false render as "0" and "false" rather than silently vanishing the way a
+ * falsy-guard escaper does.
+ */
+const AM_ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function amEsc(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, function (c) { return AM_ESC_MAP[c]; });
+}
+
+/**
+ * Escape and clip in one step, for the many `title` + truncated-cell pairs.
+ * Truncation happens on the RAW string and escaping after it, because clipping
+ * escaped text can cut an entity in half ("&am") and leave the browser to
+ * resynchronise on whatever follows.
+ */
+function amEscClip(value, max) {
+    if (value === null || value === undefined) return '';
+    const s = String(value);
+    return amEsc(s.length > max ? s.slice(0, max - 1) + '\u2026' : s);
+}
+
+// Also hung off window: several pages run their JS inside an IIFE that shadows
+// or predates these bindings, and a couple of inline blocks are evaluated in a
+// scope where the classic-script global lexical binding is not visible.
+window.amEsc = amEsc;
+window.amEscClip = amEscClip;
+
+
 // ── Chart.js dark theme defaults ───────────────────────────────────
 if (typeof Chart !== 'undefined') {
     Chart.defaults.color = '#b4bcd0';

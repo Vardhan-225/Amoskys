@@ -493,11 +493,16 @@
 
     /* ── Helpers ── */
 
+    // Five characters, not three. The div.textContent -> innerHTML trick that
+    // used to live here escapes & < > and leaves " and ' alone, which is fine
+    // for text nodes and wrong for the eight places this page interpolates into
+    // an attribute (title=, data-dst=). One ASN org or process name carrying a
+    // double quote closes the attribute and the rest is markup.
     function escHtml(s) {
-        if (!s) return '';
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
     }
 
     function asnTypeClass(t) {
@@ -1288,7 +1293,14 @@
     // Initial start
     startPoller(selectedHours);
 
-})();
+    // NOTE: the IIFE deliberately does NOT close here. Everything below —
+    // the Connection Story and its delegated click listener — reads
+    // selectedHours, _devQ and escHtml, which are declared in this closure.
+    // Closing here put loadStory at top level, so every row click threw a
+    // ReferenceError that the story's own try/catch swallowed into
+    // "Story request failed." — the page's headline feature was dead in
+    // every environment, and dead silently.
+
     // ── Connection Story ───────────────────────────────────────────────────
     // Turns one destination into a narrative. The corroboration ledger is the
     // reason this exists: every other console shows a verdict, this shows the
@@ -1435,5 +1447,6 @@
         }
     });
 
+})();
 </script>
 {% endblock %}

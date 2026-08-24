@@ -830,6 +830,33 @@ def incident_timeline(incident_id):
 # ── DNS Intelligence ──
 
 
+def _store_unavailable(payload_shape):
+    """The answer when there is no store to ask.
+
+    These endpoints used to return a *successful* empty result — HTTP 200 with
+    ``[]`` or ``{"total_queries": 0}``. The DNS page read that as evidence and
+    printed "DNS resolution patterns appear healthy with no anomalous activity
+    detected." over a store it had never reached. Zero queries observed is not a
+    clean bill; on a live machine it is itself an alarm.
+
+    503 is the honest code: the service is fine, the thing behind it is not, and
+    the client's existing failure paths already say so out loud. The body keeps
+    the caller's expected shape so anything that ignores the status still gets a
+    structure it can iterate rather than a TypeError.
+    """
+    if isinstance(payload_shape, dict):
+        body = {"available": False, "error": "telemetry store unavailable"}
+        body.update(payload_shape)
+        return jsonify(body), 503
+    # List endpoints: the shape is an array, so the flag rides in the header.
+    response = jsonify([])
+    response.status_code = 503
+    response.headers["X-Amoskys-Unavailable"] = "telemetry store unavailable"
+    return response
+
+
+
+
 @dashboard_bp.route("/api/dns/stats")
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
@@ -837,7 +864,7 @@ def dns_stats():
     """DNS query analytics."""
     store = _get_store()
     if not store:
-        return jsonify({"total_queries": 0})
+        return _store_unavailable({"total_queries": None})
     hours = request.args.get("hours", 24, type=int)
     device_id = request.args.get("device_id") or None
     stats = store.get_dns_stats(hours, device_id=device_id)
@@ -855,7 +882,7 @@ def dns_top_domains():
     """Top queried domains."""
     store = _get_store()
     if not store:
-        return jsonify([])
+        return _store_unavailable([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 20, type=int)
     device_id = request.args.get("device_id") or None
@@ -871,7 +898,7 @@ def dns_dga():
     """DGA suspect domains."""
     store = _get_store()
     if not store:
-        return jsonify([])
+        return _store_unavailable([])
     hours = request.args.get("hours", 24, type=int)
     min_score = request.args.get("min_score", 0.5, type=float)
     limit = request.args.get("limit", 50, type=int)
@@ -890,7 +917,7 @@ def dns_beaconing():
     """Beaconing domain detection."""
     store = _get_store()
     if not store:
-        return jsonify([])
+        return _store_unavailable([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 50, type=int)
     device_id = request.args.get("device_id") or None
@@ -904,7 +931,7 @@ def dns_timeline():
     """DNS query timeline."""
     store = _get_store()
     if not store:
-        return jsonify([])
+        return _store_unavailable([])
     hours = request.args.get("hours", 24, type=int)
     device_id = request.args.get("device_id") or None
     return jsonify(store.get_dns_timeline(hours, device_id=device_id))
@@ -917,7 +944,7 @@ def dns_recent():
     """Recent DNS events with search."""
     store = _get_store()
     if not store:
-        return jsonify({"results": [], "total_count": 0})
+        return _store_unavailable({"results": [], "total_count": None})
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
