@@ -1039,7 +1039,10 @@
     function humanize(s) {
         if (!s) return '';
         var m = { 'process_spawned':'Process Exec','lolbin_execution':'Suspicious Binary','new_external_connection':'External Conn','tcc_permission_denied':'Perm Denied','exfil_spike':'Data Exfil','macos_config_backdoor_new':'Config Backdoor','c2_beacon_suspect':'C2 Beacon','dns_beaconing_suspected':'DNS Beacon','dns_beaconing_detected':'DNS Beacon','full_kill_chain':'Kill Chain','cloud_exfil_detected':'Cloud Exfil','new_domain_first_seen':'New Domain' };
-        return m[s] || s.replace(/_/g,' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        // amEventName also collapses a namespace prefix that was written twice
+        // (tcc_tcc_permission_request) and spells the acronyms — see
+        // dashboard-core.js.
+        return m[s] || amEventName(s);
     }
     function mitreName(id) {
         var n = { 'T1059':'Command & Scripting','T1204':'User Execution','T1071':'App Layer Protocol','T1071.004':'DNS','T1059.002':'AppleScript','T1218':'System Binary Proxy','T1548':'Elevation Control','T1583':'Acquire Infrastructure','T1048':'Alt Protocol Exfil','T1568.002':'DNS Calc','T1567':'Web Service Exfil' };

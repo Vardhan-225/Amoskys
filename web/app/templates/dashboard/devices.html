@@ -352,7 +352,10 @@
             'tcc_permission_denied':'Permission Denied', 'exfil_spike':'Data Exfiltration', 'macos_config_backdoor_new':'Config Backdoor',
             'c2_beacon_suspect':'C2 Beacon', 'topology_new_route':'Route Change', 'dns_beaconing_suspected':'DNS Beaconing',
             'high_cpu':'High CPU', 'full_kill_chain':'Kill Chain', 'rapid_app_switch':'App Switching' };
-        return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        // amEventName also collapses a namespace prefix that was written twice
+        // (tcc_tcc_permission_request) and spells the acronyms — see
+        // dashboard-core.js.
+        return map[s] || amEventName(s);
     }
     function osIcon(os) {
         os = (os || '').toLowerCase();

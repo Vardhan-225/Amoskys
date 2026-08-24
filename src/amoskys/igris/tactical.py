@@ -163,6 +163,13 @@ _NOISE_CATEGORIES = {
     "app_launch",
     "process_exit",
     "app_terminated",
+    # Both spellings. The doubled form was produced by a prefix applied twice
+    # in the unified-log probes (fixed at the source in probes.py::_namespaced),
+    # but the rows already written to security_events keep it forever — and a
+    # noise filter that stops matching them would start surfacing months of
+    # TCC prompts as threats.
+    "tcc_permission_request",
+    "tcc_permission_granted",
     "tcc_tcc_permission_request",
     "tcc_tcc_permission_granted",
     "late_night_connections",  # informational, not actionable

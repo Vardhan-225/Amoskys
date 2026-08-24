@@ -475,7 +475,10 @@
             'suspicious_script': 'Suspicious Script', 'credential_theft_command': 'Credential Theft',
             'macos_launchagent_new': 'New LaunchAgent', 'macos_config_backdoor_new': 'Config Backdoor',
         };
-        return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        // amEventName also collapses a namespace prefix that was written twice
+        // (tcc_tcc_permission_request) and spells the acronyms — see
+        // dashboard-core.js.
+        return map[s] || amEventName(s);
     }
 
     function mitreName(id) {

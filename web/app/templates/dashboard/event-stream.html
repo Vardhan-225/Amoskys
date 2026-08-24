@@ -631,7 +631,10 @@ const esApp = {
             'persistence_cron': 'Cron Job', 'persistence_ssh_key': 'SSH Key',
             'file_integrity_change': 'File Integrity',
         };
-        return map[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        // amEventName also collapses a namespace prefix that was written twice
+        // (tcc_tcc_permission_request) and spells the acronyms — see
+        // dashboard-core.js.
+        return map[cat] || amEventName(cat);
     },
 
     escHtml(s) {

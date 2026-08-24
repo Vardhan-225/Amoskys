@@ -245,11 +245,52 @@ function amEscClip(value, max) {
     return amEsc(s.length > max ? s.slice(0, max - 1) + '\u2026' : s);
 }
 
+/**
+ * Humanise a stored event category or action for display.
+ *
+ * Collapses a leading token that was written twice. Nine event categories in
+ * this store are named tcc_tcc_permission_request, sharing_sharing_activated
+ * and so on, because two probes applied their namespace prefix to a subtype
+ * that already carried it. That is fixed at the source
+ * (unified_log/probes.py::_namespaced), but the rows already written keep the
+ * doubled name forever — and the UI renders it as "tcc tcc permission request",
+ * which reads as a rendering fault and quietly undermines every other label on
+ * the page.
+ *
+ * The rule is narrow on purpose: only an IMMEDIATELY repeated FIRST token is
+ * collapsed. "dns_dns_beaconing" would be collapsed; "process_process_spawned"
+ * would be; "new_domain_first_seen" is untouched.
+ */
+// Title-casing turns dns into "Dns" and tcc into "Tcc". These are acronyms an
+// operator reads dozens of times an hour, and the lower-cased form makes a
+// security console look like it does not know its own domain.
+const AM_ACRONYMS = {
+    dns: 'DNS', tcc: 'TCC', ip: 'IP', url: 'URL', usb: 'USB', ssh: 'SSH',
+    tls: 'TLS', ssl: 'SSL', http: 'HTTP', https: 'HTTPS', api: 'API',
+    cpu: 'CPU', c2: 'C2', dga: 'DGA', mitre: 'MITRE', fim: 'FIM',
+    wal: 'WAL', pid: 'PID', asn: 'ASN', os: 'OS', id: 'ID', ml: 'ML',
+};
+
+function amEventName(raw) {
+    if (raw === null || raw === undefined) return '';
+    return String(raw)
+        .replace(/^([a-z0-9]+)_\1_/i, '$1_')
+        .split(/[_\s]+/)
+        .filter(Boolean)
+        .map(function (word) {
+            var lower = word.toLowerCase();
+            if (AM_ACRONYMS[lower]) return AM_ACRONYMS[lower];
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
 // Also hung off window: several pages run their JS inside an IIFE that shadows
 // or predates these bindings, and a couple of inline blocks are evaluated in a
 // scope where the classic-script global lexical binding is not visible.
 window.amEsc = amEsc;
 window.amEscClip = amEscClip;
+window.amEventName = amEventName;
 
 
 // ── Chart.js dark theme defaults ───────────────────────────────────

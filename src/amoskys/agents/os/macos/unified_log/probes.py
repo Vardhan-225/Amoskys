@@ -469,6 +469,31 @@ class XPCAnomalyProbe(MicroProbe):
 
 
 # TCC event patterns
+
+
+def _namespaced(prefix: str, subtype: str) -> str:
+    """Prefix an event subtype, but only once.
+
+    The pattern tables below name their subtypes inconsistently: every entry in
+    _TCC_PATTERNS already carries the "tcc_" prefix, and three of the ten
+    _SHARING_PATTERNS entries already carry "sharing_". The emit sites then
+    prefixed unconditionally, so a subtype that was already namespaced got a
+    second copy — and the name reached the operator's screen as
+
+        tcc tcc permission request
+        sharing sharing deactivated
+
+    once the UI split it on underscores. This is not a display bug: the doubled
+    string is what was written to security_events.event_category, so it is also
+    what every rule, filter and saved query had to match.
+
+    Prefixing conditionally fixes the names without having to rewrite either
+    table and without breaking the seven sharing subtypes that were always
+    correct.
+    """
+    return subtype if subtype.startswith(prefix + "_") else f"{prefix}_{subtype}"
+
+
 _TCC_PATTERNS = [
     # Permission granted
     (
@@ -580,7 +605,7 @@ class TCCEventProbe(MicroProbe):
 
                     events.append(
                         self._create_event(
-                            event_type=f"tcc_{event_subtype}",
+                            event_type=_namespaced("tcc", event_subtype),
                             severity=severity,
                             data={
                                 "probe_name": self.name,
@@ -685,7 +710,7 @@ class SharingServiceProbe(MicroProbe):
                 if re.search(pattern, message_lower):
                     events.append(
                         self._create_event(
-                            event_type=f"sharing_{event_subtype}",
+                            event_type=_namespaced("sharing", event_subtype),
                             severity=severity,
                             data={
                                 "probe_name": self.name,
