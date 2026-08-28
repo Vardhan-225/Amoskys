@@ -96,6 +96,37 @@ class HybridCoverageMixin:
                 self._frontier_inferred = True
             else:
                 self._frontier_inferred = False
+
+            # A SESSION MARKER IS NECESSARY BUT NOT SUFFICIENT.
+            #
+            # Witnessing can stop without the process restarting: the Mac
+            # sleeps, the daemon survives, no new sentinel_start is emitted,
+            # and the stream simply goes quiet. Anchoring on the marker alone
+            # then claims continuity across the hole — measured here, it
+            # reported 94.86h of "continuous witnessing" spanning a FOUR-DAY
+            # gap in which the exec stream produced nothing at all.
+            #
+            # Continuity has to be demonstrated, not assumed from a marker. The
+            # Sentinel heartbeats every 30s, so any gap materially longer than
+            # that is a break, and the honest frontier is the start of the last
+            # unbroken stretch.
+            beats = [r[0] for r in db.execute(
+                "SELECT timestamp_ns FROM esf_stream_health "
+                "WHERE timestamp_ns >= ? ORDER BY timestamp_ns", (attach,))]
+            gap_limit_ns = 10 * 60 * 1_000_000_000   # 20x the 30s heartbeat
+            continuous_from = attach
+            largest_gap_s = 0.0
+            for prev, nxt in zip(beats, beats[1:]):
+                gap = nxt - prev
+                if gap > gap_limit_ns:
+                    largest_gap_s = max(largest_gap_s, gap / 1e9)
+                    continuous_from = nxt
+            self._frontier_gap_s = largest_gap_s
+            if continuous_from != attach:
+                self._frontier_broken = True
+                attach = continuous_from
+            else:
+                self._frontier_broken = False
             newest = db.execute(
                 "SELECT MAX(timestamp_ns) FROM esf_exec_events"
             ).fetchone()[0]
@@ -139,8 +170,16 @@ class HybridCoverageMixin:
             "first_poll_after_attach_s": round(gap_s, 1) if gap_s is not None else None,
             "complete_since_ns": attach if captured else None,
             "session_boundary": "inferred" if getattr(self, "_frontier_inferred", True) else "recorded",
+            "continuity_broken": getattr(self, "_frontier_broken", False),
+            "largest_gap_hours": round(getattr(self, "_frontier_gap_s", 0.0) / 3600.0, 2),
             "note": (
-                f"Witnessed continuously for {uptime_s/3600:.1f}h. "
+                (f"WITNESSING WAS INTERRUPTED: the largest gap in this session "
+                 f"was {getattr(self, '_frontier_gap_s', 0)/3600:.1f}h, during "
+                 f"which nothing was witnessed and no restart was recorded — a "
+                 f"sleeping Mac produces exactly this. Coverage is measured "
+                 f"from the end of that gap, not from the session marker. "
+                 if getattr(self, "_frontier_broken", False) else "")
+                + f"Witnessed continuously for {uptime_s/3600:.1f}h. "
                 f"{inherited:,} processes predate that and are inherited from "
                 f"polling's snapshot rather than witnessed starting — a real "
                 f"limit, not a defect, and it shrinks as uptime grows. Polling "
