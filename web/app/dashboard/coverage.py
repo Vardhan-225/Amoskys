@@ -136,6 +136,28 @@ _LEDGER_UNKNOWN = {
 }
 
 
+def _sync_window_hours(db: sqlite3.Connection) -> int | None:
+    """The horizon this tier deliberately keeps, if it recorded one.
+
+    A cache holding six hours because that is its configured window is a very
+    different thing from one holding six hours because the sync is failing, and
+    a coverage report that cannot tell them apart sends someone to debug a
+    pipeline that is working as designed.
+    """
+    try:
+        row = db.execute(
+            "SELECT value FROM _sync_meta WHERE key='sync_window_hours'"
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return None
+
+
 def _blindness(db: sqlite3.Connection, device_id: str | None) -> dict:
     """Active blindness events, or an honest "cannot tell".
 
@@ -229,6 +251,7 @@ def report(
                 }
             )
         blindness = _blindness(db, device_id)
+        sync_window = _sync_window_hours(db)
     finally:
         db.close()
 
@@ -296,12 +319,22 @@ def report(
     window_note = None
     if short:
         worst = min(short, key=lambda s: s["span_hours"])
-        window_note = (
-            f"{len(short)} of {len(windowed)} reporting sensors hold less than a "
-            f"day of data — {worst['label']} covers only {worst['span_hours']}h. "
-            'Figures on this dashboard labelled "last 24 hours" are answered '
-            "from what reached this server, which is less than the fleet holds."
-        )
+        if sync_window and sync_window < 24:
+            # By design, and say so. "Less than a day of data" without this
+            # sends someone looking for a broken pipeline that is working.
+            window_note = (
+                f"This server keeps a {sync_window}-hour window by design, so "
+                'figures labelled "last 24 hours" are answered from at most '
+                f"{sync_window}h of data — the fleet backend holds more. "
+                f"Shortest right now: {worst['label']} at {worst['span_hours']}h."
+            )
+        else:
+            window_note = (
+                f"{len(short)} of {len(windowed)} reporting sensors hold less than a "
+                f"day of data — {worst['label']} covers only {worst['span_hours']}h. "
+                'Figures on this dashboard labelled "last 24 hours" are answered '
+                "from what reached this server, which is less than the fleet holds."
+            )
 
     return {
         "available": True,
@@ -313,4 +346,5 @@ def report(
         "blindness": blindness,
         "window_note": window_note,
         "window_short_count": len(short),
+        "sync_window_hours": sync_window,
     }

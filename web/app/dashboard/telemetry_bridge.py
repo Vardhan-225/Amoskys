@@ -530,6 +530,33 @@ def _start_fleet_sync():
     t.start()
 
 
+# How much history this tier keeps. Raising it costs memory and disk on a
+# 914MB box, so it is an operator decision rather than a default to drift.
+SYNC_WINDOW_HOURS = max(1, min(int(os.getenv("AMOSKYS_SYNC_WINDOW_HOURS", "6")), 72))
+
+
+def _record_sync_window(db) -> None:
+    """Write the horizon into the cache so readers cannot mistake it.
+
+    Without this, a page asking a 24h question of a 6h cache gets a smaller
+    answer and no way to know it was smaller — which is indistinguishable from
+    a quiet day.
+    """
+    try:
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS _sync_meta ("
+            "key TEXT PRIMARY KEY, value TEXT, updated_at REAL)"
+        )
+        db.execute(
+            "INSERT INTO _sync_meta (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+            "updated_at=excluded.updated_at",
+            ("sync_window_hours", str(SYNC_WINDOW_HOURS), time.time()),
+        )
+    except Exception:  # pragma: no cover - never fail a sync over metadata
+        logger.debug("could not record sync window", exc_info=True)
+
+
 def _sync_from_ops():
     """Fetch event tables from ops server and REPLACE local cache.
 
@@ -540,8 +567,16 @@ def _sync_from_ops():
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Fetch bulk export from ops server (6h window — keeps cache small
-    # for the t2.micro presentation server with 914MB RAM)
+    # THE SYNC WINDOW IS THE CACHE'S HORIZON, and it is 6h by design — the
+    # presentation server has 914MB of RAM and this is a truncate-and-replace,
+    # so the cache never holds more than one window's worth.
+    #
+    # That is a defensible tradeoff and it was invisible: every page on this
+    # tier labels its figures "last 24 hours" and computes them from six. On the
+    # live fleet that reads as 29,721 cached flow_events against 137,095 on the
+    # backend for the same day. The number is now DECLARED — written into the
+    # cache on every sync — so the UI can say which window it is really
+    # answering instead of quietly overstating it.
     # Pin TLS verification to the ops self-signed CA (CN=ops.amoskys.com).
     # Missing CA → WARNING + unverified fallback so sync never hard-breaks.
     _ca_bundle = _resolve_ca_bundle()
@@ -557,7 +592,7 @@ def _sync_from_ops():
     try:
         resp = _session.get(
             f"{_OPS_SERVER}/api/v1/bulk-export",
-            params={"hours": 6},
+            params={"hours": SYNC_WINDOW_HOURS},
             timeout=60,
         )
         if resp.status_code != 200:
@@ -708,6 +743,9 @@ def _sync_from_ops():
                     table_name,
                     e,
                 )
+        # Stamp the horizon inside the same transaction as the data it describes,
+        # so the recorded window can never belong to a different snapshot.
+        _record_sync_window(db)
         db.commit()
     except Exception as e:
         # Nothing below the loop can un-truncate the cache, so roll the whole

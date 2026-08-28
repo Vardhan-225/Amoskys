@@ -211,3 +211,30 @@ def test_a_sensor_with_no_rows_makes_no_window_claim(store):
     det = _by_label(coverage.report())["Detections"]
     assert det["span_hours"] is None
     assert det["rows"] == 0
+
+
+def test_a_designed_window_is_not_reported_as_a_failure(store, monkeypatch, tmp_path):
+    """A cache holding 6h because that is its configured window, and one holding
+    6h because the sync is broken, need different sentences. The first sends
+    nobody to debug a working pipeline."""
+    import sqlite3 as _sq
+
+    path = coverage.insight_service.resolve_db_path()
+    db = _sq.connect(path)
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS _sync_meta (key TEXT PRIMARY KEY, value TEXT, updated_at REAL)"
+    )
+    db.execute("INSERT OR REPLACE INTO _sync_meta VALUES ('sync_window_hours','6',0)")
+    db.commit()
+    db.close()
+
+    report = coverage.report()
+    assert report["sync_window_hours"] == 6
+    assert "by design" in report["window_note"]
+    assert "at most 6h" in report["window_note"]
+
+
+def test_without_a_recorded_window_the_shortfall_reads_as_a_shortfall(store):
+    report = coverage.report()
+    assert report["sync_window_hours"] is None
+    assert "less than a day of data" in report["window_note"]
