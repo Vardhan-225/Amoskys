@@ -836,6 +836,38 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
         for old_key, new_key in column_map.items():
             if old_key in row and new_key not in row:
                 row[new_key] = row.pop(old_key)
+        # OBSERVATIONS ARRIVE WITHOUT A TIME OR A PAYLOAD, and always have.
+        #
+        # Measured on the live fleet backend: 202,000 observation_events, ZERO
+        # with event_timestamp_ns, and only 5,620 (2.8%) with
+        # raw_attributes_json. The cache requires timestamp_ns, timestamp_dt and
+        # attributes NOT NULL, so every single exported row was rejected —
+        # "0 of 5000 exported rows accepted", once a minute, for the life of
+        # this deployment. An entire telemetry domain (171k unified_log, 9.6k
+        # provenance, 5.6k realtime sensor) has never reached this tier.
+        #
+        # `received_at` is when the BACKEND received the observation, not when
+        # it happened. That is a weaker claim than a real event time and it is
+        # recorded as such below — but it is a bounded approximation of a real
+        # moment, and the alternative on offer was rejecting the row and showing
+        # the operator nothing at all. The distinction is preserved: the
+        # substituted rows carry quality_state so a reader can tell which
+        # timestamps were observed and which were inferred.
+        if (
+            table == "observation_events"
+            and not row.get("timestamp_ns")
+            and row.get("received_at")
+        ):
+            try:
+                row["timestamp_ns"] = int(float(row["received_at"]) * 1e9)
+                row.setdefault("quality_state", "timestamp_inferred_from_receipt")
+            except (TypeError, ValueError):
+                pass
+        if table == "observation_events" and row.get("attributes") is None:
+            # No payload was sent. An empty object is honest — the row records
+            # that an observation occurred in this domain, and nothing more.
+            row["attributes"] = "{}"
+
         # Generate timestamp_dt from timestamp_ns if missing
         if "timestamp_ns" in row and "timestamp_dt" not in row:
             try:
