@@ -97,7 +97,24 @@ refresh_threat_intel() {
 # is a worse default than a loud line in the log. Set
 # AMOSKYS_RESTART_ON_CHANGE=1 to opt in.
 check_stale_code() {
-  local newest worker pid started
+  # THE BOOTSTRAP PROBLEM, stated because it bit immediately.
+  #
+  # This function shipped inside the supervisor, and the supervisor that was
+  # running had been started before it existed — so the stale-code detector was
+  # itself stale, and never ran. Four separate times a component sat running
+  # old code with an empty table as the only symptom, and the check written to
+  # catch exactly that was among them.
+  #
+  # A self-check cannot detect its own staleness. The supervisor is therefore
+  # checked FIRST and by a different mechanism: its own start time against the
+  # script file on disk. That is the one comparison it can make about itself.
+  local newest worker pid started sup_started script_mtime
+  sup_started=$(ps -o lstart= -p $$ 2>/dev/null | xargs -I{} date -j -f "%a %b %d %T %Y" {} +%s 2>/dev/null || echo 0)
+  script_mtime=$(stat -f %m "$0" 2>/dev/null || echo 0)
+  if [ "${sup_started:-0}" -gt 0 ] && [ "$script_mtime" -gt "$sup_started" ]; then
+    echo "$(date -u +%FT%TZ) STALE SUPERVISOR: this process started before the current $0. Its own checks are running an older build — restart it with: launchctl kickstart -k gui/\$(id -u)/com.amoskys.live" >> logs/supervisor.log
+  fi
+
   newest=$(find src -name '*.py' -newer "$STALE_STAMP" -print -quit 2>/dev/null)
   [ -z "$newest" ] && return 0
 
