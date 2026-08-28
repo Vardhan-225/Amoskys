@@ -90,6 +90,33 @@ def _forward_upstream(item: dict, verdict: str) -> tuple[str, str]:
     # A kernel-witnessed binary carries its judgement to a different store:
     # esf_binary_ledger.verdict, whose NULL was built to mean "nobody has looked
     # at this yet" rather than "cleared". This press is what closes that gap.
+    # A grouped first-run item judges several binaries at once. Writing the
+    # verdict to each of them is the whole point: the ledger's NULL means
+    # "nobody has looked at this yet", and clearing the group without clearing
+    # its members would leave every one of them unreviewed while telling the
+    # user they had been handled.
+    cdhashes = item.get("cdhashes") or []
+    if cdhashes:
+        binary_verdict = "benign" if verdict == verdict_store.MINE else "suspicious"
+        written, failed = 0, 0
+        for member in cdhashes:
+            result = kernel.record_binary_verdict(
+                member, binary_verdict, note=f"marked via ledger by {verdict}"
+            )
+            if result.get("written"):
+                written += 1
+            else:
+                failed += 1
+        if written:
+            detail = f"recorded {written} binaries on the ledger as {binary_verdict}"
+            if failed:
+                detail += f"; {failed} could not be written"
+            return "applied", detail
+        return (
+            "unavailable",
+            "The binary ledger did not accept these — they remain unreviewed.",
+        )
+
     cdhash = item.get("cdhash")
     if cdhash:
         binary_verdict = "benign" if verdict == verdict_store.MINE else "suspicious"
@@ -173,6 +200,7 @@ def api_ledger():
     for bucket in (payload["needs_you"], payload["recognised"]["items"]):
         for item in bucket:
             item.pop("row_ids", None)
+            item.pop("cdhashes", None)
     return jsonify(payload), 200
 
 
@@ -505,3 +533,51 @@ def api_kernel():
     that claim is either backed by a live exec stream or honestly withdrawn.
     """
     return jsonify(kernel.summary_for_ledger()), 200
+
+
+# ── Fleet membership ─────────────────────────────────────────────────────────
+@dashboard_bp.route("/api/devices/<device_id>/retire", methods=["POST"])
+@require_login
+def api_retire_device(device_id):
+    """Retire a duplicate or dead device so it stops distorting the fleet.
+
+    One Mac registered twice makes "1 of 3 online" permanently wrong and leaves
+    a phantom in the list that looks like an unmonitored machine. Retiring is
+    reversible and keeps the record — this is evidence, not clutter.
+    """
+    is_admin, user = _require_admin()
+    if not is_admin:
+        return (
+            jsonify(
+                {
+                    "error": "forbidden",
+                    "detail": "Retiring a device is limited to administrators.",
+                }
+            ),
+            403,
+        )
+    allowed, _ = _scope()
+    if allowed is not None and device_id not in allowed:
+        return jsonify({"error": "unknown device"}), 404
+
+    data = request.get_json(silent=True) or {}
+    who = getattr(user, "email", None) or getattr(user, "username", None) or "unknown"
+    payload, status = actions.retire_device(
+        device_id,
+        reason=(data.get("reason") or "").strip(),
+        requested_by=f"console:{who}",
+    )
+    if status == 200:
+        logger.info("DEVICE_RETIRED device=%s by=%s", device_id, who)
+    return jsonify(payload), status
+
+
+@dashboard_bp.route("/api/devices/<device_id>/unretire", methods=["POST"])
+@require_login
+def api_unretire_device(device_id):
+    """Undo a retirement."""
+    is_admin, _ = _require_admin()
+    if not is_admin:
+        return jsonify({"error": "forbidden"}), 403
+    payload, status = actions.unretire_device(device_id)
+    return jsonify(payload), status

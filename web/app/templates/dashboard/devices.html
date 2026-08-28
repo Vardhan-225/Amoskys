@@ -10,6 +10,7 @@
         </a>
     </div>
     <p class="dv-subtitle" id="dv-subtitle">Loading...</p>
+    <div id="dv-alert" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;background:rgba(201,162,39,0.10);border:1px solid rgba(201,162,39,0.35);color:#c9a227;font-size:0.82em;"></div>
     <div id="dv-list"><div style="text-align:center;padding:40px;"><div class="neural-loading"></div></div></div>
     <div id="dv-empty" class="dv-empty" style="display:none;">
         <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="64" height="64" style="opacity:0.2;margin-bottom:16px;">
@@ -61,6 +62,15 @@
 .dv-tag-ok { color: #00ff88; background: rgba(0,255,136,0.06); }
 .dv-tag-unknown { color: #8d99a8; background: rgba(141,153,168,0.09); }
 .dv-blind { color: #c9a227; font-size: 0.82em; padding: 8px 0; line-height: 1.5; }
+.dv-retire-bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+    padding:10px 16px 14px; border-top:1px solid rgba(255,255,255,0.04); }
+.dv-retire-note { flex:1; min-width:220px; font-size:0.76em; color:#6b7a99; line-height:1.5; }
+.dv-retire-btn { font:inherit; font-size:0.78em; font-weight:600; cursor:pointer;
+    padding:6px 12px; border-radius:6px; background:transparent; color:#c9a227;
+    border:1px solid rgba(201,162,39,0.45); }
+.dv-retire-btn:hover { background:rgba(201,162,39,0.10); }
+.dv-retire-btn[disabled] { opacity:0.5; cursor:default; }
+.dv-retire-btn.confirming { background:rgba(201,162,39,0.18); color:#ffd970; }
 .dv-tag-warn { color: #f0ad4e; background: rgba(240,173,78,0.08); }
 .dv-tag-crit { color: #ff3366; background: rgba(255,51,102,0.08); }
 .dv-stats { display: flex; gap: 14px; }
@@ -219,6 +229,22 @@
             html += '<div class="dv-cs"><div class="dv-cs-val ve">' + events + '</div><div class="dv-cs-lbl">Events</div></div>';
             html += '</div><div class="dv-chevron">&#x203A;</div></div>';
 
+            // Retire is offered where it is actually needed: a device with no
+            // telemetry that has not been heard from. A duplicate registration
+            // leaves exactly that — a phantom that makes "N of M online"
+            // permanently wrong and looks like an unmonitored machine.
+            if (events === 0 && !on) {
+                html += '<div class="dv-retire-bar">'
+                    + '<span class="dv-retire-note">This device has reported nothing'
+                    + (x.last_seen ? ' since ' + esc(timeAgo(x.last_seen)) : ' ever')
+                    + '. If it is a duplicate registration, retire it — the record is kept '
+                    + 'and it stops being counted.</span>'
+                    + '<button type="button" class="dv-retire-btn" data-retire="'
+                    + esc(x.device_id || '') + '" data-host="' + esc(x.hostname || '') + '">'
+                    + 'Retire this device</button>'
+                    + '</div>';
+            }
+
             // Expandable detail
             html += '<div class="dv-detail"><div class="dv-detail-grid">';
 
@@ -339,6 +365,57 @@
                 level.textContent = 'Verdict unavailable';
                 desc.textContent = 'The verdict service did not answer — this is not an all-clear.';
             });
+    }
+
+    // Two presses, and a reason recorded — retiring changes what the fleet
+    // reports, so it should not be one stray click away.
+    document.addEventListener('click', async function (ev) {
+        var btn = ev.target.closest && ev.target.closest('[data-retire]');
+        if (!btn) { return; }
+        ev.stopPropagation();
+        var deviceId = btn.dataset.retire;
+        if (!btn.classList.contains('confirming')) {
+            btn.classList.add('confirming');
+            btn.textContent = 'Press again to retire';
+            setTimeout(function () {
+                btn.classList.remove('confirming');
+                btn.textContent = 'Retire this device';
+            }, 6000);
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Retiring…';
+        try {
+            var r = await fetch('/dashboard/api/devices/' + encodeURIComponent(deviceId) + '/retire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    reason: 'Duplicate or dead registration, retired from the devices page.'
+                })
+            });
+            var d = await r.json();
+            if (!r.ok) {
+                btn.disabled = false;
+                btn.textContent = 'Retire this device';
+                btn.classList.remove('confirming');
+                alertBar(d.detail || d.error || ('HTTP ' + r.status));
+                return;
+            }
+            load();
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = 'Retire this device';
+            alertBar(String(e));
+        }
+    });
+
+    function alertBar(msg) {
+        var el = document.getElementById('dv-alert');
+        if (!el) { return; }
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(function () { el.style.display = 'none'; }, 8000);
     }
 
     function alertItem(level, title, sub) {

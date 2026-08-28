@@ -1077,7 +1077,8 @@ def list_devices():
     rows = db.execute(
         """SELECT device_id, hostname, os, os_version, arch,
                   agent_version, first_seen, last_seen, status, public_ip
-           FROM devices ORDER BY last_seen DESC"""
+           FROM devices WHERE IFNULL(status,'') != 'retired'
+           ORDER BY last_seen DESC"""
     ).fetchall()
 
     devices = []
@@ -1427,10 +1428,12 @@ def fleet_status():
 
     # Device counts
     total = db.execute(
-        f"SELECT COUNT(*) FROM devices WHERE 1=1{org_filter}", org_params
+        f"SELECT COUNT(*) FROM devices WHERE IFNULL(status,'') != 'retired'{org_filter}",
+        org_params,
     ).fetchone()[0]
     online = db.execute(
-        f"SELECT COUNT(*) FROM devices WHERE last_seen > ?{org_filter}",
+        f"SELECT COUNT(*) FROM devices WHERE last_seen > ? "
+        f"AND IFNULL(status,'') != 'retired'{org_filter}",
         [now - 300] + org_params,
     ).fetchone()[0]
     offline = total - online
@@ -1499,7 +1502,14 @@ def fleet_status():
     top_techniques = sorted(technique_counts.items(), key=lambda x: -x[1])[:10]
 
     # Per-device summary (include public_ip and org_id for globe markers)
-    dev_where = " WHERE 1=1" + (" AND d.org_id = ?" if org_id else "")
+    # Retired devices are excluded HERE too, not only from the counters. Missing
+    # this was caught by a round-trip test: the totals dropped but the device
+    # itself kept appearing in the list, so a retired duplicate stayed visible
+    # while no longer being counted — a worse state than before, because the
+    # list and the count then disagreed.
+    dev_where = " WHERE IFNULL(d.status,'') != 'retired'" + (
+        " AND d.org_id = ?" if org_id else ""
+    )
     dev_params = [org_id] if org_id else []
     device_summary = db.execute(
         f"""SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
@@ -2061,6 +2071,99 @@ def create_command(device_id):
         ),
         201,
     )
+
+
+@app.route("/api/v1/devices/<device_id>/retire", methods=["POST"])
+@require_operator_auth
+def retire_device(device_id):
+    """Retire a device from the fleet without destroying its record.
+
+    The immediate need is a duplicate: one Mac registered twice, so a
+    three-device fleet is really two, "1 of 3 online" is permanently wrong, and
+    a phantom with zero telemetry sits in the list looking like an unmonitored
+    machine.
+
+    Retire, not DELETE, and deliberately so. This is a security product: the
+    record that a device once existed, and what it reported, is evidence. A
+    console that can silently erase a machine from the fleet history is a
+    console an intruder would love. Retiring hides it from the fleet views and
+    stops it counting, and it can be undone.
+    """
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    actor = (data.get("requested_by") or "").strip()
+    if not reason:
+        return jsonify({"error": "reason required"}), 400
+    if not actor:
+        return jsonify({"error": "requested_by required"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT device_id, hostname, status FROM devices WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": f"Device {device_id} not found"}), 404
+    if row["status"] == "retired":
+        return jsonify({"error": "already_retired", "device_id": device_id}), 409
+
+    now = time.time()
+    for column, ctype in (
+        ("retired_at", "REAL"),
+        ("retired_by", "TEXT"),
+        ("retired_reason", "TEXT"),
+    ):
+        try:
+            db.execute(f"ALTER TABLE devices ADD COLUMN {column} {ctype}")
+        except sqlite3.OperationalError:
+            pass
+    db.execute(
+        "UPDATE devices SET status = 'retired', retired_at = ?, retired_by = ?, "
+        "retired_reason = ? WHERE device_id = ?",
+        (now, actor, reason[:500], device_id),
+    )
+    db.commit()
+    logger.info(
+        "DEVICE_RETIRED device=%s host=%s by=%s reason=%s",
+        device_id,
+        row["hostname"],
+        actor,
+        reason[:120],
+    )
+    return jsonify(
+        {
+            "status": "retired",
+            "device_id": device_id,
+            "hostname": row["hostname"],
+            "retired_at": now,
+            "retired_by": actor,
+            "reason": reason,
+            "note": "The device is hidden from fleet views and no longer counted. "
+            "Its history is kept. Un-retire to bring it back.",
+        }
+    )
+
+
+@app.route("/api/v1/devices/<device_id>/unretire", methods=["POST"])
+@require_operator_auth
+def unretire_device(device_id):
+    """Undo a retirement — the counterpart that makes the action safe to take."""
+    db = get_db()
+    row = db.execute(
+        "SELECT status FROM devices WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": f"Device {device_id} not found"}), 404
+    if row["status"] != "retired":
+        return jsonify({"error": "not_retired", "status": row["status"]}), 409
+    db.execute(
+        "UPDATE devices SET status = 'offline', retired_at = NULL, "
+        "retired_by = NULL, retired_reason = NULL WHERE device_id = ?",
+        (device_id,),
+    )
+    db.commit()
+    logger.info("DEVICE_UNRETIRED device=%s", device_id)
+    return jsonify({"status": "active", "device_id": device_id})
 
 
 @app.route("/api/v1/commands", methods=["GET"])

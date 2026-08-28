@@ -425,3 +425,97 @@ def test_crossing_the_baseline_threshold_does_not_multiply_the_queue(monkeypatch
             lambda *a, r=ready, **k: _novel(20, baseline_ready=r),
         )
         assert len(ledger._kernel_items({})) == 1, f"baseline_ready={ready}"
+
+
+# ── First-run grouping: three regressions that reached production ────────────
+def _novel_rows(*trusts):
+    return {
+        "available": True,
+        "baseline_ready": True,
+        "known_binaries_total": 900,
+        "note": None,
+        "novel": [
+            {
+                "cdhash": f"cd{i}",
+                "first_exe": f"/opt/thing{i}",
+                "trust": t,
+                "age_minutes": 3,
+                "exec_count": 1,
+            }
+            for i, t in enumerate(trusts)
+        ],
+    }
+
+
+def test_an_unreadable_signature_is_never_grouped_as_vouched(monkeypatch):
+    """trust=="unknown" means the signing flags could not be READ.
+
+    Grouping it with the signed binaries made the item assert that every member
+    "carries a signature identifying where it came from" — a provenance claim
+    about software whose signature was never established.
+    """
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel_rows("signed", "unknown")
+    )
+    items = ledger._kernel_items({})
+    grouped = [i for i in items if i["key"].startswith("binary:batch:")]
+    singles = [i for i in items if not i["key"].startswith("binary:batch:")]
+    assert len(singles) == 1, "the unreadable one must be asked about on its own"
+    assert grouped and grouped[0]["count"] == 1
+    for i in items:
+        assert "identifying where it came from" not in i["why"]
+
+
+def test_a_cleared_batch_cannot_pre_clear_software_it_never_saw(monkeypatch):
+    """The batch key was a constant, so one "That's me" cleared every first-run
+    program that would ever appear afterwards — tomorrow's newly dropped binary
+    arriving pre-recognised, in the calm band, unlooked at."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+
+    monkeypatch.setattr(kernel, "novel_binaries", lambda *a, **k: _novel_rows("signed"))
+    first = ledger._kernel_items({})[0]
+    cleared = {first["key"]: {"verdict": verdict_store.MINE, "decided_at": 1.0}}
+    assert ledger._kernel_items(cleared)[0]["recognised"] is True
+
+    # A different population must not inherit that judgement.
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel_rows("signed", "signed")
+    )
+    later = ledger._kernel_items(cleared)[0]
+    assert later["key"] != first["key"]
+    assert later["recognised"] is False, "new software must not arrive pre-cleared"
+
+
+def test_a_grouped_item_carries_the_binaries_it_speaks_for(monkeypatch):
+    """Without member identities the verdict endpoint had nothing to write, so
+    "That's me" wrote nothing to esf_binary_ledger and then described itself as
+    "derived from flow aggregates"."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(
+        kernel, "novel_binaries", lambda *a, **k: _novel_rows("signed", "adhoc")
+    )
+    grouped = [
+        i for i in ledger._kernel_items({}) if i["key"].startswith("binary:batch:")
+    ]
+    assert grouped, "signed and ad-hoc first-runs group together"
+    assert sorted(grouped[0]["cdhashes"]) == ["cd0", "cd1"]
+
+
+def test_batch_verdict_writes_to_every_member(monkeypatch):
+    """A cleared group must clear its members, or they stay unreviewed while the
+    user is told they were handled."""
+    routes_ledger = importlib.import_module("app.dashboard.routes_ledger")
+    written = []
+
+    def _record(cdhash, verdict, note=""):
+        written.append((cdhash, verdict))
+        return {"written": True, "detail": "ok"}
+
+    monkeypatch.setattr(routes_ledger.kernel, "record_binary_verdict", _record)
+    status, detail = routes_ledger._forward_upstream(
+        {"cdhashes": ["a", "b", "c"], "categories": []}, verdict_store.MINE
+    )
+    assert status == "applied"
+    assert written == [("a", "benign"), ("b", "benign"), ("c", "benign")]
+    assert "3 binaries" in detail

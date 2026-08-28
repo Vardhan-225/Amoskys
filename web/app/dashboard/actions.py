@@ -469,3 +469,54 @@ def _verify():
     turning off verification entirely.
     """
     return _ops_ca() or True
+
+
+# ── Fleet membership ─────────────────────────────────────────────────────────
+def retire_device(device_id: str, reason: str, requested_by: str) -> tuple[dict, int]:
+    """Retire a device from the fleet views, keeping its record.
+
+    Deliberately not a delete. In a security product the fact that a machine
+    once existed, and what it reported, is evidence — a console that can erase
+    a device from fleet history is a console an intruder would want. This hides
+    it and stops it counting, and it can be undone.
+    """
+    state = availability()
+    if not state["available"]:
+        return {"error": "response_disabled", "detail": state["reason"]}, 503
+    if not reason.strip():
+        return {"error": "reason_required", "detail": "Say why — it is stored."}, 400
+    try:
+        resp = requests.post(
+            f"{_ops_base()}/api/v1/devices/{device_id}/retire",
+            json={"reason": reason.strip()[:500], "requested_by": requested_by},
+            headers={"Authorization": f"Bearer {_operator_key()}"},
+            timeout=10,
+            verify=_verify(),
+        )
+        return resp.json(), resp.status_code
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("device retire failed: %s", exc)
+        return (
+            {
+                "error": "ops_unreachable",
+                "detail": "The fleet backend did not answer, so nothing changed.",
+            },
+            502,
+        )
+
+
+def unretire_device(device_id: str) -> tuple[dict, int]:
+    """Bring a retired device back — the undo that makes retiring safe."""
+    state = availability()
+    if not state["available"]:
+        return {"error": "response_disabled", "detail": state["reason"]}, 503
+    try:
+        resp = requests.post(
+            f"{_ops_base()}/api/v1/devices/{device_id}/unretire",
+            headers={"Authorization": f"Bearer {_operator_key()}"},
+            timeout=10,
+            verify=_verify(),
+        )
+        return resp.json(), resp.status_code
+    except (requests.RequestException, ValueError):
+        return {"error": "ops_unreachable", "detail": "Nothing changed."}, 502

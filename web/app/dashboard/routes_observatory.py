@@ -855,8 +855,6 @@ def _store_unavailable(payload_shape):
     return response
 
 
-
-
 @dashboard_bp.route("/api/dns/stats")
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
@@ -981,7 +979,27 @@ def network_flow_stats():
         )
     hours = request.args.get("hours", 24, type=int)
     device_id = request.args.get("device_id") or None
-    return jsonify(store.get_flow_stats(hours, device_id=device_id))
+    stats = store.get_flow_stats(hours, device_id=device_id)
+
+    # Whether the byte counters are populated at all. Without this the page
+    # renders an unmeasured field as a confident "0 B" — measured live, 99.64%
+    # of flows carry bytes_tx = bytes_rx = 0 as literal zeros, so almost every
+    # volume figure on the network page was a measurement that never happened.
+    try:
+        from . import insight_service
+
+        db_path = insight_service.resolve_db_path()
+        if db_path:
+            db = insight_service._connect(db_path)
+            try:
+                stats["byte_accounting"] = insight_service.byte_accounting(
+                    db, device_id=device_id
+                )
+            finally:
+                db.close()
+    except Exception:  # pragma: no cover - never break the page over this
+        logger.debug("byte accounting unavailable", exc_info=True)
+    return jsonify(stats)
 
 
 @dashboard_bp.route("/api/network/visibility-health")
@@ -1437,6 +1455,164 @@ def network_by_process():
     return jsonify(
         store.get_flow_by_process(hours, min(limit, 100), device_id=device_id)
     )
+
+
+@dashboard_bp.route("/api/network/connection-story/ask", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=10, window_seconds=60)
+def network_connection_story_ask():
+    """Hand ONE connection to IGRIS, with the evidence already assembled.
+
+    The chat widget can already answer questions about the fleet, but a person
+    looking at a line on the globe should not have to describe what they are
+    looking at. The context is built HERE, server-side, from the same story the
+    page is showing — so IGRIS is answering about the connection in front of the
+    user rather than about whatever the browser managed to phrase, and a client
+    cannot invent facts for it to reason over.
+
+    The question stays the user's; only the evidence is supplied.
+    """
+    data = request.get_json(silent=True) or {}
+    dst_ip = (data.get("dst_ip") or "").strip()
+    question = (data.get("question") or "").strip()
+    hours = int(data.get("hours") or 24)
+    device_id = data.get("device_id") or None
+    if not dst_ip:
+        return jsonify({"status": "error", "message": "dst_ip required"}), 400
+
+    store = _get_store()
+    if not store:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "The telemetry store is unreachable, so there is "
+                    "no evidence to hand IGRIS. This is not a clean bill.",
+                }
+            ),
+            503,
+        )
+    hours = max(1, min(hours, 24 * 14))
+    try:
+        story = store.get_connection_story(dst_ip, hours=hours, device_id=device_id)
+    except Exception:
+        logger.warning("connection story failed for %s", dst_ip, exc_info=True)
+        return jsonify({"status": "error", "message": "story_query_failed"}), 500
+
+    if not story.get("found"):
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "No flows to that destination in this window, so "
+                    "there is nothing to explain yet.",
+                }
+            ),
+            404,
+        )
+
+    context = _story_as_prompt(story, dst_ip, hours)
+    ask = question or (
+        "Explain this connection to me in plain language: why does it exist, "
+        "is it expected on my machine, and is there anything here I should act on?"
+    )
+
+    from .routes_igris import _get_igris_chat
+
+    chat = _get_igris_chat()
+    if chat is None:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "IGRIS is unavailable on this server "
+                    "(ANTHROPIC_API_KEY is not configured).",
+                    "context": context,
+                }
+            ),
+            503,
+        )
+    try:
+        answer = chat.chat(f"{context}\n\nThe person asks: {ask}")
+        return jsonify(
+            {
+                "status": "success",
+                "response": answer,
+                "evidence": chat.get_last_evidence(),
+                "context_sent": context,
+                "dst_ip": dst_ip,
+            }
+        )
+    except Exception as e:
+        logger.error("connection-story ask failed: %s", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _story_as_prompt(story: dict, dst_ip: str, hours: int) -> str:
+    """Flatten the assembled story into facts IGRIS can reason over.
+
+    Deliberately states what is MISSING as well as what is known — an unmeasured
+    byte counter and a genuinely idle connection look identical in a number, and
+    an analyst told "0 B" without that distinction will draw the wrong
+    conclusion just as readily as a person would.
+    """
+    what = story.get("what") or {}
+    where = story.get("where") or {}
+    why = story.get("why") or {}
+    who = story.get("who") or []
+
+    lines = [
+        "You are being asked about ONE outbound destination from the user's Mac.",
+        "Here is everything AMOSKYS holds about it. Do not look up anything else "
+        "unless it is needed to answer.",
+        "",
+        f"DESTINATION: {dst_ip}",
+        f"WINDOW: last {hours}h",
+        f"WHERE: {where.get('city') or 'unknown city'}, "
+        f"{where.get('country') or 'unknown country'} — "
+        f"owned by {where.get('asn_org') or 'an unattributed network'}",
+        f"CONNECTIONS: {what.get('flows') or 0}",
+        f"PORTS: {', '.join(str(p.get('port')) for p in (what.get('ports') or [])[:6]) or 'unknown'}",
+        f"FIRST SEEN: {what.get('first_seen') or 'unknown'} · LAST SEEN: {what.get('last_seen') or 'unknown'}",
+    ]
+
+    measured = what.get("bytes_measured")
+    if measured is False:
+        lines.append(
+            "VOLUME: NOT MEASURED. The byte counters are not populated for these "
+            "flows, so treat any zero as missing data — do NOT tell the user this "
+            "connection moved no data."
+        )
+    else:
+        lines.append(f"VOLUME: {what.get('bytes') or 0} bytes")
+
+    if who:
+        lines.append("WHICH PROCESSES OPENED IT:")
+        for p in who[:5]:
+            chain = " <- ".join(a.get("name", "?") for a in (p.get("ancestry") or []))
+            lines.append(
+                f"  - {p.get('name') or '?'}"
+                + (f" (ancestry: {chain})" if chain else "")
+                + f" · code signing: {p.get('code_signing') or 'unknown'}"
+            )
+    else:
+        lines.append(
+            "WHICH PROCESSES OPENED IT: not attributable from the data on this tier."
+        )
+
+    if why:
+        lines.append("CORROBORATION LEDGER (why AMOSKYS rated it as it did):")
+        for key, value in why.items():
+            lines.append(f"  - {key}: {value}")
+
+    lines += [
+        "",
+        "Answer in plain language for the owner of the machine, not an analyst. "
+        "Be specific about what this counterparty is and what normally talks to "
+        "it. If the evidence does not support a conclusion, say so rather than "
+        "guessing, and never describe unmeasured volume as zero traffic.",
+    ]
+    return "\n".join(lines)
 
 
 @dashboard_bp.route("/api/network/connection-story")

@@ -337,7 +337,14 @@ class DomainQueryMixin:
                 rows = rdb.execute(
                     "SELECT geo_dst_latitude, geo_dst_longitude, geo_dst_country, geo_dst_city, "
                     "COUNT(*) as cnt, SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as total_bytes, "
-                    "asn_dst_org, MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat "
+                    "asn_dst_org, MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat, "
+                    # A representative destination address for this map point,
+                    # and how many distinct addresses it stands for. Without
+                    # these a click on the globe has nothing to look up: the
+                    # rows are grouped by coordinate, so the point knows WHERE
+                    # but not WHAT, and the connection story keys on dst_ip.
+                    "MAX(dst_ip) as sample_dst, COUNT(DISTINCT dst_ip) as distinct_dsts, "
+                    "SUM(CASE WHEN COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0) > 0 THEN 1 ELSE 0 END) as measured "
                     "FROM flow_events INDEXED BY idx_flow_geopoints_covering "
                     "WHERE timestamp_ns > ? "
                     f"AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0{dev_sql} "
@@ -355,6 +362,12 @@ class DomainQueryMixin:
                         "bytes": r[5] or 0,
                         "asn_org": r[6],
                         "threat": bool(r[7]),
+                        "dst_ip": r[8],
+                        "distinct_dsts": r[9] or 0,
+                        # How many of these connections actually carried a byte
+                        # count. 0 means the volume beside this point is a
+                        # missing measurement, not an idle link.
+                        "measured_flows": r[10] or 0,
                     }
                     for r in rows
                 ]

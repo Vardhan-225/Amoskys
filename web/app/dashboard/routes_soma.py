@@ -282,7 +282,9 @@ def _pipeline_stages(store, engine):
         if ts and (newest is None or ts > newest):
             newest = ts
     if newest is None:
-        stages.append(_stage("Agents", "down", "No agent has ever written to this store."))
+        stages.append(
+            _stage("Agents", "down", "No agent has ever written to this store.")
+        )
     else:
         age = (now_ns - newest) / 1e9
         stages.append(
@@ -374,7 +376,11 @@ def _pipeline_stages(store, engine):
         fresh = _fusion_freshness(engine)
         if fresh.get("age_seconds") is None:
             stages.append(
-                _stage("FusionEngine", "idle", "Loaded, but it has never written a verdict.")
+                _stage(
+                    "FusionEngine",
+                    "idle",
+                    "Loaded, but it has never written a verdict.",
+                )
             )
         else:
             stages.append(

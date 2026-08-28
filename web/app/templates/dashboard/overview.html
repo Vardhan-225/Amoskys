@@ -19,6 +19,22 @@
         <p>Install the AMOSKYS agent to start protecting your devices.</p>
         <a href="/dashboard/deploy" class="ov-cta">Install on your Mac</a>
     </div>
+    <!-- A backend we cannot reach is NOT an empty fleet. Rendering the
+         onboarding screen over a temporary outage tells the owner of a working
+         fleet that their machines do not exist and they should start over —
+         the most destructive thing this page could say. -->
+    <div id="ov-unreachable" class="ov-empty" style="display:none;">
+        <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="80" height="80" style="opacity:0.25;margin-bottom:20px;">
+        <h2>Can&rsquo;t reach the fleet backend</h2>
+        <p id="ov-unreachable-detail">Your devices are still there — this view cannot see them right now.</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <button type="button" id="ov-retry" class="ov-cta">Try again</button>
+            <a href="/dashboard/ledger" class="ov-cta" style="background:none;border:1px solid #2a3050;color:#c8d6e5;">Open the Ledger instead</a>
+        </div>
+        <p style="margin-top:16px;font-size:0.78em;color:#6b7a99;">
+            The Ledger reads this server&rsquo;s own cache, so it keeps working while the fleet backend is unreachable.
+        </p>
+    </div>
 </div>
 
 <style>
@@ -245,6 +261,18 @@
     load();
     setInterval(function() { if (!document.hidden) load(); }, 25000);
 
+    // "We could not ask" and "you have nothing" are different answers, and the
+    // page must never collapse the first into the second.
+    function showState(which, detail) {
+        document.getElementById('ov-root').style.display = which === 'ok' ? '' : 'none';
+        document.getElementById('ov-empty').style.display = which === 'empty' ? 'block' : 'none';
+        document.getElementById('ov-unreachable').style.display =
+            which === 'unreachable' ? 'block' : 'none';
+        if (which === 'unreachable' && detail) {
+            document.getElementById('ov-unreachable-detail').textContent = detail;
+        }
+    }
+
     async function load() {
         try {
             // Try new overview API first, fall back to command center
@@ -253,9 +281,15 @@
             if (!data.available) {
                 r = await fetch('/dashboard/api/command-center/status');
                 data = await r.json();
-                if (!data.available || !data.devices || !data.devices.length) {
-                    document.getElementById('ov-root').style.display = 'none';
-                    document.getElementById('ov-empty').style.display = 'block';
+                if (!data.available) {
+                    showState('unreachable',
+                        (data.detail || data.message ||
+                         'The fleet backend did not answer.') +
+                        ' Your devices are still there — this view cannot see them right now.');
+                    return;
+                }
+                if (!data.devices || !data.devices.length) {
+                    showState('empty');
                     return;
                 }
                 // Adapt shape
@@ -279,11 +313,21 @@
             }
             fleetData = data;
             render(data);
-        } catch(e) {
-            document.getElementById('ov-root').style.display = 'none';
-            document.getElementById('ov-empty').style.display = 'block';
+        } catch (e) {
+            // A failed request is a failure to look, not a finding.
+            showState('unreachable',
+                'This page could not load fleet data (' + String(e) + '). ' +
+                'That is a gap in this view, not a change to your devices.');
         }
     }
+
+    document.getElementById('ov-retry').addEventListener('click', function () {
+        showState('ok');
+        document.getElementById('ov-root').innerHTML =
+            '<div style="text-align:center;padding:80px;"><div class="neural-loading"></div>' +
+            '<div style="margin-top:12px;color:#6b7a99;font-size:0.82em;">Retrying…</div></div>';
+        load();
+    });
 
     // The verdict is NOT computed here. This function used to derive a score
     // from critical/high counts while devices.html derived a different one in

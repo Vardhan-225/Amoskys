@@ -20,6 +20,7 @@ Two ideas carry it:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -93,7 +94,13 @@ def _item_from_incident(inc: dict, user_verdicts: dict) -> dict:
     }
 
 
-_UNVOUCHED = ("unsigned", "signature-invalid")
+# A signature that could not be READ vouches for nothing. `unknown` is what
+# kernel._trust() returns when the signing flags are absent, and folding it in
+# with the signed binaries made the grouped item assert "every one of them
+# carries a signature identifying where it came from" about software whose
+# signature was never established. Not knowing and knowing-it-is-fine are
+# different states — that distinction is the whole reason `unknown` exists.
+_UNVOUCHED = ("unsigned", "signature-invalid", "unknown")
 
 
 def _binary_name(row: dict) -> str:
@@ -101,7 +108,17 @@ def _binary_name(row: dict) -> str:
 
 
 def _kernel_item(
-    *, key, title, why, band, verdict_label, factors, count, decided, cdhash=None
+    *,
+    key,
+    title,
+    why,
+    band,
+    verdict_label,
+    factors,
+    count,
+    decided,
+    cdhash=None,
+    cdhashes=None,
 ) -> dict:
     """One ledger item from the exec stream, in the shape build() expects."""
     item = {
@@ -129,6 +146,12 @@ def _kernel_item(
     }
     if cdhash:
         item["cdhash"] = cdhash
+    if cdhashes:
+        # Without these the grouped item reached the feedback endpoint with no
+        # binary identity at all, so "That's me" wrote nothing to
+        # esf_binary_ledger and reported itself as "derived from flow
+        # aggregates" — a control that did nothing and then misdescribed why.
+        item["cdhashes"] = [c for c in cdhashes if c]
     return item
 
 
@@ -176,15 +199,25 @@ def _kernel_items(user_verdicts: dict) -> list[dict]:
     if routine:
         names = ", ".join(_binary_name(r) for r in routine[:4])
         more = f" and {len(routine) - 4} more" if len(routine) > 4 else ""
-        key = "binary:first-run-batch"
+        # The key is derived from the MEMBERS, not from the concept. A constant
+        # key over a changing population meant one "That's me" cleared every
+        # first-run program that would ever appear afterwards: tomorrow's newly
+        # dropped binary would arrive pre-recognised, in the calm band, without
+        # anyone having looked at it. A verdict may only ever clear the things
+        # it was actually shown.
+        batch_cdhashes = sorted(r.get("cdhash") or "" for r in routine)
+        batch_id = hashlib.sha256("|".join(batch_cdhashes).encode()).hexdigest()[:16]
+        key = f"binary:batch:{batch_id}"
         decided = user_verdicts.get(key)
         if baseline_ready:
             why = (
                 f"The kernel witnessed {names}{more} execute here for the first "
-                "time. Every one of them carries a signature identifying where "
-                "it came from, so they are grouped into a single question "
-                "rather than asked one at a time. Anything the kernel could not "
-                "vouch for is listed separately."
+                "time. Each one carries a code signature the kernel could "
+                "read, so they are grouped into a single question rather than "
+                "asked one at a time — note that an ad-hoc signature proves the "
+                "binary has not been altered since it was built, but names no "
+                "author. Anything the kernel could not vouch for at all is "
+                "listed separately, above."
             )
             label = "Routine software"
         else:
@@ -209,13 +242,14 @@ def _kernel_items(user_verdicts: dict) -> list[dict]:
                     f"{report.get('known_binaries_total', 0)} binaries known so far",
                     "kernel-witnessed",
                     (
-                        "signature identifies the source"
+                        "signature readable"
                         if baseline_ready
                         else "baseline not established"
                     ),
                 ],
                 count=len(routine),
                 decided=decided,
+                cdhashes=batch_cdhashes,
             )
         )
 

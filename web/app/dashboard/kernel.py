@@ -189,10 +189,14 @@ def stream_health(window_hours: int = 24) -> dict:
         # ended up hiding a placement bug instead, which is the more common way
         # that kind of handler earns its keep in reverse.
         try:
-            kernel_dropped = int(db.execute(
-                "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
-                "WHERE timestamp_ns >= ?", (cutoff,)
-            ).fetchone()[0] or 0)
+            kernel_dropped = int(
+                db.execute(
+                    "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
+                    "WHERE timestamp_ns >= ?",
+                    (cutoff,),
+                ).fetchone()[0]
+                or 0
+            )
         except sqlite3.OperationalError:
             # Narrowed on purpose: OperationalError is "no such table", which
             # is the only condition this fallback is for. Anything else is a
@@ -331,21 +335,31 @@ def transitions(hours: int = 24, limit: int = 40) -> dict:
         # implementation did exactly that, one level up.
         #
         # The weights live in SQL so the LIMIT applies after ranking.
-        rows = [dict(r) for r in db.execute(
-            "SELECT timestamp_ns, kind, pid, euid, exe, cdhash, is_platform, detail, "
-            "  CASE kind "
-            "    WHEN 'cs_invalidated' THEN 100 "
-            "    WHEN 'kextload'       THEN 90 "
-            "    WHEN 'setuid'         THEN 60 "
-            "    WHEN 'setgid'         THEN 55 "
-            "    WHEN 'mount'          THEN 50 "
-            "    WHEN 'unmount'        THEN 30 "
-            "    ELSE 70 END AS severity "
-            "FROM esf_kernel_events WHERE timestamp_ns >= ? "
-            "ORDER BY severity DESC, timestamp_ns DESC LIMIT ?", (cutoff, limit))]
-        by_kind = {k: n for k, n in db.execute(
-            "SELECT kind, COUNT(*) FROM esf_kernel_events WHERE timestamp_ns >= ? "
-            "GROUP BY kind", (cutoff,))}
+        rows = [
+            dict(r)
+            for r in db.execute(
+                "SELECT timestamp_ns, kind, pid, euid, exe, cdhash, is_platform, detail, "
+                "  CASE kind "
+                "    WHEN 'cs_invalidated' THEN 100 "
+                "    WHEN 'kextload'       THEN 90 "
+                "    WHEN 'setuid'         THEN 60 "
+                "    WHEN 'setgid'         THEN 55 "
+                "    WHEN 'mount'          THEN 50 "
+                "    WHEN 'unmount'        THEN 30 "
+                "    ELSE 70 END AS severity "
+                "FROM esf_kernel_events WHERE timestamp_ns >= ? "
+                "ORDER BY severity DESC, timestamp_ns DESC LIMIT ?",
+                (cutoff, limit),
+            )
+        ]
+        by_kind = {
+            k: n
+            for k, n in db.execute(
+                "SELECT kind, COUNT(*) FROM esf_kernel_events WHERE timestamp_ns >= ? "
+                "GROUP BY kind",
+                (cutoff,),
+            )
+        }
     except sqlite3.Error:
         return absent
     if not rows and not by_kind:

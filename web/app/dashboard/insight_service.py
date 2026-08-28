@@ -759,6 +759,66 @@ def build_incidents(events: list[dict], flows_by_dest: dict) -> list[dict]:
 
 
 # ── Globe: real geolocated flows -> arcs ─────────────────────────────────────
+# Below this share of flows carrying any byte count, the counter is not being
+# populated and every "0 B" on screen is an unmeasured field, not a measurement.
+BYTE_ACCOUNTING_MIN_COVERAGE = 0.05
+
+
+def byte_accounting(
+    db: sqlite3.Connection,
+    device_id: str | None = None,
+    allowed_device_ids: list[str] | None = None,
+) -> dict:
+    """Is the flow byte counter actually working for this scope?
+
+    Measured on the live fleet cache: 29,614 of 29,721 flows (99.64%) carry
+    bytes_tx = bytes_rx = 0, stored as literal zeros rather than NULL. The
+    globe read those as measurements and told the owner that 4,385 connections
+    to Anthropic moved "0 B" — a confident figure for something never counted.
+
+    Zero and unmeasured are different claims. This decides which one the number
+    in front of the user actually is, once, for the whole scope, so no caller
+    has to guess.
+    """
+    dev_and = " AND device_id = ?" if device_id else ""
+    dev_p: tuple = (device_id,) if device_id else ()
+    scope, scope_p = _scope_sql(allowed_device_ids, " AND ")
+    try:
+        row = db.execute(
+            "SELECT COUNT(*) total, "
+            "SUM(CASE WHEN COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0) > 0 THEN 1 ELSE 0 END) measured "
+            "FROM flow_events WHERE 1=1" + dev_and + scope,
+            dev_p + scope_p,
+        ).fetchone()
+    except sqlite3.Error:
+        return {
+            "working": False,
+            "total": 0,
+            "measured": 0,
+            "coverage": 0.0,
+            "note": "Flow byte accounting could not be read.",
+        }
+    total = (row["total"] if row else 0) or 0
+    measured = (row["measured"] if row else 0) or 0
+    coverage = (measured / total) if total else 0.0
+    working = coverage >= BYTE_ACCOUNTING_MIN_COVERAGE
+    return {
+        "working": working,
+        "total": total,
+        "measured": measured,
+        "coverage": round(coverage, 4),
+        "note": (
+            None
+            if working
+            else (
+                f"Only {measured:,} of {total:,} connections carry a byte count, so "
+                "volume is not being measured on this device. Figures shown as "
+                "'not measured' are missing data, not zero traffic."
+            )
+        ),
+    }
+
+
 def build_globe(
     db: sqlite3.Connection,
     device_id: str | None = None,
@@ -781,6 +841,7 @@ def build_globe(
            ORDER BY flows DESC""",
         dev_p + scope_p,
     ).fetchall()
+    accounting = byte_accounting(db, device_id, allowed_device_ids)
     dests, by_key = [], {}
     for r in rows:
         org = r["org"] or ""
@@ -790,6 +851,7 @@ def build_globe(
             country and country not in ("US", "GB", "IE", "NL", "") and not known
         )
         band = "amber" if foreign else "calm"
+        raw_bytes = r["bytes"] or 0
         d = {
             "lat": r["lat"],
             "lon": r["lon"],
@@ -798,7 +860,9 @@ def build_globe(
             "org": _asn_friendly(org),
             "org_raw": org,
             "flows": r["flows"],
-            "bytes": r["bytes"] or 0,
+            "bytes": raw_bytes,
+            # A zero here means one of two very different things. Say which.
+            "bytes_measured": bool(raw_bytes) or accounting["working"],
             "procs": (r["procs"] or "").split(",")[:4],
             "band": band,
             "known_good": known,
@@ -941,6 +1005,10 @@ def build_model(db_path: str, allowed_device_ids: list[str] | None = None) -> di
             "globe": {
                 "device": {"lat": _HOME_LAT, "lon": _HOME_LON},
                 "destinations": dests,
+                # So the map can say "not measured" instead of "0 B".
+                "byte_accounting": byte_accounting(
+                    db, allowed_device_ids=allowed_device_ids
+                ),
             },
             "domains": domains,
             "timeline": timeline,

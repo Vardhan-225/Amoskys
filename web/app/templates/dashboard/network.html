@@ -476,6 +476,21 @@
    textures are already vendored under /static/vendor/. #}
 <script src="/static/vendor/globe.gl.min.js"></script>
 <script nonce="{{ csp_nonce() }}">
+
+// ── Zero is a measurement. Unmeasured is not. ────────────────────────────────
+// Measured on the live fleet cache: 29,614 of 29,721 flows carry
+// bytes_tx = bytes_rx = 0, stored as literal zeros. Rendering that as "0 B"
+// told the owner that 4,385 connections to Anthropic moved no data — a
+// confident figure for something the collector never counted. The server now
+// reports whether the counter is working; this renders the difference.
+var byteAccounting = { working: null, note: null };
+
+function volumeLabel(bytes) {
+    var n = bytes || 0;
+    if (n > 0) { return formatBytes(n); }
+    if (byteAccounting.working === false) { return 'not measured'; }
+    return formatBytes(0);
+}
 /* ── Network Intelligence — Globe.gl threat globe + DashboardCache + DashboardPoller ── */
 (function() {
     'use strict';
@@ -659,7 +674,15 @@
         document.getElementById('stat-flows').textContent = formatNumber(d.total_flows || 0);
         document.getElementById('stat-dsts').textContent = formatNumber(d.unique_destinations || 0);
         document.getElementById('stat-countries').textContent = d.countries_reached || 0;
-        document.getElementById('stat-bytes').textContent = formatBytes((d.bytes_sent || 0) + (d.bytes_received || 0));
+        byteAccounting = d.byte_accounting || byteAccounting;
+        document.getElementById('stat-bytes').textContent =
+            volumeLabel((d.bytes_sent || 0) + (d.bytes_received || 0));
+        var lbl = document.querySelector('#stat-bytes ~ .net-stat-lbl');
+        if (lbl) {
+            lbl.textContent = byteAccounting.working === false
+                ? 'Volume — not measured' : 'Bytes Transferred';
+            lbl.title = byteAccounting.note || '';
+        }
         const threats = d.threat_intel_hits || 0;
         document.getElementById('stat-threats').textContent = formatNumber(threats);
         buildNlpSummary(d);
@@ -768,7 +791,11 @@
             return;
         }
 
-        if (bytes > 0) {
+        if (byteAccounting.working === false) {
+            parts.push(' Data volume is <strong>not being measured</strong> on this device — ' +
+                'the connection counters are populated but the byte counters are not, ' +
+                'so any "0 B" here is a missing measurement rather than an idle link.');
+        } else if (bytes > 0) {
             parts.push(' Total data transferred: <strong>' + formatBytes(bytes) + '</strong>.');
         }
 
@@ -871,7 +898,7 @@
                     </div>
                     <div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 0.8rem;font-size:0.7rem;">
                         <span style="color:#6b7a99;">Location</span><span style="color:#e2e8f0;text-align:right;">${escHtml(d.city ? d.city + ', ' + d.country : d.label)}</span>
-                        <span style="color:#6b7a99;">Transferred</span><span style="color:#00d9ff;text-align:right;font-weight:600;">${formatBytes(d.bytes)}</span>
+                        <span style="color:#6b7a99;">Transferred</span><span style="color:#00d9ff;text-align:right;font-weight:600;">${volumeLabel(d.bytes)}</span>
                         <span style="color:#6b7a99;">Connections</span><span style="color:#b4bcd0;text-align:right;">${formatNumber(d.count)}</span>
                     </div>
                 </div>
@@ -908,15 +935,25 @@
                     const loc = d.city || d.country || '';
                     el.innerHTML =
                         '<div style="font-size:0.58rem;font-weight:600;color:' + nameColor + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + escHtml(name) + '</div>' +
-                        '<div style="font-size:0.5rem;color:' + locColor + ';white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + escHtml(loc) + ' &middot; ' + formatBytes(d.bytes || 0) + '</div>';
+                        '<div style="font-size:0.5rem;color:' + locColor + ';white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + escHtml(loc) + ' &middot; ' + volumeLabel(d.bytes) + '</div>';
                 }
                 return el;
             })
             .htmlAltitude(d => d.isDevice ? 0.045 : 0.025)
 
-            /* ── Click-to-zoom on arcs ── */
+            /* ── Click an arc: zoom AND explain it ──
+               A line on a globe that only zooms is decoration. The story
+               endpoint already assembles what/who/where/why for a destination;
+               this is the click that reaches it. */
             .onArcClick(d => {
                 globe.pointOfView({ lat: d.endLat, lng: d.endLng, altitude: 1.3 }, 1000);
+                if (d.dstIp) {
+                    loadStory(d.dstIp, {
+                        org: d.asnOrg, city: d.city, country: d.country,
+                        distinctDsts: d.distinctDsts, measuredFlows: d.measuredFlows,
+                        connections: d.count
+                    });
+                }
             });
 
         // Globe material polish — subtle self-illumination for dark-side visibility
@@ -1020,7 +1057,10 @@
                 asnOrg: pt.asn_org || 'Unknown',
                 bytes: bytes,
                 count: count,
-                threat: isThreat
+                threat: isThreat,
+                dstIp: pt.dst_ip || null,
+                distinctDsts: pt.distinct_dsts || 0,
+                measuredFlows: pt.measured_flows || 0
             };
         });
 
@@ -1332,10 +1372,14 @@
         return n + ' B';
     }
 
-    async function loadStory(dstIp) {
+    var _storyCtx = null;
+
+    async function loadStory(dstIp, mapCtx) {
         const sec = document.getElementById('story-section');
         const body = document.getElementById('story-body');
-        document.getElementById('story-dst').textContent = dstIp;
+        _storyCtx = { dstIp: dstIp, map: mapCtx || null };
+        document.getElementById('story-dst').textContent =
+            dstIp + (mapCtx && mapCtx.org ? '  ·  ' + mapCtx.org : '');
         sec.style.display = '';
         body.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Assembling story…</div>';
         sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1358,6 +1402,86 @@
             body.innerHTML = '<div style="padding:1rem;"><strong class="warn-text">Story request failed.</strong></div>';
         }
     }
+
+    function askPanelHTML() {
+        var m = _storyCtx && _storyCtx.map;
+        var unmeasured = m && m.connections && !m.measuredFlows;
+        return '<div id="story-ask" style="margin-top:1rem;padding-top:0.9rem;' +
+            'border-top:1px solid var(--border-color);">' +
+            (unmeasured
+                ? '<div style="font-size:0.8rem;color:#f0ad4e;margin-bottom:0.6rem;">' +
+                  'None of these ' + m.connections + ' connections carried a byte count, ' +
+                  'so the volume for this destination is <strong>not measured</strong> — ' +
+                  'not zero.</div>'
+                : '') +
+            '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">' +
+                '<input type="text" id="story-q" placeholder="Ask IGRIS about this connection…" ' +
+                    'style="flex:1;min-width:220px;padding:0.45rem 0.6rem;border-radius:6px;' +
+                    'background:var(--bg-tertiary);color:var(--text-primary);' +
+                    'border:1px solid var(--border-color);font:inherit;font-size:0.85rem;">' +
+                '<button type="button" id="story-ask-btn" class="neural-button" ' +
+                    'style="padding:0.45rem 0.9rem;font-size:0.85rem;cursor:pointer;">Ask IGRIS</button>' +
+            '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.4rem;">' +
+                'The evidence above is sent with your question, so IGRIS answers about ' +
+                'this connection rather than guessing what you meant.</div>' +
+            '<div id="story-answer" style="margin-top:0.8rem;"></div>' +
+        '</div>';
+    }
+
+    async function askIgrisAboutConnection() {
+        var box = document.getElementById('story-answer');
+        var q = (document.getElementById('story-q') || {}).value || '';
+        var btn = document.getElementById('story-ask-btn');
+        if (!_storyCtx || !_storyCtx.dstIp) { return; }
+        btn.disabled = true;
+        box.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">' +
+            'IGRIS is reading the evidence for this destination…</div>';
+        try {
+            const r = await fetch('/dashboard/api/network/connection-story/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    dst_ip: _storyCtx.dstIp,
+                    question: q,
+                    hours: selectedHours,
+                    device_id: (typeof AMOSKYS_DEVICE_ID !== 'undefined' ? AMOSKYS_DEVICE_ID : null)
+                })
+            });
+            const d = await r.json();
+            if (d.status !== 'success') {
+                box.innerHTML = '<div style="font-size:0.85rem;color:#f0ad4e;">' +
+                    escHtml(d.message || 'IGRIS could not answer.') + '</div>';
+                return;
+            }
+            var ev = (d.evidence || []).map(function (e) {
+                return '<span style="display:inline-block;font-size:0.68rem;padding:0.1rem 0.4rem;' +
+                    'margin:0.15rem 0.2rem 0 0;border-radius:4px;background:var(--bg-tertiary);' +
+                    'border:1px solid var(--border-color);color:var(--text-secondary);">' +
+                    escHtml(e.label || e.tool || 'evidence') + '</span>';
+            }).join('');
+            box.innerHTML =
+                '<div style="font-size:0.88rem;line-height:1.6;color:var(--text-primary);' +
+                'white-space:pre-wrap;">' + escHtml(d.response || '') + '</div>' +
+                (ev ? '<div style="margin-top:0.5rem;">' + ev + '</div>' : '');
+        } catch (e) {
+            box.innerHTML = '<div style="font-size:0.85rem;color:#f0ad4e;">' +
+                'The request failed: ' + escHtml(String(e)) + '</div>';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    document.addEventListener('click', function (ev) {
+        if (ev.target && ev.target.id === 'story-ask-btn') { askIgrisAboutConnection(); }
+    });
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && ev.target && ev.target.id === 'story-q') {
+            ev.preventDefault();
+            askIgrisAboutConnection();
+        }
+    });
 
     function renderStory(s) {
         const w = s.what, wh = s.where, why = s.why;
@@ -1426,7 +1550,7 @@
             '<div style="margin-top:1rem;">' +
               '<button id="story-hunt" class="net-search-btn" data-dst="' + escHtml(s.dst_ip) + '">' +
               'Ask IGRIS to hunt this connection</button>' +
-            '</div>';
+            '</div>' + askPanelHTML();
     }
 
     // Delegated listeners — no inline handlers (CSP cannot authorise on* attrs).
