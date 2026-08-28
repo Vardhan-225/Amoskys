@@ -51,8 +51,13 @@ class ESFForensicsMixin:
 
     # ── 1. What ran, in a window ──────────────────────────────────────────
     def esf_timeline(
-        self, *, start_ns: int, end_ns: int, device_id: Optional[str] = None,
-        trust: Optional[str] = None, limit: int = 500,
+        self,
+        *,
+        start_ns: int,
+        end_ns: int,
+        device_id: Optional[str] = None,
+        trust: Optional[str] = None,
+        limit: int = 500,
     ) -> Dict[str, Any]:
         """Ordered exec timeline, with an explicit statement of completeness.
 
@@ -67,7 +72,8 @@ class ESFForensicsMixin:
             where.append("device_id = ?")
             args.append(device_id)
         sql = (
-            "SELECT * FROM esf_exec_events WHERE " + " AND ".join(where)
+            "SELECT * FROM esf_exec_events WHERE "
+            + " AND ".join(where)
             + " ORDER BY timestamp_ns ASC LIMIT ?"
         )
         with self._read_pool.connection() as db:
@@ -96,8 +102,8 @@ class ESFForensicsMixin:
             "complete": dropped == 0,
             "completeness_note": (
                 "Complete: the Sentinel reported no drops in this window."
-                if dropped == 0 else
-                f"INCOMPLETE: {dropped} exec events were dropped in this window "
+                if dropped == 0
+                else f"INCOMPLETE: {dropped} exec events were dropped in this window "
                 "and are permanently unrecoverable. Absence of an event here is "
                 "not evidence that it did not happen."
             ),
@@ -105,8 +111,12 @@ class ESFForensicsMixin:
 
     # ── 2. Reconstruct a process tree ─────────────────────────────────────
     def esf_reconstruct(
-        self, *, pid: int, at_ns: Optional[int] = None,
-        device_id: Optional[str] = None, max_depth: int = 12,
+        self,
+        *,
+        pid: int,
+        at_ns: Optional[int] = None,
+        device_id: Optional[str] = None,
+        max_depth: int = 12,
     ) -> Dict[str, Any]:
         """Walk ancestry up and descendants down from one process.
 
@@ -125,8 +135,8 @@ class ESFForensicsMixin:
             def exec_of(p: int, before_ns: int):
                 r = db.execute(
                     "SELECT * FROM esf_exec_events WHERE pid = ? AND timestamp_ns <= ? "
-                    + " ".join(dev) +
-                    " ORDER BY timestamp_ns DESC LIMIT 1",
+                    + " ".join(dev)
+                    + " ORDER BY timestamp_ns DESC LIMIT 1",
                     [p, before_ns] + devargs,
                 ).fetchone()
                 return _row_to_exec(r) if r else None
@@ -140,20 +150,24 @@ class ESFForensicsMixin:
                 seen.add(ppid)
                 parent = exec_of(ppid, cur["timestamp_ns"])
                 if not parent:
-                    ancestry.append({
-                        "pid": ppid, "exe": None,
-                        "note": "no exec record — process predates the retention "
-                                "window, or started before the Sentinel did",
-                    })
+                    ancestry.append(
+                        {
+                            "pid": ppid,
+                            "exe": None,
+                            "note": "no exec record — process predates the retention "
+                            "window, or started before the Sentinel did",
+                        }
+                    )
                     break
                 ancestry.append(parent)
                 cur = parent
 
             children = [
-                _row_to_exec(r) for r in db.execute(
+                _row_to_exec(r)
+                for r in db.execute(
                     "SELECT * FROM esf_exec_events WHERE ppid = ? AND timestamp_ns >= ? "
-                    + " ".join(dev) +
-                    " ORDER BY timestamp_ns ASC LIMIT 200",
+                    + " ".join(dev)
+                    + " ORDER BY timestamp_ns ASC LIMIT 200",
                     [pid, (self_exec or {}).get("timestamp_ns", 0)] + devargs,
                 )
             ]
@@ -175,7 +189,11 @@ class ESFForensicsMixin:
 
     # ── 3. Novelty ────────────────────────────────────────────────────────
     def esf_novel_binaries(
-        self, *, hours: int = 24, include_platform: bool = False, limit: int = 100,
+        self,
+        *,
+        hours: int = 24,
+        include_platform: bool = False,
+        limit: int = 100,
     ) -> Dict[str, Any]:
         """Binaries whose cdhash was first seen inside the window.
 
@@ -191,9 +209,15 @@ class ESFForensicsMixin:
             where.append("IFNULL(is_platform, 0) = 0")
         with self._read_pool.connection() as db:
             db.row_factory = __import__("sqlite3").Row
-            rows = [dict(r) for r in db.execute(
-                "SELECT * FROM esf_binary_ledger WHERE " + " AND ".join(where)
-                + " ORDER BY first_seen_ns DESC LIMIT ?", args + [limit])]
+            rows = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT * FROM esf_binary_ledger WHERE "
+                    + " AND ".join(where)
+                    + " ORDER BY first_seen_ns DESC LIMIT ?",
+                    args + [limit],
+                )
+            ]
             known = db.execute("SELECT COUNT(*) FROM esf_binary_ledger").fetchone()[0]
         for r in rows:
             r["age_minutes"] = (time.time_ns() - r["first_seen_ns"]) / 6e10
@@ -224,13 +248,23 @@ class ESFForensicsMixin:
             ledger = db.execute(
                 "SELECT * FROM esf_binary_ledger WHERE cdhash = ?", (cdhash,)
             ).fetchone()
-            execs = [_row_to_exec(r) for r in db.execute(
-                "SELECT * FROM esf_exec_events WHERE cdhash = ? "
-                "ORDER BY timestamp_ns DESC LIMIT ?", (cdhash, limit))]
-            paths = [dict(r) for r in db.execute(
-                "SELECT exe, COUNT(*) AS n, MIN(timestamp_ns) AS first_ns, "
-                "MAX(timestamp_ns) AS last_ns FROM esf_exec_events "
-                "WHERE cdhash = ? GROUP BY exe ORDER BY n DESC", (cdhash,))]
+            execs = [
+                _row_to_exec(r)
+                for r in db.execute(
+                    "SELECT * FROM esf_exec_events WHERE cdhash = ? "
+                    "ORDER BY timestamp_ns DESC LIMIT ?",
+                    (cdhash, limit),
+                )
+            ]
+            paths = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT exe, COUNT(*) AS n, MIN(timestamp_ns) AS first_ns, "
+                    "MAX(timestamp_ns) AS last_ns FROM esf_exec_events "
+                    "WHERE cdhash = ? GROUP BY exe ORDER BY n DESC",
+                    (cdhash,),
+                )
+            ]
         return {
             "cdhash": cdhash,
             "ledger": dict(ledger) if ledger else None,
@@ -243,15 +277,19 @@ class ESFForensicsMixin:
                 "Multiple paths are normal for a tool installed in several "
                 "places, and are also what relocation looks like — the counts "
                 "and first/last timestamps are there to tell those apart."
-                if len(paths) > 1 else
-                "Single path: this binary has only ever run from one location."
+                if len(paths) > 1
+                else "Single path: this binary has only ever run from one location."
             ),
         }
 
     # ── 5. The composite detector ─────────────────────────────────────────
     def esf_composite_alerts(
-        self, *, hours: int = 24, novelty_window_s: int = 604800,
-        require_untrusted: bool = True, limit: int = 200,
+        self,
+        *,
+        hours: int = 24,
+        novelty_window_s: int = 604800,
+        require_untrusted: bool = True,
+        limit: int = 200,
     ) -> Dict[str, Any]:
         """NOVEL and NON-PLATFORM and UNTRUSTED — the one signal with real power.
 
@@ -292,7 +330,8 @@ class ESFForensicsMixin:
 
         trust_clause = (
             "AND (e.is_signed = 0 OR e.is_adhoc = 1 OR e.is_valid = 0)"
-            if require_untrusted else ""
+            if require_untrusted
+            else ""
         )
         sql = f"""
             SELECT e.*, l.first_seen_ns, l.exec_count, l.verdict
@@ -315,8 +354,12 @@ class ESFForensicsMixin:
         """
         with self._read_pool.connection() as db:
             db.row_factory = __import__("sqlite3").Row
-            raw = [_row_to_exec(r) for r in db.execute(
-                sql, (cutoff_ns, time.time_ns() - novelty_cut_ns, limit))]
+            raw = [
+                _row_to_exec(r)
+                for r in db.execute(
+                    sql, (cutoff_ns, time.time_ns() - novelty_cut_ns, limit)
+                )
+            ]
             # ONE ALERT PER BINARY, not per execution.
             #
             # Novelty is a property of the cdhash, so the second alert for a
@@ -336,14 +379,16 @@ class ESFForensicsMixin:
                 if h not in by_hash:
                     r["executions"] = []
                     by_hash[h] = r
-                by_hash[h]["executions"].append({
-                    "timestamp_ns": r["timestamp_ns"],
-                    "argv": r.get("argv"),
-                    "pid": r.get("pid"),
-                    "ppid": r.get("ppid"),
-                    "euid": r.get("euid"),
-                    "exe": r.get("exe"),
-                })
+                by_hash[h]["executions"].append(
+                    {
+                        "timestamp_ns": r["timestamp_ns"],
+                        "argv": r.get("argv"),
+                        "pid": r.get("pid"),
+                        "ppid": r.get("ppid"),
+                        "euid": r.get("euid"),
+                        "exe": r.get("exe"),
+                    }
+                )
             rows = list(by_hash.values())
             for r in rows:
                 # Distinct paths for one hash is the relocation signal — a
@@ -358,7 +403,8 @@ class ESFForensicsMixin:
             ).fetchone()[0]
             dropped = db.execute(
                 "SELECT IFNULL(SUM(dropped), 0) FROM esf_stream_health "
-                "WHERE timestamp_ns >= ?", (cutoff_ns,),
+                "WHERE timestamp_ns >= ?",
+                (cutoff_ns,),
             ).fetchone()[0]
 
         for r in rows:
@@ -387,8 +433,8 @@ class ESFForensicsMixin:
                 "dropped_in_window before reading anything into a quiet result "
                 "-- an empty result from an empty corpus is arithmetic, not "
                 "evidence."
-                if not rows else
-                f"{len(rows)} alerts from {total:,} execs examined."
+                if not rows
+                else f"{len(rows)} alerts from {total:,} execs examined."
             ),
         }
 
@@ -411,9 +457,14 @@ class ESFForensicsMixin:
         return True
 
     # ── 6. Hybrid ancestry ────────────────────────────────────────────────
-    def esf_resolve_parent(self, *, ppid: int, before_ns: int,
-                           device_id: Optional[str] = None,
-                           allow_polling: bool = False) -> Optional[Dict[str, Any]]:
+    def esf_resolve_parent(
+        self,
+        *,
+        ppid: int,
+        before_ns: int,
+        device_id: Optional[str] = None,
+        allow_polling: bool = False,
+    ) -> Optional[Dict[str, Any]]:
         """Find a parent using ESF first, then the polling sensor.
 
         MEASURED PROBLEM: only 7.5% of ESF execs have their parent in the ESF
@@ -454,6 +505,7 @@ class ESFForensicsMixin:
         alone so the replacement decision rests on evidence.
         """
         import sqlite3 as _sq
+
         with self._read_pool.connection() as db:
             db.row_factory = _sq.Row
             args = [ppid, before_ns]
@@ -463,7 +515,9 @@ class ESFForensicsMixin:
                 args.append(device_id)
             row = db.execute(
                 f"SELECT * FROM esf_exec_events WHERE pid = ? AND timestamp_ns <= ? {dev} "
-                "ORDER BY timestamp_ns DESC LIMIT 1", args).fetchone()
+                "ORDER BY timestamp_ns DESC LIMIT 1",
+                args,
+            ).fetchone()
             if row:
                 out = _row_to_exec(row)
                 out["source"] = "esf"
@@ -476,7 +530,9 @@ class ESFForensicsMixin:
             row = db.execute(
                 f"SELECT pid, ppid, exe, cmdline, name, username FROM process_events "
                 f"WHERE pid = ? AND timestamp_ns <= ? {dev} "
-                "ORDER BY timestamp_ns DESC LIMIT 1", args).fetchone()
+                "ORDER BY timestamp_ns DESC LIMIT 1",
+                args,
+            ).fetchone()
             if row:
                 d = dict(row)
                 argv = d.get("cmdline")
@@ -486,9 +542,11 @@ class ESFForensicsMixin:
                     except (ValueError, TypeError):
                         argv = [argv]
                 return {
-                    "pid": d.get("pid"), "ppid": d.get("ppid"),
-                    "exe": d.get("exe"), "argv": argv,
-                    "cdhash": None,          # polling cannot supply this
+                    "pid": d.get("pid"),
+                    "ppid": d.get("ppid"),
+                    "exe": d.get("exe"),
+                    "argv": argv,
+                    "cdhash": None,  # polling cannot supply this
                     "source": "polling",
                     "witnessed": False,
                     "note": (
@@ -524,11 +582,16 @@ class ESFForensicsMixin:
         """
         with self._read_pool.connection() as db:
             n = db.execute("SELECT COUNT(*) FROM esf_exec_events").fetchone()[0]
-            distinct = db.execute(
-                "SELECT COUNT(*) FROM esf_binary_ledger").fetchone()[0]
-            span = db.execute(
-                "SELECT (MAX(timestamp_ns) - MIN(timestamp_ns)) / 1e9 "
-                "FROM esf_exec_events").fetchone()[0] or 0.0
+            distinct = db.execute("SELECT COUNT(*) FROM esf_binary_ledger").fetchone()[
+                0
+            ]
+            span = (
+                db.execute(
+                    "SELECT (MAX(timestamp_ns) - MIN(timestamp_ns)) / 1e9 "
+                    "FROM esf_exec_events"
+                ).fetchone()[0]
+                or 0.0
+            )
 
         rate_per_day = (n / (span / 86400.0)) if span > 3600 else 0.0
         fraction = min(1.0, n / float(self._NOVELTY_MATURE_N))
@@ -566,7 +629,10 @@ class ESFForensicsMixin:
         )
         if eta_days is not None:
             return head + f" for another {eta_days:.1f} days."
-        return head + " until the corpus has grown; too little history to estimate how long."
+        return (
+            head
+            + " until the corpus has grown; too little history to estimate how long."
+        )
 
     # ── 8. Transitions: rarity that is intrinsic, not learned ─────────────
     #
@@ -581,28 +647,40 @@ class ESFForensicsMixin:
     # measured rates once there are enough observations to compute one.
     _TRANSITION_WEIGHT = {
         "cs_invalidated": 20.0,  # running code modified in place
-        "kextload":       16.0,  # kernel extension load
-        "setuid":         10.0,  # privilege change
-        "setgid":          9.0,
-        "mount":           8.0,  # volume / disk image attach
-        "unmount":         6.0,
+        "kextload": 16.0,  # kernel extension load
+        "setuid": 10.0,  # privilege change
+        "setgid": 9.0,
+        "mount": 8.0,  # volume / disk image attach
+        "unmount": 6.0,
     }
 
-    def esf_transition_alerts(self, *, hours: int = 24, limit: int = 200
-                              ) -> Dict[str, Any]:
+    def esf_transition_alerts(
+        self, *, hours: int = 24, limit: int = 200
+    ) -> Dict[str, Any]:
         """Kernel transitions, with measured rates once they exist."""
         cutoff = time.time_ns() - hours * 3600 * 1_000_000_000
         with self._read_pool.connection() as db:
             db.row_factory = __import__("sqlite3").Row
-            rows = [dict(r) for r in db.execute(
-                "SELECT * FROM esf_kernel_events WHERE timestamp_ns >= ? "
-                "ORDER BY timestamp_ns DESC LIMIT ?", (cutoff, limit))]
-            totals = {k: n for k, n in db.execute(
-                "SELECT kind, COUNT(*) FROM esf_kernel_events GROUP BY kind")}
+            rows = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT * FROM esf_kernel_events WHERE timestamp_ns >= ? "
+                    "ORDER BY timestamp_ns DESC LIMIT ?",
+                    (cutoff, limit),
+                )
+            ]
+            totals = {
+                k: n
+                for k, n in db.execute(
+                    "SELECT kind, COUNT(*) FROM esf_kernel_events GROUP BY kind"
+                )
+            }
             grand = sum(totals.values())
             kdrops = db.execute(
                 "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
-                "WHERE timestamp_ns >= ?", (cutoff,)).fetchone()[0]
+                "WHERE timestamp_ns >= ?",
+                (cutoff,),
+            ).fetchone()[0]
 
         for r in rows:
             if r.get("detail"):
@@ -636,8 +714,8 @@ class ESFForensicsMixin:
                 "No transition events recorded. Either nothing happened, or the "
                 "Sentinel is running a build that does not subscribe to them — "
                 "check sentinel_start.subscriptions before reading this as quiet."
-                if not rows and not grand else
-                f"{len(rows)} transitions in {hours}h across {len(totals)} kinds."
+                if not rows and not grand
+                else f"{len(rows)} transitions in {hours}h across {len(totals)} kinds."
             ),
         }
 
@@ -694,10 +772,14 @@ class ESFForensicsMixin:
         cutoff = time.time_ns() - hours * 3600 * 1_000_000_000
         with self._read_pool.connection() as db:
             db.row_factory = __import__("sqlite3").Row
-            allrows = [dict(r) for r in db.execute(
-                "SELECT id, timestamp_ns, exe, is_platform, detail, kind, cdhash, "
-                "pid, euid FROM esf_kernel_events "
-                "WHERE kind IN ('setuid','setgid') ORDER BY timestamp_ns ASC")]
+            allrows = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT id, timestamp_ns, exe, is_platform, detail, kind, cdhash, "
+                    "pid, euid FROM esf_kernel_events "
+                    "WHERE kind IN ('setuid','setgid') ORDER BY timestamp_ns ASC"
+                )
+            ]
 
         # PER-CANDIDATE BASELINE, and this is the whole correctness argument.
         #
@@ -774,8 +856,8 @@ class ESFForensicsMixin:
                 f"A never-before-seen privilege event is currently worth "
                 f"{never_bits:.1f} bits; that rises as the clean baseline grows, "
                 f"so this signal strengthens with time rather than decaying."
-                if n else
-                "No privilege transitions recorded at all. Either none occurred, "
+                if n
+                else "No privilege transitions recorded at all. Either none occurred, "
                 "or the Sentinel is not subscribed to NOTIFY_SETUID — check "
                 "sentinel_start.subscriptions before reading this as quiet."
             ),
@@ -843,9 +925,13 @@ class ESFForensicsMixin:
             # the artifact instead of the phenomenon, so this refuses rather
             # than guesses.
             esf_lag_s = (time.time_ns() - e_ns) / 1e9
-            poll_newest = db.execute(
-                "SELECT MAX(timestamp_ns) FROM process_events "
-                "WHERE collection_agent='macos_process'").fetchone()[0] or 0
+            poll_newest = (
+                db.execute(
+                    "SELECT MAX(timestamp_ns) FROM process_events "
+                    "WHERE collection_agent='macos_process'"
+                ).fetchone()[0]
+                or 0
+            )
             poll_lag_s = (time.time_ns() - poll_newest) / 1e9
             skew_s = abs(esf_lag_s - poll_lag_s)
             if skew_s > 300:
@@ -867,9 +953,14 @@ class ESFForensicsMixin:
                     ),
                 }
 
-            witnessed = {r[0] for r in db.execute(
-                "SELECT DISTINCT pid FROM esf_exec_events "
-                "WHERE timestamp_ns BETWEEN ? AND ?", (s_ns, e_ns))}
+            witnessed = {
+                r[0]
+                for r in db.execute(
+                    "SELECT DISTINCT pid FROM esf_exec_events "
+                    "WHERE timestamp_ns BETWEEN ? AND ?",
+                    (s_ns, e_ns),
+                )
+            }
             # create_time lets us tell "predates the Sentinel" from "started
             # during the window but was never witnessed" — the whole point.
             # NO UPPER BOUND on the polling side, and this is not sloppiness.
@@ -882,10 +973,15 @@ class ESFForensicsMixin:
             #
             # What matters for reconciliation is create_time (when the process
             # began), which is compared against the window below.
-            sampled = [dict(r) for r in db.execute(
-                "SELECT DISTINCT pid, exe, create_time FROM process_events "
-                "WHERE timestamp_ns >= ? AND collection_agent='macos_process' "
-                "AND pid IS NOT NULL", (s_ns,))]
+            sampled = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT DISTINCT pid, exe, create_time FROM process_events "
+                    "WHERE timestamp_ns >= ? AND collection_agent='macos_process' "
+                    "AND pid IS NOT NULL",
+                    (s_ns,),
+                )
+            ]
 
         predates, unwitnessed, undatable = [], [], []
         for r in sampled:
@@ -920,10 +1016,155 @@ class ESFForensicsMixin:
                     "without a witnessed exec is either a gap in the stream "
                     "(check kernel drops first) or something that did not exec "
                     "in the ordinary way."
-                    if unwitnessed else
-                    " Nothing started unwitnessed in this window — every "
+                    if unwitnessed
+                    else " Nothing started unwitnessed in this window — every "
                     "process polling found either predates the stream or was "
                     "seen starting."
                 )
             ),
         }
+
+
+# ── Fleet-side DDL ───────────────────────────────────────────────────────────
+# The exec stream is created on the agent by migration 015/016. The fleet
+# backend and the presentation cache need the same tables to receive it, and
+# they do not run the agent's migration chain — so the shape lives here, once,
+# and both import it. Two hand-maintained copies of a schema is how a column
+# goes missing on one tier and a sync starts silently dropping it.
+#
+# This is deliberately the SUBSET the fleet needs, not a mirror of the agent's
+# forensic store: the ranking indexes an investigation uses locally are not
+# worth their write cost on a server that only aggregates.
+ESF_FLEET_DDL = """
+CREATE TABLE IF NOT EXISTS esf_exec_events (
+    id                INTEGER PRIMARY KEY,
+    source_id         INTEGER,
+    timestamp_ns      INTEGER NOT NULL,
+    timestamp_dt      TEXT,
+    device_id         TEXT    NOT NULL,
+    org_id            TEXT,
+    exe               TEXT    NOT NULL,
+    argv              TEXT,
+    cdhash            TEXT,
+    signing_id        TEXT,
+    team_id           TEXT,
+    cs_flags          INTEGER,
+    is_signed         BOOLEAN,
+    is_valid          BOOLEAN,
+    is_adhoc          BOOLEAN,
+    is_platform       BOOLEAN,
+    pid               INTEGER,
+    ppid              INTEGER,
+    euid              INTEGER,
+    username          TEXT,
+    decision          TEXT,
+    decision_reason   TEXT,
+    process_guid      TEXT,
+    parent_guid       TEXT,
+    received_at       REAL
+);
+CREATE INDEX IF NOT EXISTS idx_esf_fleet_time
+    ON esf_exec_events(timestamp_ns DESC);
+CREATE INDEX IF NOT EXISTS idx_esf_fleet_cdhash
+    ON esf_exec_events(cdhash, timestamp_ns DESC);
+CREATE INDEX IF NOT EXISTS idx_esf_fleet_device
+    ON esf_exec_events(device_id, timestamp_ns DESC);
+
+-- Keyed on cdhash, NOT an autoincrement id: this table is a running summary
+-- that is UPDATED (exec_count, last_seen, an operator verdict), so it is
+-- shipped as a snapshot and upserted rather than drained by cursor.
+CREATE TABLE IF NOT EXISTS esf_binary_ledger (
+    cdhash            TEXT PRIMARY KEY,
+    -- The fleet ingest stamps source_id on every row it accepts, so the column
+    -- has to exist even though this table reconciles on cdhash. Omitting it
+    -- rejected the entire snapshot with "no column named source_id" — the
+    -- ledger is the table that answers "has this binary ever run here", so
+    -- losing it costs the novelty signal outright.
+    source_id         INTEGER,
+    device_id         TEXT,
+    org_id            TEXT,
+    first_seen_ns     INTEGER NOT NULL,
+    last_seen_ns      INTEGER NOT NULL,
+    exec_count        INTEGER NOT NULL DEFAULT 1,
+    first_exe         TEXT,
+    distinct_paths    INTEGER NOT NULL DEFAULT 1,
+    signing_id        TEXT,
+    team_id           TEXT,
+    is_platform       BOOLEAN,
+    is_adhoc          BOOLEAN,
+    verdict           TEXT,
+    verdict_at_ns     INTEGER,
+    verdict_note      TEXT,
+    received_at       REAL
+);
+CREATE INDEX IF NOT EXISTS idx_esf_fleet_ledger_first
+    ON esf_binary_ledger(first_seen_ns DESC);
+
+CREATE TABLE IF NOT EXISTS esf_stream_health (
+    id                INTEGER PRIMARY KEY,
+    source_id         INTEGER,
+    timestamp_ns      INTEGER NOT NULL,
+    device_id         TEXT,
+    org_id            TEXT,
+    dropped           INTEGER NOT NULL DEFAULT 0,
+    enforce_mode      BOOLEAN,
+    collector_lag_ns  INTEGER,
+    note              TEXT,
+    received_at       REAL
+);
+CREATE INDEX IF NOT EXISTS idx_esf_fleet_health_time
+    ON esf_stream_health(timestamp_ns DESC);
+"""
+
+# What the fleet will accept per table — the ingest whitelist and the shipper's
+# column list are generated from one place so they cannot drift apart.
+ESF_FLEET_COLUMNS = {
+    "esf_exec_events": [
+        "id",
+        "timestamp_ns",
+        "timestamp_dt",
+        "device_id",
+        "exe",
+        "argv",
+        "cdhash",
+        "signing_id",
+        "team_id",
+        "cs_flags",
+        "is_signed",
+        "is_valid",
+        "is_adhoc",
+        "is_platform",
+        "pid",
+        "ppid",
+        "euid",
+        "username",
+        "decision",
+        "decision_reason",
+        "process_guid",
+        "parent_guid",
+    ],
+    "esf_binary_ledger": [
+        "cdhash",
+        "first_seen_ns",
+        "last_seen_ns",
+        "exec_count",
+        "first_exe",
+        "distinct_paths",
+        "signing_id",
+        "team_id",
+        "is_platform",
+        "is_adhoc",
+        "verdict",
+        "verdict_at_ns",
+        "verdict_note",
+    ],
+    "esf_stream_health": [
+        "id",
+        "timestamp_ns",
+        "device_id",
+        "dropped",
+        "enforce_mode",
+        "collector_lag_ns",
+        "note",
+    ],
+}

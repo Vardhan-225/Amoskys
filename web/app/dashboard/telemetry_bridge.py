@@ -622,6 +622,14 @@ def _sync_from_ops():
         from amoskys.storage._ts_schema import SCHEMA
 
         db.executescript(SCHEMA)
+        # The exec stream is created by the agent's migration chain, not by
+        # SCHEMA, so a cache built from SCHEMA alone has nowhere to put it —
+        # every shipped kernel row would be rejected as "target table missing"
+        # and the witness would go on being invisible on this tier for a
+        # completely different reason than before.
+        from amoskys.storage._ts_esf_forensics import ESF_FLEET_DDL
+
+        db.executescript(ESF_FLEET_DDL)
     except Exception:
         # Fallback: create minimal tables
         _create_minimal_schema(db)

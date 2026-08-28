@@ -444,6 +444,14 @@ def init_db():
                 db.execute(f"ALTER TABLE {m_table} ADD COLUMN {col} {ctype}")
             except sqlite3.OperationalError:
                 pass  # column already exists
+    # The kernel witness tables. Created from the shared DDL so this tier and
+    # the presentation cache hold the same shape as the agent that fills them.
+    if _ESF_FLEET_DDL:
+        try:
+            db.executescript(_ESF_FLEET_DDL)
+        except sqlite3.Error:
+            logger.warning("could not create ESF fleet tables", exc_info=True)
+
     # Command queue table (MCP server → device agent)
     db.executescript(
         """
@@ -806,10 +814,25 @@ def receive_telemetry():
             placeholders = ", ".join(["?"] * len(cols))
             col_names = ", ".join(cols)
 
-            db.execute(
-                f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})",
-                vals,
-            )
+            if table in _UPSERT_TABLES:
+                # A snapshot table is a running summary, not an event stream:
+                # the same cdhash arrives every cycle with a higher exec_count,
+                # a newer last_seen, and possibly an operator verdict written
+                # days after the row was first sent. Plain INSERT would fail the
+                # primary key on every cycle after the first and the ledger
+                # would freeze at whatever it looked like on day one.
+                key = _UPSERT_TABLES[table]
+                updates = ", ".join(f"{c}=excluded.{c}" for c in cols if c != key)
+                db.execute(
+                    f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) "
+                    f"ON CONFLICT({key}) DO UPDATE SET {updates}",
+                    vals,
+                )
+            else:
+                db.execute(
+                    f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})",
+                    vals,
+                )
             stored += 1
         except Exception as e:
             # A clean log must mean healthy, not blind: surface per-event
@@ -856,6 +879,18 @@ def delete_device(device_id):
     db.commit()
     return jsonify({"status": "deleted"})
 
+
+# Tables shipped as a full snapshot rather than an append-only stream, and the
+# key they reconcile on. See shipper._ship_snapshot.
+try:
+    from amoskys.storage._ts_esf_forensics import (
+        ESF_FLEET_COLUMNS as _ESF_FLEET_COLUMNS,
+        ESF_FLEET_DDL as _ESF_FLEET_DDL,
+    )
+except Exception:  # pragma: no cover - the fleet API must start regardless
+    _ESF_FLEET_COLUMNS, _ESF_FLEET_DDL = {}, ""
+
+_UPSERT_TABLES = {"esf_binary_ledger": "cdhash"}
 
 # Allowed columns per table (whitelist for INSERT safety)
 ALLOWED_TABLES = {
@@ -1057,6 +1092,15 @@ ALLOWED_TABLES = {
         "risk_score",
         "collection_agent",
         "received_at",
+    },
+    # ── The kernel witness ───────────────────────────────────────────────
+    # Whitelists generated from the shared fleet column map so the ingest, the
+    # shipper and the DDL cannot drift apart — a column present in one and
+    # absent from another is dropped silently, which is how a sync starts
+    # losing a field nobody notices.
+    **{
+        t: set(cols) | {"source_id", "device_id", "org_id", "received_at"}
+        for t, cols in _ESF_FLEET_COLUMNS.items()
     },
 }
 
@@ -1737,9 +1781,18 @@ def bulk_export():
         "audit_events",
         "fim_events",
         "peripheral_events",
+        # The kernel witness. Time-windowed like the rest, so the presentation
+        # tier gets the same six hours of exec history it gets of everything
+        # else — without this the witness strip, the coverage row and the
+        # first-run binaries have nothing to read and the web tier goes on
+        # honestly reporting that the kernel is not reaching it.
+        "esf_exec_events",
+        "esf_stream_health",
     ]
-    # Tables without standard timestamp_ns
-    other_tables = ["observation_events"]
+    # Tables without standard timestamp_ns. The binary ledger is keyed on
+    # cdhash and dated by first_seen_ns, so a timestamp_ns window would export
+    # nothing; it is small enough to send whole.
+    other_tables = ["observation_events", "esf_binary_ledger"]
 
     result = {}
 
@@ -1768,6 +1821,12 @@ def bulk_export():
         except Exception:
             result[table] = []
 
+    # Not every table has an autoincrement id to order by. esf_binary_ledger is
+    # keyed on cdhash, so "ORDER BY id DESC" raises — and the bare handler below
+    # turned that into an empty export, which reads downstream as "this machine
+    # has never run a novel binary". Order each table by a column it actually
+    # has.
+    _ORDER_BY = {"esf_binary_ledger": "first_seen_ns"}
     for table in other_tables:
         try:
             query = f"SELECT * FROM {table}"
@@ -1776,10 +1835,13 @@ def bulk_export():
                 query += " WHERE device_id = ?"
                 params.append(device_id)
             other_limit = min(5000, user_limit) if user_limit is not None else 5000
-            query += f" ORDER BY id DESC LIMIT {other_limit}"
+            query += f" ORDER BY {_ORDER_BY.get(table, 'id')} DESC LIMIT {other_limit}"
             rows = db.execute(query, params).fetchall()
             result[table] = [dict(r) for r in rows]
-        except Exception:
+        except Exception as e:
+            # An export that FAILED and an export with nothing to send are the
+            # same empty list to the reader. Say which this was.
+            logger.warning("bulk-export: %s could not be read: %s", table, e)
             result[table] = []
 
     # Device registry — sanitized column list only. NEVER export
@@ -1871,6 +1933,11 @@ def _run_maintenance():
     # cleanup, but row caps protect against bursts. Limits are per-table:
     _TABLE_CAPS = {
         "flow_events": 500_000,  # ~5 days at 4K/hour
+        # Measured on a live Mac: ~72K execs/day at ~354 bytes. 500K is about a
+        # week, and the forensic value of an exec decays fast — the cdhash
+        # ledger, which is what "has this ever run here" reads, is never pruned.
+        "esf_exec_events": 500_000,
+        "esf_stream_health": 100_000,
         "dns_events": 500_000,  # ~2 days at 12K/hour
         "observation_events": 200_000,
         "process_events": 200_000,
