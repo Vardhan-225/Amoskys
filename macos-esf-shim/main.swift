@@ -382,6 +382,32 @@ func handleNotify(_ msg: UnsafePointer<es_message_t>) {
         return
     }
 
+    // Lifecycle events carry a different subject: FORK's interesting party is
+    // the CHILD, not the process that called it, so the generic
+    // "m.process" fields below would describe the wrong thing entirely.
+    if m.event_type == ES_EVENT_TYPE_NOTIFY_FORK {
+        let child = m.event.fork.child
+        let ctok = child.pointee.audit_token
+        let cpath = tok(child.pointee.executable.pointee.path)
+        emit("{\"v\":1,\"t\":\(ts),\"type\":\"fork\","
+            + "\"pid\":\(Int32(bitPattern: ctok.val.5)),"
+            + "\"ppid\":\(pid),\"uid\":\(ctok.val.1),"
+            + "\"exe\":\"\(jsonEscape(cpath))\","
+            + "\"parent_exe\":\"\(jsonEscape(path))\","
+            + "\"cdhash\":\"\(cdhashHex(child))\","
+            + "\"platform\":\(child.pointee.is_platform_binary)}")
+        return
+    }
+    if m.event_type == ES_EVENT_TYPE_NOTIFY_EXIT {
+        emit("{\"v\":1,\"t\":\(ts),\"type\":\"exit\","
+            + "\"pid\":\(pid),\"uid\":\(euid),"
+            + "\"exe\":\"\(jsonEscape(path))\","
+            + "\"cdhash\":\"\(cdhash)\","
+            + "\"status\":\(m.event.exit.stat),"
+            + "\"platform\":\(proc.pointee.is_platform_binary)}")
+        return
+    }
+
     var kind = ""
     var detail = ""
 
@@ -628,6 +654,27 @@ func run() {
         // from HERE only; AUTH emits nothing, so there is exactly one record
         // per execution rather than two for the first and none thereafter.
         ES_EVENT_TYPE_NOTIFY_EXEC,
+        // PHASE 3, and it was not scheduled — the conservation law found it.
+        //
+        // Checking every running process against a witnessed origin left 31
+        // unexplained, and they resolved to a precise pattern: polling
+        // reported TWO consecutive pids three milliseconds apart where ESF
+        // reported one.
+        //
+        //     ESF     witnessed pid 62196 at 11:05:51.966
+        //     polling saw       pid 62196 AND pid 62197
+        //
+        // That is fork(). The child is a real process with its own pid,
+        // visible to any sampler, and it never execs — so an exec-only stream
+        // cannot see it, and no amount of reading the code would have shown
+        // that. It took comparing the two sensors against each other.
+        //
+        // FORK and EXIT complete the lifecycle: born, became something else,
+        // ended. Without them "every process has a witnessed origin" is only
+        // true of processes that exec, which is a narrower claim than it
+        // sounds and quietly excludes the forked child an attacker can inherit.
+        ES_EVENT_TYPE_NOTIFY_FORK,
+        ES_EVENT_TYPE_NOTIFY_EXIT,
         ES_EVENT_TYPE_NOTIFY_SETUID,        // privilege change, at the instant
         ES_EVENT_TYPE_NOTIFY_SETGID,
         ES_EVENT_TYPE_NOTIFY_KEXTLOAD,      // kernel extension load

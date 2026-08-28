@@ -120,6 +120,11 @@ class ESFStreamCollector:
     # throughout.
     KERNEL_EVENT_KINDS = frozenset({
         "setuid", "setgid", "kextload", "cs_invalidated", "mount", "unmount",
+        # Lifecycle. A forked child is a real process with its own pid that
+        # never execs — visible to any sampler, invisible to an exec-only
+        # stream. Without these, "every process has a witnessed origin" is only
+        # true of processes that exec, which quietly excludes the forked child.
+        "fork", "exit",
     })
 
     def is_kernel_event(self, rec: Dict[str, Any]) -> bool:

@@ -247,11 +247,25 @@ class HybridCoverageMixin:
             # create_time is near T. The tolerance absorbs the gap between the
             # kernel stamping the exec and psutil reading create_time, without
             # being wide enough to span a realistic pid recycle.
+            # A FORK IS AN ORIGIN TOO. The conservation law asks whether a
+            # process has a witnessed birth, and fork() is a birth — the child
+            # exists, holds a pid, and may never exec at all. Counting only
+            # execs made every forked child a violation, which is how the 31
+            # unexplained processes were found in the first place: polling saw
+            # pid 62196 AND 62197 three milliseconds apart where ESF, watching
+            # only execs, saw one.
             witnessed_execs = {}
             for pid, ts in db.execute(
                 "SELECT pid, timestamp_ns FROM esf_exec_events WHERE timestamp_ns >= ?",
                 (attach,)):
                 witnessed_execs.setdefault(pid, []).append(ts)
+            try:
+                for pid, ts in db.execute(
+                    "SELECT pid, timestamp_ns FROM esf_kernel_events "
+                    "WHERE kind = 'fork' AND timestamp_ns >= ?", (attach,)):
+                    witnessed_execs.setdefault(pid, []).append(ts)
+            except Exception:
+                pass   # older schema without kernel events
             candidates = [dict(r) for r in db.execute(
                 "SELECT DISTINCT pid, exe, create_time FROM process_events "
                 "WHERE collection_agent='macos_process' AND timestamp_ns >= ? "
