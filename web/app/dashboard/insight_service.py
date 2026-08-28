@@ -458,6 +458,16 @@ def compute_verdict(events: list[dict]) -> dict:
     """
     live = [e for e in events if not e["expected_reason"]]
     suppressed = [e for e in events if e["expected_reason"]]
+    # WHY each one was cleared, counted. The verdict reports "N cleared
+    # automatically" and the queue only ever showed suppression that happened to
+    # form a correlated story — so on a machine where none did, the page said
+    # "3,050 cleared automatically" and "Nothing was auto-recognised yet" in the
+    # same screen. A suppression you cannot audit is a blind spot; this is the
+    # audit trail.
+    suppression_breakdown = [
+        {"reason": reason, "count": n}
+        for reason, n in Counter(e["expected_reason"] for e in suppressed).most_common()
+    ]
 
     # Only genuinely-flagged, non-suppressed events are candidates.
     candidates = [
@@ -541,6 +551,7 @@ def compute_verdict(events: list[dict]) -> dict:
         "tone": band,
         "live_count": len(live),
         "suppressed_count": len(suppressed),
+        "suppression_breakdown": suppression_breakdown,
         "requires_investigation": requires,
         "top_factors": top_factors,
         "sub_line": (

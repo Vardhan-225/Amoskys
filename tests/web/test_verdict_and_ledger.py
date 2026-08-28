@@ -533,3 +533,45 @@ def test_not_me_outranks_the_engine_on_first_run_items(monkeypatch):
     assert item["band"] == "amber"
     assert item["recognised"] is False
     assert "not yours" in item["verdict_label"]
+
+
+def test_cleared_events_are_accounted_for_even_without_a_story(monkeypatch):
+    """Live on production: the verdict said "3050 cleared automatically" while
+    the Recognised section said "Nothing was auto-recognised yet".
+
+    recognised.count counts correlated STORIES; the verdict counts EVENTS. On a
+    machine where no story formed, three thousand suppressed events vanished
+    from the UI while being announced in the same screen.
+    """
+    monkeypatch.setattr(
+        ledger.verdict_mod,
+        "fleet_verdict",
+        lambda **k: {
+            "band": "amber",
+            "counts": {"live": 5, "suppressed": 3050, "requires_investigation": 0},
+            "suppression_breakdown": [
+                {
+                    "reason": "macOS system process (expected OS activity)",
+                    "count": 2000,
+                },
+                {
+                    "reason": "AMOSKYS itself (its `log` collection probe)",
+                    "count": 1050,
+                },
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        ledger.insight_service, "get_model", lambda **k: {"incidents": []}
+    )
+    monkeypatch.setattr(ledger.verdict_store, "get_all", lambda scope: {})
+    monkeypatch.setattr(ledger.verdict_store, "summary", lambda scope: {})
+    monkeypatch.setattr(ledger, "_kernel_items", lambda v: [])
+
+    book = ledger.build()
+    items = book["recognised"]["items"]
+    assert items, "3050 cleared events must not vanish because no story formed"
+    assert {i["count"] for i in items} == {2000, 1050}
+    assert all("cleared" in i["why"] for i in items)
+    # And the rows must not claim to be a separate set that sums to the total.
+    assert any("do not add up" in i["why"] for i in items)

@@ -346,6 +346,53 @@ def build(
 
     suppressed_events = canonical.get("counts", {}).get("suppressed", 0)
 
+    # Suppression that formed no correlated story still happened, and the user
+    # was told about it in the verdict ("N cleared automatically") while the
+    # Recognised section said "Nothing was auto-recognised yet". Group whatever
+    # is left by the REASON the engine gave, so every cleared event is
+    # accounted for and inspectable rather than only the ones that happened to
+    # correlate.
+    accounted = sum(i["count"] for i in recognised)
+    breakdown = canonical.get("suppression_breakdown") or []
+    if breakdown and suppressed_events > accounted:
+        for entry in breakdown:
+            reason = entry.get("reason") or "recognised activity"
+            key = "suppressed:" + hashlib.sha256(reason.encode()).hexdigest()[:12]
+            decided = user_verdicts.get(key)
+            recognised.append(
+                {
+                    "key": key,
+                    "title": f"{entry.get('count', 0)} events — {reason}",
+                    "why": (
+                        f"AMOSKYS cleared {entry.get('count', 0)} events for this "
+                        f"reason: {reason}. They are listed here rather than hidden "
+                        "because a suppression you cannot audit is indistinguishable "
+                        "from a blind spot. If this reason is wrong, say so and it "
+                        "stops being applied. A few of these may also appear above "
+                        "inside a correlated story — this is a breakdown by reason, "
+                        "not a separate set of events, so the rows here do not add "
+                        "up to the total."
+                    ),
+                    "band": "calm",
+                    "verdict_label": "Cleared automatically",
+                    "factors": [reason, "auto-suppressed", "not shown as a finding"],
+                    "mitre": [],
+                    "count": entry.get("count", 0),
+                    "evidence_count": entry.get("count", 0),
+                    "event_ids": [],
+                    "row_ids": [],
+                    "has_evidence": False,
+                    "device_ids": [],
+                    "categories": [],
+                    "first": None,
+                    "last": None,
+                    "recognised": True,
+                    "user_verdict": decided,
+                    "source": "suppression",
+                }
+            )
+        recognised.sort(key=lambda i: -i["count"])
+
     return {
         "verdict": canonical,
         "needs_you": needs_you,

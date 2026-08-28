@@ -184,6 +184,7 @@ def _shape(raw: dict, coverage: dict, subject: str) -> dict:
             "requires_investigation": raw.get("requires_investigation", 0),
         },
         "top_factors": raw.get("top_factors") or [],
+        "suppression_breakdown": raw.get("suppression_breakdown") or [],
         "coverage": coverage,
     }
 
