@@ -105,6 +105,7 @@
 .lg-sensor-name { color: var(--text-primary); font-weight: 600; }
 .lg-sensor-blurb { color: var(--text-muted); }
 .lg-sensor-age { color: var(--text-secondary); font-family: var(--font-mono, monospace); font-size: 0.74rem; white-space: nowrap; }
+.lg-span-short { color: #ffb038; font-weight: 600; }
 
 /* ── Section headings ───────────────────────────────────────────────── */
 .lg-sec-head { display: flex; align-items: baseline; gap: 0.7rem; margin: 2rem 0 0.85rem; flex-wrap: wrap; }
@@ -578,13 +579,22 @@
                 : c.reporting === 0 ? 'none' : 'partial';
             btn.dataset.cov = level;
             btn.innerHTML = '<b>' + esc(c.headline) + '</b> — ' + esc(c.detail) +
+                (c.window_note ? ' <b>' + esc(c.window_note) + '</b>' : '') +
                 ' · show me every sensor';
             var blind = c.blindness || {};
             box.innerHTML = (c.sensors || []).map(function (s) {
+                // Freshness and span are different failures, so both are shown:
+                // a sensor can be up to the minute and still hold two hours of
+                // history, and a "last 24 hours" figure built on it overstates
+                // what it was computed from.
+                var span = (s.span_hours === null || s.span_hours === undefined)
+                    ? ''
+                    : ' &middot; holds ' + esc(s.span_hours) + 'h' +
+                      (s.covers_24h ? '' : ' <span class="lg-span-short">of 24h</span>');
                 return '<div class="lg-sensor">' +
                     '<span class="lg-sensor-status ' + esc(s.status) + '">' + esc(s.status) + '</span>' +
                     '<span class="lg-sensor-name">' + esc(s.label) + '</span>' +
-                    '<span class="lg-sensor-blurb">' + esc(s.blurb) + '</span>' +
+                    '<span class="lg-sensor-blurb">' + esc(s.blurb) + span + '</span>' +
                     '<span class="lg-sensor-age">' + esc(s.age_human) + '</span>' +
                 '</div>';
             }).join('') +

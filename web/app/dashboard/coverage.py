@@ -65,6 +65,37 @@ def _age_human(seconds: float | None) -> str:
     return f"{seconds // 86400}d ago"
 
 
+def _span_hours(
+    db: sqlite3.Connection, table: str, scope: str, params: tuple
+) -> tuple[float | None, int]:
+    """How much time the cached rows actually cover, and how many there are.
+
+    This is the difference between a window a page ASKS for and a window it can
+    ANSWER. Measured on a real cache: flow_events held 23,450 rows spanning 2.5
+    hours while every network figure on the dashboard was labelled "last 24
+    hours" — an 89% shortfall, stated nowhere. On the production tier the same
+    gap reads 29,721 cached rows against 137,095 on the fleet backend for the
+    same window.
+
+    A count is not coverage. Twenty thousand rows sounds like plenty until you
+    know they are all from one afternoon.
+    """
+    try:
+        row = db.execute(
+            f"SELECT COUNT(*), MIN(timestamp_ns), MAX(timestamp_ns) FROM {table}"
+            + scope,
+            params,
+        ).fetchone()
+    except sqlite3.Error:
+        return None, 0
+    if not row or not row[0] or row[1] is None or row[2] is None:
+        return None, (row[0] if row else 0) or 0
+    try:
+        return max(0.0, (float(row[2]) - float(row[1])) / 1e9 / 3600.0), int(row[0])
+    except (TypeError, ValueError):
+        return None, int(row[0] or 0)
+
+
 def _latest_epoch(db: sqlite3.Connection, table: str, scope: str, params: tuple):
     """Newest row in a table, as an epoch, whichever time column it carries."""
     try:
@@ -181,6 +212,7 @@ def report(
                     status = "stale"
                 else:
                     status = "dark"
+            span, rows = _span_hours(db, table, scope, params)
             sensors.append(
                 {
                     "table": table,
@@ -189,6 +221,11 @@ def report(
                     "status": status,
                     "age_seconds": age,
                     "age_human": age_human,
+                    "rows": rows,
+                    "span_hours": None if span is None else round(span, 1),
+                    # The honest answer to "can this sensor answer a 24h
+                    # question?" — asked here so no page has to guess.
+                    "covers_24h": bool(span is not None and span >= 23.0),
                 }
             )
         blindness = _blindness(db, device_id)
@@ -248,6 +285,24 @@ def report(
         headline = f"{reporting} of {len(sensors)} sensors reporting"
         detail = f"Not current: {worst}."
 
+    # A windowed page asks for 24h. Say which sensors can actually answer that.
+    # Any sensor that HAS data can be asked a windowed question, whether or not
+    # its newest row is recent. Freshness and span are separate failures: a
+    # sensor can be up to the minute and still hold only two hours of history,
+    # and a page that reports the first without the second still overstates
+    # what its "last 24 hours" figure was computed from.
+    windowed = [s for s in sensors if s.get("span_hours") is not None]
+    short = [s for s in windowed if not s["covers_24h"]]
+    window_note = None
+    if short:
+        worst = min(short, key=lambda s: s["span_hours"])
+        window_note = (
+            f"{len(short)} of {len(windowed)} reporting sensors hold less than a "
+            f"day of data — {worst['label']} covers only {worst['span_hours']}h. "
+            'Figures on this dashboard labelled "last 24 hours" are answered '
+            "from what reached this server, which is less than the fleet holds."
+        )
+
     return {
         "available": True,
         "headline": headline,
@@ -256,4 +311,6 @@ def report(
         "expected": len(sensors),
         "sensors": sensors,
         "blindness": blindness,
+        "window_note": window_note,
+        "window_short_count": len(short),
     }

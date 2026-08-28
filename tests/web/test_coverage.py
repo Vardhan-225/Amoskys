@@ -185,3 +185,29 @@ def test_a_missing_blindness_ledger_is_not_reported_as_healthy(store):
     report = coverage.report()
     assert report["blindness"]["status"] == "unknown"
     assert "not evidence" in report["blindness"]["message"]
+
+
+# ── A count is not coverage ──────────────────────────────────────────────────
+def test_each_sensor_reports_the_window_it_can_actually_answer(store):
+    """Measured on a real cache: flow_events held 23,450 rows spanning 2.5
+    hours while every network figure was labelled "last 24 hours"."""
+    report = coverage.report()
+    net = _by_label(report)["Network"]
+    assert net["rows"] == 1
+    assert net["span_hours"] is not None
+    assert net["covers_24h"] is False
+
+
+def test_a_short_window_is_stated_not_left_to_be_inferred(store):
+    report = coverage.report()
+    assert report["window_short_count"] >= 1
+    assert "less than a day of data" in report["window_note"]
+    assert "last 24 hours" in report["window_note"]
+
+
+def test_a_sensor_with_no_rows_makes_no_window_claim(store):
+    """security_events exists but is empty — it must not report a span of 0h,
+    which would read as "holds no history" rather than "has nothing yet"."""
+    det = _by_label(coverage.report())["Detections"]
+    assert det["span_hours"] is None
+    assert det["rows"] == 0
