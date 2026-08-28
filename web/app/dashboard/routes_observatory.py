@@ -626,6 +626,23 @@ def _collect_blindness_health(store=None, hours=24, device_id=None):
         reverse=True,
     )[:50]
     summary = summarize_blindness_events(events)
+
+    # summarize_blindness_events([]) returns "healthy — No active blindness
+    # events" for an EMPTY list, and the list is empty both when nothing is
+    # degraded and when no ledger could be read at all. This surface reads
+    # several stores; if none of them could answer, the green verdict below is
+    # produced by the absence of a source rather than the absence of a problem —
+    # the same conflation already fixed on the coverage panel, which reads a
+    # different ledger and therefore did not fix this one.
+    if not events and not _blindness_ledger_readable(store):
+        summary = {
+            "status": "unknown",
+            "message": "No blindness ledger could be read, so gaps in coverage "
+            "cannot be ruled out. This is not a clean bill.",
+            "active_count": 0,
+            "events": [],
+            "by_sensor": {},
+        }
     summary.update(
         {
             "checked_at": time.time(),
@@ -634,6 +651,24 @@ def _collect_blindness_health(store=None, hours=24, device_id=None):
         }
     )
     return summary
+
+
+def _blindness_ledger_readable(store) -> bool:
+    """Did ANY ledger actually answer? Empty and absent are different."""
+    db = getattr(store, "db", None) if store is not None else None
+    if db is None:
+        return False
+    try:
+        from amoskys.observability.blindness import BLINDNESS_TABLE
+
+        return bool(
+            db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (BLINDNESS_TABLE,),
+            ).fetchone()
+        )
+    except Exception:
+        return False
 
 
 def _flatten_incident_timeline_entries(entries):

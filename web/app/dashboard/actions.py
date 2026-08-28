@@ -378,22 +378,16 @@ def dispatch(
         "ttl": 900,
     }
     try:
-        resp = requests.post(
+        resp = _ops_session().post(
             url,
             json=body,
             headers={"Authorization": f"Bearer {_operator_key()}"},
             timeout=10,
-            verify=_verify(),
         )
     except requests.RequestException as exc:
         logger.warning("action dispatch failed: %s", exc)
-        return (
-            {
-                "error": "ops_unreachable",
-                "detail": "The fleet backend did not answer, so nothing was queued.",
-            },
-            502,
-        )
+        kind, detail = _describe_request_error(exc)
+        return ({"error": kind, "detail": detail}, 502)
     try:
         data = resp.json()
     except ValueError:
@@ -410,12 +404,11 @@ def ledger(limit: int = 100, device_id: str | None = None) -> tuple[dict, int]:
     if device_id:
         params["device_id"] = device_id
     try:
-        resp = requests.get(
+        resp = _ops_session().get(
             f"{_ops_base()}/api/v1/commands",
             params=params,
             headers={"Authorization": f"Bearer {_operator_key()}"},
             timeout=10,
-            verify=_verify(),
         )
         return resp.json(), resp.status_code
     except (requests.RequestException, ValueError):
@@ -434,11 +427,10 @@ def cancel(command_id: str) -> tuple[dict, int]:
     if not state["available"]:
         return {"error": "response_disabled", "detail": state["reason"]}, 503
     try:
-        resp = requests.post(
+        resp = _ops_session().post(
             f"{_ops_base()}/api/v1/commands/{command_id}/cancel",
             headers={"Authorization": f"Bearer {_operator_key()}"},
             timeout=10,
-            verify=_verify(),
         )
         return resp.json(), resp.status_code
     except (requests.RequestException, ValueError):
@@ -456,19 +448,91 @@ _DEFAULT_OPS_CA = _REPO_ROOT / "deploy" / "certs" / "ops-ca.pem"
 
 
 def _ops_ca() -> str | None:
-    ca = os.getenv("AMOSKYS_OPS_CA") or str(_DEFAULT_OPS_CA)
-    return ca if os.path.exists(ca) else None
+    """The pinned ops CA.
 
-
-def _verify():
-    """The pinned CA, or refuse — never a silent fallback to unverified TLS.
-
-    Callers must not reach this without availability() having passed, which
-    already requires the CA. Returning True here rather than False means that
-    if one ever does, requests falls back to the system trust store instead of
-    turning off verification entirely.
+    Reads AMOSKYS_CA_BUNDLE first — that is the name shipper.py and
+    telemetry_bridge.py already use, and an operator who sets it expects every
+    ops caller to honour it. AMOSKYS_OPS_CA is kept as an alias so an existing
+    deployment that set the wrong one does not silently lose its pin.
     """
-    return _ops_ca() or True
+    for env in ("AMOSKYS_CA_BUNDLE", "AMOSKYS_OPS_CA"):
+        value = (os.getenv(env) or "").strip()
+        if value:
+            if os.path.isfile(value):
+                return value
+            # STRICTER THAN shipper.py ON PURPOSE. The shipper falls back to the
+            # packaged CA so a missing file never stops telemetry flowing —
+            # correct there, because the cost of stopping is blindness. Here the
+            # cost of continuing is a request that can kill a process or cut a
+            # machine off the network, sent to a peer verified against a CA the
+            # operator did not choose. An explicitly configured path that is not
+            # there is a configuration error, and this surface refuses.
+            logger.warning(
+                "%s set to %s but no such file — response actions disabled",
+                env,
+                value,
+            )
+            return None
+    packaged = str(_DEFAULT_OPS_CA)
+    return packaged if os.path.exists(packaged) else None
+
+
+def _ops_session() -> requests.Session:
+    """A session pinned the way every other ops caller in this repo pins.
+
+    Passing ``verify=<ca path>`` to requests performs full RFC 6125 hostname
+    matching. The ops certificate is self-signed and carries NO subjectAltName,
+    and the ops URL is a bare IP — so that check cannot succeed, and every
+    response action would have failed TLS before reaching the server. The
+    failure then surfaced to the operator as "the fleet backend did not
+    answer", which is a different and much less actionable statement than "this
+    server could not verify the backend's certificate".
+
+    shipper.py solved this already: require the chain to validate against the
+    pinned CA (CERT_REQUIRED — full MITM protection) and suppress only the
+    SAN/hostname match, which is the single check the missing SAN breaks. This
+    reuses that adapter rather than reimplementing it.
+    """
+    session = requests.Session()
+    ca = _ops_ca()
+    if ca:
+        try:
+            from amoskys.shipper import _PinnedCAAdapter
+
+            session.mount("https://", _PinnedCAAdapter(ca))
+        except Exception:  # pragma: no cover - defensive
+            logger.warning("pinned CA adapter unavailable", exc_info=True)
+            session.verify = ca
+    else:
+        # Unreachable via availability(), which refuses without a CA. Never
+        # False: an accidental caller gets the system trust store, not no TLS.
+        session.verify = True
+    return session
+
+
+def _describe_request_error(exc: Exception) -> tuple[str, str]:
+    """Name the failure the operator actually has.
+
+    A certificate that will not verify and a server that is down need different
+    things done about them, and reporting the first as the second sends someone
+    to check connectivity that was never the problem.
+    """
+    if isinstance(exc, requests.exceptions.SSLError):
+        return (
+            "ops_tls_failed",
+            "This server could not verify the fleet backend's TLS certificate, "
+            "so nothing was sent. Check the pinned CA (AMOSKYS_CA_BUNDLE) — the "
+            "backend itself may be perfectly healthy.",
+        )
+    if isinstance(exc, requests.exceptions.Timeout):
+        return (
+            "ops_timeout",
+            "The fleet backend did not respond in time, so nothing was queued.",
+        )
+    return (
+        "ops_unreachable",
+        "The fleet backend did not answer, so nothing was queued.",
+    )
 
 
 # ── Fleet membership ─────────────────────────────────────────────────────────
@@ -486,12 +550,11 @@ def retire_device(device_id: str, reason: str, requested_by: str) -> tuple[dict,
     if not reason.strip():
         return {"error": "reason_required", "detail": "Say why — it is stored."}, 400
     try:
-        resp = requests.post(
+        resp = _ops_session().post(
             f"{_ops_base()}/api/v1/devices/{device_id}/retire",
             json={"reason": reason.strip()[:500], "requested_by": requested_by},
             headers={"Authorization": f"Bearer {_operator_key()}"},
             timeout=10,
-            verify=_verify(),
         )
         return resp.json(), resp.status_code
     except (requests.RequestException, ValueError) as exc:
@@ -511,11 +574,10 @@ def unretire_device(device_id: str) -> tuple[dict, int]:
     if not state["available"]:
         return {"error": "response_disabled", "detail": state["reason"]}, 503
     try:
-        resp = requests.post(
+        resp = _ops_session().post(
             f"{_ops_base()}/api/v1/devices/{device_id}/unretire",
             headers={"Authorization": f"Bearer {_operator_key()}"},
             timeout=10,
-            verify=_verify(),
         )
         return resp.json(), resp.status_code
     except (requests.RequestException, ValueError):

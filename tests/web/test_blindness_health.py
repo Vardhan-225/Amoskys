@@ -8,7 +8,10 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web"))
 
-from amoskys.observability.blindness import record_blindness_event
+from amoskys.observability.blindness import (
+    ensure_blindness_table,
+    record_blindness_event,
+)
 from amoskys.observability.esf_authorization import inspect_esf_authorization
 from app import create_app
 from app.dashboard import routes_observatory
@@ -90,9 +93,11 @@ def client(app):
     return app.test_client()
 
 
-def test_blindness_health_is_healthy_without_events(monkeypatch):
+def test_blindness_health_is_healthy_with_a_readable_empty_ledger(monkeypatch):
+    """An empty ledger that EXISTS is a real all-clear."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    ensure_blindness_table(conn)
     monkeypatch.setattr(routes_observatory, "_blindness_db_paths", lambda: [])
     monkeypatch.setattr(
         routes_observatory, "inspect_esf_authorization", lambda **_: None
@@ -103,6 +108,27 @@ def test_blindness_health_is_healthy_without_events(monkeypatch):
     assert health["status"] == "healthy"
     assert health["active_count"] == 0
     assert health["events"] == []
+
+
+def test_no_readable_ledger_is_unknown_not_healthy(monkeypatch):
+    """A store with no blindness table cannot report that nothing is degraded.
+
+    summarize_blindness_events([]) says "healthy — No active blindness events",
+    and the list is empty both when nothing is wrong and when there was no
+    ledger to ask. On the one surface whose job is reporting unseen gaps, that
+    green verdict was being produced by the absence of a source.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    monkeypatch.setattr(routes_observatory, "_blindness_db_paths", lambda: [])
+    monkeypatch.setattr(
+        routes_observatory, "inspect_esf_authorization", lambda **_: None
+    )
+
+    health = routes_observatory._collect_blindness_health(_Store(conn), 24, None)
+
+    assert health["status"] == "unknown"
+    assert "not a clean bill" in health["message"]
 
 
 def test_blindness_health_treats_unauthorized_sensor_as_blind(monkeypatch):

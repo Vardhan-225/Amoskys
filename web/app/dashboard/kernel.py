@@ -188,20 +188,35 @@ def stream_health(window_hours: int = 24) -> dict:
         # forever. A broad exception handler written to survive an old schema
         # ended up hiding a placement bug instead, which is the more common way
         # that kind of handler earns its keep in reverse.
-        try:
-            kernel_dropped = int(
-                db.execute(
-                    "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
-                    "WHERE timestamp_ns >= ?",
-                    (cutoff,),
-                ).fetchone()[0]
-                or 0
-            )
-        except sqlite3.OperationalError:
-            # Narrowed on purpose: OperationalError is "no such table", which
-            # is the only condition this fallback is for. Anything else is a
-            # bug and should surface rather than be absorbed.
-            kernel_dropped = 0
+        # Probe for the table before trusting a zero from it. A store at
+        # migration 015 without 016 has esf_exec_events but no esf_kernel_drops,
+        # so the query fails and any fallback value is a guess. Returning 0
+        # there made "this tier cannot answer" byte-identical to "the kernel
+        # dropped nothing" — and the second reading is the one that prints
+        # "this timeline is complete". None is the third state that keeps them
+        # apart, exactly as coverage.py::_blindness() does for its own ledger.
+        #
+        # OperationalError is also NOT only "no such table": a locked database
+        # or a corrupt page raises it too, and those must not be absorbed into
+        # a reassuring number either. The probe distinguishes them — absent
+        # table means unmeasured, anything else means the read genuinely broke.
+        kernel_dropped = None
+        has_drop_table = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='esf_kernel_drops'"
+        ).fetchone()
+        if has_drop_table:
+            try:
+                kernel_dropped = int(
+                    db.execute(
+                        "SELECT IFNULL(SUM(dropped), 0) FROM esf_kernel_drops "
+                        "WHERE timestamp_ns >= ?",
+                        (cutoff,),
+                    ).fetchone()[0]
+                    or 0
+                )
+            except sqlite3.OperationalError:
+                logger.warning("kernel drop read failed", exc_info=True)
+                kernel_dropped = None
     except sqlite3.Error:
         return absent
     finally:
@@ -235,6 +250,11 @@ def stream_health(window_hours: int = 24) -> dict:
             "dropped events — this timeline is complete."
         )
     elif watching and dropped:
+        # Note: this branch reports the USERSPACE drop. The kernel-side check
+        # below deliberately runs afterwards and can only ever add to the
+        # picture — an earlier version let a non-zero userspace count take this
+        # branch and then skipped the kernel check entirely, so whenever both
+        # were failing the operator was told about the recoverable half only.
         status = "gapped"
         headline = "Watching, but the record has holes"
         detail = (
@@ -270,7 +290,29 @@ def stream_health(window_hours: int = 24) -> dict:
     # assumed one. The first version compared to "watching"; this module says
     # "witnessing", so the branch never fired and kernel-side loss stayed
     # invisible in the verdict even once it was being counted correctly.
-    if kernel_dropped and status in ("witnessing", "watching"):
+    if kernel_dropped and status == "gapped" and dropped:
+        # Both halves failing. Say so, and keep them separate: they have
+        # opposite remedies (a bigger buffer vs a lighter subscription).
+        headline = "Watching, but events were lost on both sides"
+        detail = (
+            f"{dropped:,} events were dropped by the Sentinel's own buffer AND "
+            f"{kernel_dropped:,} were discarded inside the kernel before it saw "
+            "them. These need different fixes — a larger userspace queue for the "
+            "first, a lighter subscription for the second — and neither is "
+            "recoverable."
+        )
+    elif kernel_dropped is None and status in ("witnessing", "watching"):
+        # Watching, but we cannot say the record is whole. Not an alarm — an
+        # explicit gap in what this tier is able to report about itself.
+        status = "unverified"
+        headline = "Watching, but kernel-side loss cannot be checked here"
+        detail = (
+            "The Sentinel's own buffer reports no drops, but this store has no "
+            "kernel drop-accounting table, so events the kernel discarded before "
+            "the Sentinel saw them cannot be counted. Treat this timeline as "
+            "probably complete rather than known complete."
+        )
+    elif kernel_dropped and status in ("witnessing", "watching"):
         status = "gapped"
         headline = "Watching, but the kernel itself dropped events"
         detail = (
@@ -289,6 +331,7 @@ def stream_health(window_hours: int = 24) -> dict:
         "detail": detail,
         "events_24h": events,
         "dropped": int(dropped),
+        "kernel_dropped_measurable": kernel_dropped is not None,
         "kernel_dropped": kernel_dropped,
         "enforce_mode": enforce,
         "last_beat_age_seconds": beat_age,
@@ -307,6 +350,21 @@ def transitions(hours: int = 24, limit: int = 40) -> dict:
     invalidation from an hour ago matters more than a mount from a minute ago,
     and a feed sorted newest-first would bury it.
     """
+    unreadable = {
+        "present": False,
+        "count": 0,
+        "by_kind": {},
+        "events": [],
+        "headline": "Kernel state changes could not be read",
+        # A failed query is not a quiet machine, and it needs a different
+        # sentence: the one below sends the reader to check a subscription,
+        # which is the wrong thing to go and do when the table would not read.
+        "detail": (
+            "The transition table could not be queried on this tier, so state "
+            "changes cannot be ruled out. This is a gap in the record, not a "
+            "quiet period."
+        ),
+    }
     absent = {
         "present": False,
         "count": 0,
@@ -360,8 +418,18 @@ def transitions(hours: int = 24, limit: int = 40) -> dict:
                 (cutoff,),
             )
         }
-    except sqlite3.Error:
+    except sqlite3.OperationalError:
+        # "no such table" — this tier predates the transitions migration.
         return absent
+    except sqlite3.Error:
+        logger.warning("kernel transitions read failed", exc_info=True)
+        return unreadable
+    finally:
+        # Every other reader in this module closes in a finally; this one closed
+        # on no path at all, so each call leaked a SQLite handle. Under the
+        # ledger's 60s refresh that is slow descriptor exhaustion in a
+        # long-lived gunicorn worker.
+        db.close()
     if not rows and not by_kind:
         return absent
 
@@ -370,7 +438,12 @@ def transitions(hours: int = 24, limit: int = 40) -> dict:
     # thing in its own table, which is exactly backwards for the rarest event
     # the Sentinel can report.
     for r in rows:
-        r["trust"] = "platform" if r.get("is_platform") else "third-party"
+        # _trust() is this module's single vocabulary and it has an "unknown"
+        # for flags that could not be read. A local platform/third-party split
+        # invented a second vocabulary with no such state, so a transition whose
+        # signing flags were absent came out labelled "third-party" — an
+        # assertion about provenance made from missing data.
+        r["trust"] = _trust(r)
         if r.get("detail"):
             try:
                 r["detail"] = json.loads(r["detail"])

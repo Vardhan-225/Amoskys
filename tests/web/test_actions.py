@@ -201,11 +201,42 @@ def test_ops_ca_resolves_from_the_package_not_the_cwd(monkeypatch, tmp_path):
     assert actions._ops_ca() == str(actions._DEFAULT_OPS_CA)
 
 
-def test_verify_never_returns_false(monkeypatch, tmp_path):
-    """False disables TLS verification entirely. If the pin is unavailable the
-    worst acceptable outcome is the system trust store, not no verification."""
+def test_tls_verification_is_never_disabled(monkeypatch, tmp_path):
+    """verify=False disables TLS entirely. If the pin is unavailable the worst
+    acceptable outcome is the system trust store, never no verification.
+
+    The session is now built by _ops_session(); this asserts the same contract
+    against it.
+    """
     monkeypatch.setenv("AMOSKYS_OPS_CA", str(tmp_path / "absent.pem"))
-    assert actions._verify() is not False
+    session = actions._ops_session()
+    assert session.verify is not False
+
+
+def test_the_ops_session_pins_rather_than_hostname_matching(monkeypatch):
+    """The ops certificate is self-signed with NO subjectAltName and the ops URL
+    is a bare IP, so passing verify=<ca> to requests fails hostname matching and
+    every response action dies in TLS — surfacing to the operator as "the fleet
+    backend did not answer". The pinned adapter validates the chain and
+    suppresses only the SAN match.
+    """
+    ca = actions._ops_ca()
+    assert ca, "the packaged ops CA should resolve with no env override"
+    session = actions._ops_session()
+    adapter = session.get_adapter("https://18.223.110.15/")
+    assert type(adapter).__name__ == "_PinnedCAAdapter"
+
+
+def test_a_tls_failure_is_not_reported_as_an_unreachable_backend():
+    """They need different things done about them: one is a certificate, the
+    other is connectivity."""
+    import requests as _rq
+
+    kind, detail = actions._describe_request_error(_rq.exceptions.SSLError("bad cert"))
+    assert kind == "ops_tls_failed"
+    assert "certificate" in detail
+    kind, _ = actions._describe_request_error(_rq.exceptions.ConnectionError("down"))
+    assert kind == "ops_unreachable"
 
 
 def test_a_missing_pinned_ca_makes_the_surface_unavailable(monkeypatch, tmp_path):

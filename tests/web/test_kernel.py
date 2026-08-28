@@ -23,7 +23,7 @@ kernel = importlib.import_module("app.dashboard.kernel")
 NS = 1_000_000_000
 
 
-def _make_store(tmp_path, *, beats=(), execs=0, binaries=()):
+def _make_store(tmp_path, *, beats=(), execs=0, binaries=(), kernel_drops=None):
     path = tmp_path / "telemetry.db"
     db = sqlite3.connect(path)
     db.executescript(
@@ -45,6 +45,17 @@ def _make_store(tmp_path, *, beats=(), execs=0, binaries=()):
         """
     )
     now = time.time_ns()
+    # Migration 016 adds kernel-side drop accounting. `None` builds a store at
+    # 015 only — the state every existing store was in the moment 016 shipped.
+    if kernel_drops is not None:
+        db.execute(
+            "CREATE TABLE esf_kernel_drops (id INTEGER PRIMARY KEY, "
+            "timestamp_ns INTEGER, device_id TEXT, event_type TEXT, dropped INTEGER)"
+        )
+        db.execute(
+            "INSERT INTO esf_kernel_drops (timestamp_ns, dropped) VALUES (?,?)",
+            (now, kernel_drops),
+        )
     for i in range(execs):
         db.execute(
             "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash) VALUES (?,?,?)",
@@ -117,16 +128,49 @@ def test_installed_but_never_run_is_idle_not_clean(store):
     assert "needs root" in health["detail"]
 
 
-def test_a_live_heartbeat_with_no_drops_is_a_complete_timeline(store):
-    store(beats=[(10, 0, False)], execs=5)
+def test_a_complete_timeline_requires_kernel_accounting_to_confirm_it(store):
+    """ "Nothing was dropped" and "we cannot check whether anything was dropped"
+    are different claims, and only the first may say the record is complete."""
+    store(beats=[(10, 0, False)], execs=5, kernel_drops=0)
     health = kernel.stream_health()
     assert health["status"] == "witnessing"
     assert health["watching"] is True
     assert "complete" in health["detail"]
+    assert health["kernel_dropped_measurable"] is True
+
+
+def test_a_store_without_kernel_drop_accounting_will_not_claim_completeness(store):
+    """A store at migration 015 has esf_exec_events but no esf_kernel_drops.
+
+    Returning 0 there made "this tier cannot answer" byte-identical to "the
+    kernel dropped nothing" — and it is the second reading that prints "this
+    timeline is complete".
+    """
+    store(beats=[(10, 0, False)], execs=5)  # 015 only
+    health = kernel.stream_health()
+    assert health["watching"] is True
+    assert health["status"] == "unverified"
+    assert health["kernel_dropped_measurable"] is False
+    assert "cannot be counted" in health["detail"]
+    # It may say "probably complete"; it may never say the record IS complete.
+    assert "known complete" not in health["detail"].replace(
+        "probably complete rather than known complete", ""
+    )
+    assert "this timeline is complete" not in health["detail"]
+
+
+def test_kernel_side_loss_is_reported_even_when_userspace_also_dropped(store):
+    """Whenever both halves were failing, the operator was told about the
+    recoverable half only."""
+    store(beats=[(10, 7, False)], execs=5, kernel_drops=42)
+    health = kernel.stream_health()
+    assert health["status"] == "gapped"
+    assert "both sides" in health["headline"]
+    assert "7" in health["detail"] and "42" in health["detail"]
 
 
 def test_drops_are_reported_as_holes_in_the_record(store):
-    store(beats=[(10, 42, False)], execs=5)
+    store(beats=[(10, 42, False)], execs=5, kernel_drops=0)
     health = kernel.stream_health()
     assert health["status"] == "gapped"
     assert health["dropped"] == 42

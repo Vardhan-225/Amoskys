@@ -289,6 +289,19 @@ Four things had to change beyond moving the markup:
     // the message reports what actually landed rather than what was planned.
     var VERDICT_MAP = { expected: 'mine', suspicious: 'not_mine', threat: 'not_mine', dismiss: 'clear' };
 
+    // The store records two states, and the buttons offer four. "Suspicious"
+    // and "Threat" therefore produce an IDENTICAL record — a user who chooses
+    // between them is making a distinction the product then discards, silently.
+    // Until the store can hold the nuance, the confirmation says what was
+    // actually written, so nobody is left believing a severity was captured.
+    var RECORDED_AS = {
+        expected: 'recorded as: this is yours',
+        suspicious: 'recorded as: not yours',
+        threat: 'recorded as: not yours',
+        dismiss: 'cleared'
+    };
+    var COLLAPSES = { suspicious: true, threat: true };
+
     async function setV(id, k, el) {
         selV[id] = k;
         Array.prototype.forEach.call(el.parentNode.children, function (b) { b.classList.remove('sel'); });
@@ -315,12 +328,21 @@ Four things had to change beyond moving the markup:
             if (k === 'dismiss') {
                 feed.textContent = data.message || 'Cleared — this is back in the queue.';
                 feed.style.color = 'var(--text-muted)';
-            } else if (data.upstream === 'applied') {
-                feed.textContent = data.message + ' The detector was updated: ' + (data.upstream_detail || '');
-                feed.style.color = k === 'expected' ? 'var(--iq-calm)' : 'var(--iq-amber)';
             } else {
-                feed.textContent = data.message + ' ' + (data.upstream_detail || '');
-                feed.style.color = 'var(--text-muted)';
+                var recorded = RECORDED_AS[k] || '';
+                var nuance = COLLAPSES[k]
+                    ? ' Suspicious and Threat are both stored as "not yours" — the '
+                      + 'severity you picked is not kept yet.'
+                    : '';
+                if (data.upstream === 'applied') {
+                    feed.textContent = data.message + ' (' + recorded + ') The detector was updated: '
+                        + (data.upstream_detail || '') + nuance;
+                    feed.style.color = k === 'expected' ? 'var(--iq-calm)' : 'var(--iq-amber)';
+                } else {
+                    feed.textContent = data.message + ' (' + recorded + ') '
+                        + (data.upstream_detail || '') + nuance;
+                    feed.style.color = 'var(--text-muted)';
+                }
             }
         } catch (err) {
             feed.textContent = 'Did not save: ' + String(err);

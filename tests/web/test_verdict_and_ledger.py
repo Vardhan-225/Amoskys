@@ -519,3 +519,17 @@ def test_batch_verdict_writes_to_every_member(monkeypatch):
     assert status == "applied"
     assert written == [("a", "benign"), ("b", "benign"), ("c", "benign")]
     assert "3 binaries" in detail
+
+
+def test_not_me_outranks_the_engine_on_first_run_items(monkeypatch):
+    """Only MINE was honoured, so "Not me" left the item calm and still labelled
+    routine — the user told the product it was wrong and it kept its verdict."""
+    kernel = importlib.import_module("app.dashboard.kernel")
+    monkeypatch.setattr(kernel, "novel_binaries", lambda *a, **k: _novel_rows("signed"))
+    key = ledger._kernel_items({})[0]["key"]
+    item = ledger._kernel_items(
+        {key: {"verdict": verdict_store.NOT_MINE, "decided_at": 1.0}}
+    )[0]
+    assert item["band"] == "amber"
+    assert item["recognised"] is False
+    assert "not yours" in item["verdict_label"]

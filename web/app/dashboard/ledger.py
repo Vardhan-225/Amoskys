@@ -103,6 +103,17 @@ def _item_from_incident(inc: dict, user_verdicts: dict) -> dict:
 _UNVOUCHED = ("unsigned", "signature-invalid", "unknown")
 
 
+def _band_after_verdict(band: str, decided: dict | None) -> str:
+    """Apply a user's verdict over the engine's band, in both directions."""
+    if not decided:
+        return band
+    if decided["verdict"] == verdict_store.MINE:
+        return "calm"
+    # "Not me" must never leave an item calm: the person has just said this is
+    # not their software.
+    return "amber" if band == "calm" else band
+
+
 def _binary_name(row: dict) -> str:
     return (row.get("first_exe") or "an unnamed binary").rsplit("/", 1)[-1]
 
@@ -125,10 +136,17 @@ def _kernel_item(
         "key": key,
         "title": title,
         "why": why,
-        "band": (
-            "calm" if (decided and decided["verdict"] == verdict_store.MINE) else band
+        # A human's judgement outranks the engine in BOTH directions. Only MINE
+        # was honoured here, so "Not me" on a first-run item left it sitting in
+        # the calm band with its original wording — the user told the product it
+        # was wrong and the product kept its own verdict. That asymmetry is the
+        # thing the two buttons exist to remove.
+        "band": _band_after_verdict(band, decided),
+        "verdict_label": (
+            "You said this is not yours"
+            if (decided and decided["verdict"] == verdict_store.NOT_MINE)
+            else verdict_label
         ),
-        "verdict_label": verdict_label,
         "factors": factors,
         "mitre": [],
         "count": count,

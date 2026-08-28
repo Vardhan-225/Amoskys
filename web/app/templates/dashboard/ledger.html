@@ -532,6 +532,41 @@
         }
     }
 
+    // THREE states, because the ledger has three. Branching on active_count
+    // alone folded "the ledger could not be read" — which the server now
+    // reports as status:"unknown" with a message saying so — into the same
+    // green "clear · Nothing has reported itself degraded" as a genuinely
+    // quiet ledger. The panel whose entire job is to report unseen gaps was
+    // discarding the server's admission that it could not see, on the one
+    // surface built to prevent exactly that.
+    function blindnessRow(blind) {
+        blind = blind || {};
+        var unreadable = blind.status === 'unknown' || blind.status === 'unavailable';
+        if (unreadable) {
+            return '<div class="lg-sensor">' +
+                '<span class="lg-sensor-status missing">ledger</span>' +
+                '<span class="lg-sensor-name">Blindness events</span>' +
+                '<span class="lg-sensor-blurb">' +
+                    esc(blind.message ||
+                        'The blindness ledger could not be read on this tier — ' +
+                        'absence of recorded gaps is not evidence there were none.') +
+                '</span>' +
+                '<span class="lg-sensor-age">unreadable</span></div>';
+        }
+        if (blind.active_count) {
+            return '<div class="lg-sensor">' +
+                '<span class="lg-sensor-status dark">ledger</span>' +
+                '<span class="lg-sensor-name">Blindness events</span>' +
+                '<span class="lg-sensor-blurb">' + esc(blind.message || '') + '</span>' +
+                '<span class="lg-sensor-age">' + esc(blind.status || '') + '</span></div>';
+        }
+        return '<div class="lg-sensor">' +
+            '<span class="lg-sensor-status fresh">ledger</span>' +
+            '<span class="lg-sensor-name">Blindness events</span>' +
+            '<span class="lg-sensor-blurb">Nothing has reported itself degraded.</span>' +
+            '<span class="lg-sensor-age">clear</span></div>';
+    }
+
     async function loadCoverage() {
         const btn = document.getElementById('lg-cov-toggle');
         const box = document.getElementById('lg-cov-detail');
@@ -553,15 +588,7 @@
                     '<span class="lg-sensor-age">' + esc(s.age_human) + '</span>' +
                 '</div>';
             }).join('') +
-            (blind.active_count
-                ? '<div class="lg-sensor"><span class="lg-sensor-status dark">ledger</span>' +
-                  '<span class="lg-sensor-name">Blindness events</span>' +
-                  '<span class="lg-sensor-blurb">' + esc(blind.message || '') + '</span>' +
-                  '<span class="lg-sensor-age">' + esc(blind.status) + '</span></div>'
-                : '<div class="lg-sensor"><span class="lg-sensor-status fresh">ledger</span>' +
-                  '<span class="lg-sensor-name">Blindness events</span>' +
-                  '<span class="lg-sensor-blurb">Nothing has reported itself degraded.</span>' +
-                  '<span class="lg-sensor-age">clear</span></div>');
+            blindnessRow(blind);
         } catch (err) {
             btn.dataset.cov = 'none';
             btn.innerHTML = '<b>Coverage could not be read.</b> That is a gap, not an all-clear.';
