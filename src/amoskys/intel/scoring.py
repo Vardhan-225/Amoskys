@@ -1536,7 +1536,54 @@ class SequenceScorer:
 
     # Known attack sequences: each is a list of event_category prefixes
     # that form an attack progression. Ordered from initial access → impact.
+    # ── VOCABULARY MISMATCH, corrected ───────────────────────────────────
+    #
+    # These sequences matched NOTHING. Measured over 24h: the matcher expected
+    # 15 category names, the probes emitted 90, and the OVERLAP WAS ZERO. Not
+    # rare — impossible. SEQUENCE_KILL_CHAIN has fired 0 times in 17,265
+    # incidents, the entire lifetime of the database.
+    #
+    # The cause is two vocabularies that were never reconciled. The sequences
+    # speak in generic security nouns — "auth_failure", "process_exec",
+    # "exfiltration" — while every macOS probe emits a specific event name:
+    # "process_spawned", "macos_launchagent_new", "dns_beaconing_detected". Both
+    # halves were built correctly and never introduced to each other, which is
+    # why a real staged kill chain produced four loose probe hits and no chain.
+    #
+    # The originals are KEPT below, because a Linux or Windows agent may yet
+    # emit them and deleting a sequence is not the same as fixing it. The
+    # additions are grounded in categories this machine actually produces, with
+    # observed 7-day counts recorded so a future reader can tell a live term
+    # from an aspirational one.
+    #
+    # A test asserts the vocabularies overlap. That is the durable fix: this
+    # class of bug is invisible by construction — a matcher that never matches
+    # looks exactly like a machine with no attacks on it.
     ATTACK_SEQUENCES: List[List[str]] = [
+        # ── Chains in the vocabulary the probes actually speak ────────────
+        # Infostealer: arrive, run, read credentials, leave.
+        ["macos_download_new", "process_spawned", "tcc_permission_granted"],
+        ["message_to_download", "process_spawned", "new_external_connection"],
+        # Download -> execute -> persist. The shape the red-team chain had.
+        ["macos_download_new", "process_spawned", "macos_launchagent_new"],
+        ["quarantine_evasion_pattern", "process_spawned", "macos_launchagent_new"],
+        # Living-off-the-land into egress: lolbin_execution is 2,785/7d on its
+        # own and means nothing alone; followed by beaconing it is a chain.
+        ["lolbin_execution", "new_external_connection", "dns_beaconing_detected"],
+        ["lolbin_execution", "new_domain_first_seen", "connection_burst_detected"],
+        # Execution from a temp path into egress.
+        ["execution_from_temp", "process_spawned", "new_external_connection"],
+        # Credential access followed by egress — the infostealer signature
+        # whose middle step the retired file agent used to provide.
+        ["tcc_permission_granted", "credential_access_indirect",
+         "new_external_connection"],
+        # Persistence installed, then activated on a later boot.
+        ["macos_launchagent_new", "temporal_persistence_activation",
+         "new_external_connection"],
+        # Privilege change followed by persistence.
+        ["sudo_escalation", "process_spawned", "macos_launchagent_new"],
+
+        # ── Originals, retained for non-macOS agents ─────────────────────
         # Brute force → success → reconnaissance
         ["auth_failure", "auth_success", "process_exec"],
         # SUID plant → privilege escalation → persistence
