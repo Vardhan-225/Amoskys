@@ -547,6 +547,64 @@ class TemporalScorer:
 # ── Behavioral Scorer ─────────────────────────────────────────────────
 
 
+
+def _corroborating_witnesses(event: Dict[str, Any]) -> List[str]:
+    """Independent evidence that a finding is real, named so it can be audited.
+
+    THE GATE THIS FEEDS IS RIGHT; ITS DEFINITION WAS TOO NARROW. A probe like
+    full_kill_chain inflates its own composite, so "the composite is high"
+    cannot justify itself — that is circular, and the cap exists to stop it.
+    But corroboration was defined as exactly two things:
+
+        corroborated = bool(threat_intel_match) or foreign
+
+    An IOC hit, or a foreign IP. Nothing else counted. So a five-stage kill
+    chain — unsigned binary from Downloads, credential store read, LaunchAgent
+    persistence, outbound beacon, and the KERNEL ITSELF returning would_deny —
+    was capped at 0.40 because the destination was domestic and the feed had no
+    matching indicator. Measured on this machine: max risk_score ever produced
+    was 0.70, and 77% of all scored events sat in 0.30-0.50. There is no number
+    the system could emit that meant "act now".
+
+    The correct test is not "is there an IOC" but "did something OTHER THAN the
+    scoring probe independently agree". These qualify because none of them can
+    be influenced by the probe whose composite is being judged:
+
+      kernel_would_deny   The ESF Sentinel evaluated this exec against its own
+                          policy, at the kernel, before the process ran, and
+                          decided to block it. A different sensor with different
+                          physics reaching the same conclusion is the strongest
+                          corroboration available on this machine — and it was
+                          not consulted at all.
+      unsigned_at_exec    The kernel's view of the code signature AT EXEC TIME.
+                          Not a re-read of the file afterwards, which an
+                          attacker can change; the bytes the kernel authorized.
+      novel_binary        This cdhash has never run here before. A temporal
+                          fact from the ledger, independent of any probe.
+      threat_intel_match  Existing.
+      foreign_source      Existing.
+
+    Returned as a LIST rather than a bool so the reason appears in
+    score_factors. A cap lifted without a stated reason is how the next person
+    inherits an unexplainable threshold.
+    """
+    reasons: List[str] = []
+    if event.get("threat_intel_match"):
+        reasons.append("threat_intel_match")
+    country = str(event.get("geo_src_country") or "").upper()
+    if country and country not in _HOME_REGIONS:
+        reasons.append("foreign_source")
+    # ESF evidence, present only when the analyzer could attribute this event to
+    # a witnessed exec. Absent is NOT negative — it means unattributed.
+    if str(event.get("esf_decision") or "") in ("would_deny", "denied"):
+        reasons.append("kernel_would_deny")
+    if event.get("esf_untrusted"):
+        reasons.append("unsigned_at_exec")
+    if event.get("esf_novel_binary"):
+        reasons.append("novel_binary")
+    return reasons
+
+
 class BehavioralScorer:
     """Scores deviation from established baselines.
 
@@ -1250,8 +1308,22 @@ class ScoringEngine:
         if floor > 0.0:
             country = str(event.get("geo_src_country") or "").upper()
             foreign = bool(country) and country not in _HOME_REGIONS
-            corroborated = bool(event.get("threat_intel_match")) or foreign
+            witnesses = _corroborating_witnesses(event)
+            corroborated = bool(witnesses)
             capped_uncorroborated = not corroborated
+            if witnesses:
+                behav_factors.append(
+                    {
+                        "name": "Independent Corroboration",
+                        "contribution": 0.0,
+                        "detail": (
+                            "Cap lifted — corroborated by: "
+                            + ", ".join(witnesses)
+                            + ". These are witnesses the scoring probe cannot "
+                            "influence, which is the whole test."
+                        ),
+                    }
+                )
             effective_floor = floor if corroborated else min(floor, _SUSPICIOUS_THRESHOLD)
             if not corroborated:
                 # never let an uncorroborated floored category exceed suspicious

@@ -259,6 +259,13 @@ def _rescore_fleet_db(
                                 exc_info=True,
                             )
 
+                    # NO ESF ENRICHMENT HERE, deliberately. This function
+                    # re-scores the FLEET database — events shipped from other
+                    # devices. Their kernel witness, if any, lives on those
+                    # machines; joining this device's esf_exec_events by pid
+                    # would attribute one Mac's exec evidence to another's
+                    # process, which is worse than having none. Kernel
+                    # corroboration is device-local by nature.
                     scorer.score_event(event_data)
 
                     # Best-effort fusion feed — never let a fusion error abort
@@ -383,11 +390,22 @@ def main(run_once: bool = False) -> int:
     try:
         from amoskys.intel.scoring import ScoringEngine
 
+
         scorer = ScoringEngine()
+        # Carries the kernel's verdict to the scorer for LOCAL events. One per
+        # process, cached per-pid, so the hot path costs a dict lookup rather
+        # than a query per scored event.
+        try:
+            from amoskys.intel.esf_corroboration import ESFCorroborator
+
+            esf_corroborator = ESFCorroborator(store)
+        except Exception:
+            esf_corroborator = None
         logger.info("ScoringEngine initialized")
     except Exception as e:
         logger.warning("ScoringEngine not available: %s", e)
         scorer = None
+        esf_corroborator = None
 
     # ── Sigma detection-as-code engine (56 stateless rules) ──
     sigma = None
@@ -766,6 +784,8 @@ def main(run_once: bool = False) -> int:
 
                                 if scorer is not None:
                                     try:
+                                        if esf_corroborator is not None:
+                                            esf_corroborator.enrich(event_data)
                                         scorer.score_event(event_data)
                                     except Exception:
                                         pass
