@@ -137,13 +137,49 @@ check_stale_code() {
 STALE_STAMP="$PWD/data/.code_stamp"
 [ -f "$STALE_STAMP" ] || touch "$STALE_STAMP"
 
+
+# ── Worker liveness ─────────────────────────────────────────────────────────
+# pgrep -f matches ANY process whose command line contains the string — which
+# includes a shell that merely mentioned it. That is not hypothetical: a
+# diagnostic session left `amoskys.collector_main` in an interactive shell's
+# argv, every guard below matched it, and the supervisor sat for 32 minutes
+# believing all four workers were alive while the machine had NO sensors at
+# all. The failure is silent by construction: a liveness check that returns
+# "alive" costs nothing and logs nothing.
+#
+# So liveness is tracked by PID FILE and verified two ways: the pid must exist
+# AND its own command line must contain the module. A stale pidfile whose pid
+# was recycled by an unrelated process therefore fails the second test rather
+# than passing the first.
+PIDDIR="$PWD/data/pids"
+mkdir -p "$PIDDIR"
+
+worker_alive() {
+  local module="$1" pf="$PIDDIR/${1//[^a-zA-Z0-9]/_}.pid" pid
+  [ -f "$pf" ] || return 1
+  pid=$(cat "$pf" 2>/dev/null) || return 1
+  [ -n "$pid" ] || return 1
+  ps -p "$pid" >/dev/null 2>&1 || return 1
+  # The pid exists — but is it OURS, or a recycled number?
+  ps -o command= -p "$pid" 2>/dev/null | grep -q "$module" || return 1
+  return 0
+}
+
+start_worker() {
+  local module="$1" logfile="$2" pf="$PIDDIR/${1//[^a-zA-Z0-9]/_}.pid"
+  worker_alive "$module" && return 0
+  nohup "$PY" -m "$module" >> "$logfile" 2>&1 &
+  echo $! > "$pf"
+  echo "$(date -u +%FT%TZ) started $module pid=$!" >> logs/supervisor.log
+}
+
 while true; do
   rotate_logs
   check_stale_code
   refresh_threat_intel
-  pgrep -f 'amoskys.collector_main' >/dev/null || nohup "$PY" -m amoskys.collector_main >> logs/collector.live.log 2>&1 &
+  start_worker amoskys.collector_main logs/collector.live.log
   sleep 5
-  pgrep -f 'amoskys.analyzer_main' >/dev/null || nohup "$PY" -m amoskys.analyzer_main >> logs/analyzer.live.log 2>&1 &
+  start_worker amoskys.analyzer_main logs/analyzer.live.log
   sleep 5
   # The shipper is what makes this device part of a FLEET rather than a private
   # log. It was supervised by nothing — not this script, not launchd, not the
@@ -155,7 +191,7 @@ while true; do
   # Needs AMOSKYS_SERVER / AMOSKYS_API_KEY from .env (sourced above); if they
   # are absent the shipper exits immediately and this loop simply retries,
   # which is the correct behaviour for an unregistered device.
-  pgrep -f 'amoskys.shipper' >/dev/null || nohup "$PY" -m amoskys.shipper >> logs/shipper.live.log 2>&1 &
+  start_worker amoskys.shipper logs/shipper.live.log
   # ESF collector. The Sentinel is the only sensor that sees a process BEFORE
   # it runs and the only one that reads cdhash and signing state as the kernel
   # saw them; until this was wired it wrote to a file nothing read. It needs
@@ -163,6 +199,6 @@ while true; do
   # this side only tails what it writes, so the two lifecycles stay
   # independent: restarting the collector must never interrupt kernel
   # authorization.
-  pgrep -f 'amoskys.agents.os.macos.esf' >/dev/null || nohup "$PY" -m amoskys.agents.os.macos.esf >> logs/esf_collector.live.log 2>&1 &
+  start_worker amoskys.agents.os.macos.esf logs/esf_collector.live.log
   sleep 25
 done
