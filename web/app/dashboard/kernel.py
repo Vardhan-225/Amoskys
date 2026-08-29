@@ -665,11 +665,23 @@ def enforcement_decisions(hours: int = 24, limit: int = 25) -> dict:
             "WHERE timestamp_ns >= ? AND decision IS NOT NULL AND decision <> 'allow'",
             (cutoff,),
         ).fetchone()[0]
+        # Provenance is a newer column: present on the local agent store and on
+        # any fleet cache the sync has caught up to, absent on an older cache.
+        # Select it only when it exists so the whole enforcement surface does
+        # not vanish on a store that predates it — a NULL there means "built
+        # locally", and so does "column not here yet", which read the same in
+        # the banding below.
+        _has_quar = any(
+            c[1] == "quarantine"
+            for c in db.execute("PRAGMA table_info(esf_exec_events)")
+        )
+        _quar_sel = "MAX(quarantine) AS quarantine" if _has_quar else "NULL AS quarantine"
         rows = [
             dict(r)
             for r in db.execute(
-                """
+                f"""
                 SELECT cdhash, exe, decision, decision_reason,
+                       {_quar_sel},
                        COUNT(*) AS hits, MAX(timestamp_ns) AS last_ns,
                        MAX(is_signed) AS is_signed, MAX(is_valid) AS is_valid,
                        MAX(is_adhoc) AS is_adhoc, MAX(is_platform) AS is_platform,
@@ -708,6 +720,9 @@ def enforcement_decisions(hours: int = 24, limit: int = 25) -> dict:
                 "exe": r["exe"],
                 "trust": _trust(r),
                 "reason": r["decision_reason"] or "",
+                # Raw com.apple.quarantine string, or None when built locally /
+                # column absent. Parsed for source attribution in the banding.
+                "quarantine": r.get("quarantine"),
                 "hits": r["hits"],
                 "as_root": bool(r["euid"] == 0),
                 "blocked": actually_blocked,

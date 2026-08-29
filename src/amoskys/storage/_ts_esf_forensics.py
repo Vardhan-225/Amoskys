@@ -1061,6 +1061,13 @@ CREATE TABLE IF NOT EXISTS esf_exec_events (
     decision_reason   TEXT,
     process_guid      TEXT,
     parent_guid       TEXT,
+    -- Provenance the kernel read at exec time via getxattr(path,
+    -- com.apple.quarantine, XATTR_NOFOLLOW): raw "flags;ts;agent;uuid" when the
+    -- file was downloaded (agent names Safari/WhatsApp/…), NULL when it was
+    -- built locally (ENOATTR — a definite answer, not a missing one). The
+    -- banding layer uses NULL-vs-present to separate "I built this ad-hoc
+    -- binary" from "this was downloaded and it ran".
+    quarantine        TEXT,
     received_at       REAL
 );
 CREATE INDEX IF NOT EXISTS idx_esf_fleet_time
@@ -1142,6 +1149,7 @@ ESF_FLEET_COLUMNS = {
         "decision_reason",
         "process_guid",
         "parent_guid",
+        "quarantine",
     ],
     "esf_binary_ledger": [
         "cdhash",

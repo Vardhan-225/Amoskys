@@ -173,6 +173,33 @@ def _kernel_item(
     return item
 
 
+def _quarantine_provenance(raw) -> tuple[bool, str]:
+    """Read download provenance from a raw ``com.apple.quarantine`` string.
+
+    Returns ``(downloaded, source)``. ``downloaded`` is True when the file
+    carried the attribute at exec — it came from a browser, a messenger,
+    AirDrop, an opened archive — and False when it was built locally (the kernel
+    read ENOATTR, a definite answer) or the column is not present on this tier
+    yet. Those two read the same on purpose: absence is never treated as a
+    finding.
+
+    The format is ``flags;timestamp;agent;uuid``, but it is NOT a fixed four
+    fields. A manual ``xattr -w`` records no agent; some agents (Microsoft Word)
+    write a trailing ``;`` and no uuid; the class flags vary by writer. So the
+    agent is read by position only where that field exists, and never assumed —
+    the presence of the attribute is the signal, the agent name is a bonus that
+    sharpens the sentence when it happens to be there.
+    """
+    if not isinstance(raw, str):
+        return (False, "")
+    raw = raw.strip()
+    if not raw:
+        return (False, "")
+    parts = raw.split(";")
+    source = parts[2].strip() if len(parts) > 2 else ""
+    return (True, source)
+
+
 def _enforcement_items(user_verdicts: dict) -> list[dict]:
     """The kernel's own block decisions, as the top of the queue.
 
@@ -206,6 +233,7 @@ def _enforcement_items(user_verdicts: dict) -> list[dict]:
         name = d.get("name") or "an unnamed binary"
         root = " running as root" if d.get("as_root") else ""
         blocklisted = "blocklist" in reason.lower()
+        downloaded, source = _quarantine_provenance(d.get("quarantine"))
 
         # The signature class the kernel objected to is the whole question.
         # ad-hoc is how every local `cc`/`cargo`/`go` build is signed — measured
@@ -213,8 +241,33 @@ def _enforcement_items(user_verdicts: dict) -> list[dict]:
         # and rustup. Banding ad-hoc red painted their compiler "act now", which
         # is the product's cry-wolf sin in reverse. Only a signature that is
         # ITSELF the alarm — unsigned, signature-invalid, or a blocklisted
-        # cdhash — leads the queue red. ad-hoc is amber, and never leads.
-        alarming = (trust in ("unsigned", "signature-invalid")) or blocklisted
+        # cdhash — leads on the signature alone. ad-hoc is amber, and never
+        # leads on its signature.
+        alarming_sig = (trust in ("unsigned", "signature-invalid")) or blocklisted
+
+        # Provenance is what separates the two ad-hoc worlds the signature
+        # cannot. An ad-hoc binary the kernel read a quarantine attribute on was
+        # DOWNLOADED — a browser, a messenger, an archive stamped it — and then
+        # it ran; that is a dropper's exact shape (T1204), not a compiler. So a
+        # downloaded ad-hoc/unknown binary is promoted to the red lead the plain
+        # local build never becomes. A SIGNED download is just an app install
+        # and is left alone. NULL provenance keeps today's amber, so a tier that
+        # does not carry the column yet behaves exactly as before.
+        downloaded_adhoc = (
+            downloaded and trust in ("adhoc", "unknown") and not alarming_sig
+        )
+        # HONESTY ON THE DENOMINATOR: this promotion is principled but not yet
+        # validated — as of writing, downloaded-AND-ad-hoc had ZERO observations
+        # over thousands of execs, so its false-positive rate is reasoned, not
+        # measured. It is held to the same standard kernel_would_deny just
+        # failed (rare AND 100% benign). The populations that could trip it
+        # benignly, and would force the same narrowing: an extracted archive
+        # carrying a helper binary, an npm/pip postinstall shipping a prebuilt
+        # executable, something AirDropped between the owner's own machines. If
+        # those turn up ad-hoc and quarantined in normal use, this needs a
+        # second discriminator beyond "downloaded". Until then the copy stays
+        # conditional ("if you did not run it on purpose") and claims no rate.
+        alarming = alarming_sig or downloaded_adhoc
         leads = alarming and not blocked
 
         if blocked:
@@ -236,7 +289,7 @@ def _enforcement_items(user_verdicts: dict) -> list[dict]:
                 "so it was stopped before it ran."
             )
             label = "Blocked"
-        elif alarming:
+        elif alarming_sig:
             title = f"The kernel would have blocked: {name}"
             why = (
                 f"The Sentinel decided against {name}{root} — {reason}. Its "
@@ -248,6 +301,27 @@ def _enforcement_items(user_verdicts: dict) -> list[dict]:
                 "you do not recognise it, open it first."
             )
             label = "Would have blocked"
+        elif downloaded_adhoc:
+            # Field 3 (the downloading app) is a bonus, never a precondition: a
+            # manual xattr and some legitimate writers leave it empty, and
+            # "downloaded and then run" — with its T1204 mapping — is exactly as
+            # true and as actionable without the name. So the empty case names
+            # no app; it does not soften the finding.
+            got_it = f"downloaded via {source}" if source else "downloaded"
+            title = f"Downloaded, then run: {name}"
+            why = (
+                f"The kernel read a download stamp on {name}{root}: it was "
+                f"{got_it} and then executed. Its signature is ad-hoc, which "
+                "proves it was not altered since it was built but names no "
+                "author — so the signature alone could not tell a download from "
+                "something you compiled. The quarantine stamp is what tells them "
+                f"apart. The Sentinel decided against it — {reason} — and with "
+                "enforcement OFF it ran anyway. A binary that arrived from "
+                "outside and immediately executed is the opening move of an "
+                "intrusion (T1204); if you did not run it on purpose, treat it "
+                "as one."
+            )
+            label = "Downloaded — did you mean to run it?"
         else:
             title = f"The kernel flagged a local-style binary: {name}"
             why = (
@@ -268,13 +342,18 @@ def _enforcement_items(user_verdicts: dict) -> list[dict]:
                 "band": band,
                 "leads": leads,
                 "verdict_label": label,
-                "factors": [
-                    f"signature: {trust}",
-                    reason,
-                    ("contained" if blocked else "ran — enforcement off"),
-                    "kernel decision",
-                ],
-                "mitre": [],
+                "factors": (
+                    [f"signature: {trust}"]
+                    + ([f"downloaded via {source}"] if downloaded_adhoc and source
+                       else (["downloaded — source not recorded"] if downloaded_adhoc
+                             else []))
+                    + [
+                        reason,
+                        ("contained" if blocked else "ran — enforcement off"),
+                        "kernel decision",
+                    ]
+                ),
+                "mitre": (["T1204"] if downloaded_adhoc else []),
                 "count": d.get("hits", 1),
                 "evidence_count": d.get("hits", 1),
                 "event_ids": [],

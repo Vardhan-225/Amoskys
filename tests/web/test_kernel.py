@@ -33,7 +33,8 @@ def _make_store(tmp_path, *, beats=(), execs=0, binaries=(), kernel_drops=None):
             team_id TEXT, cs_flags INTEGER, is_signed BOOLEAN, is_valid BOOLEAN,
             is_adhoc BOOLEAN, is_platform BOOLEAN, pid INTEGER, ppid INTEGER,
             euid INTEGER, username TEXT, decision TEXT, decision_reason TEXT,
-            process_guid TEXT, parent_guid TEXT, ingested_at_ns INTEGER);
+            process_guid TEXT, parent_guid TEXT, ingested_at_ns INTEGER,
+            quarantine TEXT);
         CREATE TABLE esf_binary_ledger (cdhash TEXT PRIMARY KEY, first_seen_ns INTEGER,
             last_seen_ns INTEGER, exec_count INTEGER DEFAULT 1, first_exe TEXT,
             distinct_paths INTEGER DEFAULT 1, signing_id TEXT, team_id TEXT,
@@ -495,3 +496,157 @@ def test_the_owners_thats_me_lifts_the_enforcement_item(store):
     )[0]
     assert mine["band"] == "calm"
     assert mine["recognised"] is True
+
+
+# ── Provenance banding — the receiving half of the quarantine contract ────────
+# The Sentinel reads com.apple.quarantine at exec (getxattr, XATTR_NOFOLLOW) and
+# ships it on esf_exec_events. Presence separates "ad-hoc because I compiled it"
+# (amber, never leads) from "ad-hoc because I downloaded it, and it ran" (red,
+# T1204). These lock that split and the defensive parse macOS's variability
+# forces. NOTE: as of writing this red band has ZERO real observations — it is
+# principled, not yet measured; see the HONESTY comment in _enforcement_items.
+def _seed_would_deny(path, *, cdhash, quarantine, trust="adhoc", reason="from /Users/"):
+    import sqlite3
+    import time
+
+    flags = {
+        "adhoc": (1, 1, 1, 0),
+        "unsigned": (0, None, 0, 0),
+        "signed": (1, 1, 0, 0),
+    }[trust]
+    db = sqlite3.connect(path)
+    now = time.time_ns()
+    db.execute(
+        "INSERT OR IGNORE INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) "
+        "VALUES (?,0,0)",
+        (now,),
+    )
+    db.execute(
+        "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, decision_reason, "
+        "is_signed, is_valid, is_adhoc, is_platform, euid, pid, quarantine) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            now,
+            f"/Users/a/{cdhash}",
+            cdhash,
+            "would_deny",
+            reason,
+            flags[0],
+            flags[1],
+            flags[2],
+            flags[3],
+            501,
+            900,
+            quarantine,
+        ),
+    )
+    db.commit()
+    db.close()
+
+
+def test_quarantine_provenance_parses_defensively():
+    """macOS does not hand back a fixed four-field string. A manual xattr empties
+    the agent; Microsoft Word writes a trailing ';' and no uuid; the class flags
+    vary. The presence of the attribute is the signal, the agent a bonus — and a
+    NULL/absent attribute is a definite 'built locally', never a finding."""
+    from app.dashboard.ledger import _quarantine_provenance as q
+
+    assert q(None) == (False, "")
+    assert q("") == (False, "")
+    assert q("   ") == (False, "")
+    assert q(123) == (False, "")  # non-string never crashes
+    assert q("0083;69e16347;Safari;A7053FFF-0000") == (True, "Safari")
+    assert q("0283;6a93527e;;TEST") == (True, "")  # xattr -w emptied the agent
+    assert q("0081;68abcd;Microsoft Word;") == (True, "Microsoft Word")  # no uuid
+    assert q("garbage") == (True, "")  # present but unparseable → still downloaded
+    assert q("0083;ts") == (True, "")  # only two fields, no agent field at all
+
+
+def test_a_downloaded_adhoc_binary_leads_where_a_built_one_does_not(store):
+    """The core of the receiving half. Two ad-hoc would_deny binaries, identical
+    but for provenance: the compiled one stays amber and does not lead; the
+    downloaded one leads red and maps to T1204."""
+    path = store(execs=0)
+    _seed_would_deny(path, cdhash="cdBUILT", quarantine=None)
+    _seed_would_deny(path, cdhash="cdDL", quarantine="0083;69e16347;Safari;A70-FFF")
+    from app.dashboard import ledger
+
+    items = {i["cdhash"]: i for i in ledger._enforcement_items({})}
+    built = items["cdBUILT"]
+    assert built["band"] == "amber", "a compiled ad-hoc binary is not an alarm"
+    assert built["leads"] is False
+    dl = items["cdDL"]
+    assert dl["band"] == "red", "a downloaded ad-hoc binary that ran leads red"
+    assert dl["leads"] is True
+    assert "T1204" in dl["mitre"]
+    assert "Safari" in dl["why"]
+    assert "downloaded" in dl["title"].lower()
+
+
+def test_a_downloaded_binary_with_no_agent_still_leads_and_does_not_soften(store):
+    """The xattr -w / empty-agent case. 'Downloaded and it ran' with its T1204
+    mapping is exactly as true without the app name — the finding must not weaken
+    to a softer sentence just because field 3 is blank."""
+    path = store(execs=0)
+    _seed_would_deny(
+        path, cdhash="cdNOAGENT", quarantine="0283;6a93527e;;UUID",
+        reason="adhoc from /private/tmp/",
+    )
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert item["band"] == "red" and item["leads"] is True
+    assert "T1204" in item["mitre"]
+    assert "downloaded" in item["why"].lower()
+    assert "via " not in item["why"], "no agent name was recorded — do not invent one"
+
+
+def test_a_signed_download_is_not_promoted_to_red(store):
+    """Download provenance elevates only when the signature also cannot name an
+    author. A properly signed binary that was downloaded is a normal app
+    install, not a dropper."""
+    path = store(execs=0)
+    _seed_would_deny(
+        path, cdhash="cdSIGNED", trust="signed",
+        quarantine="0083;69e16347;Safari;UUID", reason="signed from /Downloads/",
+    )
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert item["band"] != "red", "a signed download is an install, not an alarm"
+    assert "T1204" not in item["mitre"]
+
+
+def test_provenance_absent_keeps_todays_behaviour(store):
+    """A store that predates the quarantine column must behave exactly as before:
+    the enforcement surface stays up (the column is selected only when present)
+    and an ad-hoc would_deny with no provenance is the amber local-build case."""
+    path = store(execs=0)
+    import sqlite3
+    import time
+
+    db = sqlite3.connect(path)
+    # Drop the column to simulate an older cache/tier.
+    cols = [c[1] for c in db.execute("PRAGMA table_info(esf_exec_events)")]
+    if "quarantine" in cols:
+        keep = [c for c in cols if c != "quarantine"]
+        db.execute(f"CREATE TABLE _e AS SELECT {','.join(keep)} FROM esf_exec_events")
+        db.execute("DROP TABLE esf_exec_events")
+        db.execute("ALTER TABLE _e RENAME TO esf_exec_events")
+    now = time.time_ns()
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (now,),
+    )
+    db.execute(
+        "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, decision_reason, "
+        "is_signed, is_valid, is_adhoc, is_platform, euid, pid) "
+        "VALUES (?,?,?,?,?,1,1,1,0,501,900)",
+        (now, "/Users/a/cdOLD", "cdOLD", "would_deny", "adhoc from /Users/"),
+    )
+    db.commit()
+    db.close()
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert item["band"] == "amber" and item["leads"] is False
