@@ -121,6 +121,13 @@
 .lg-item[data-band="calm"]  { --lg-tone: #3ad29f; }
 .lg-item[data-band="amber"] { --lg-tone: #ffb038; }
 .lg-item[data-band="red"]   { --lg-tone: #ff4d5e; }
+.lg-item-kernel { border-left-width: 4px; box-shadow: 0 0 0 1px var(--lg-tone) inset; }
+.lg-kernel-flag {
+    display: block; padding: 0.3rem 1.15rem; font-size: 0.66rem; font-weight: 700;
+    letter-spacing: 0.11em; text-transform: uppercase; color: var(--lg-tone);
+    background: color-mix(in srgb, var(--lg-tone) 12%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--lg-tone) 30%, transparent);
+}
 
 .lg-head {
     display: flex; align-items: flex-start; gap: 1rem; width: 100%;
@@ -428,13 +435,20 @@
     }
 
     function itemHTML(item) {
-        const mark = item.band === 'calm' ? '✓' : '!';
+        const isKernel = item.source === 'kernel_enforcement';
+        // A shield, not a bang: this row is a kernel allow/deny decision, and it
+        // should not read as one more thing a probe scored.
+        const mark = isKernel ? '\u26E8' : (item.band === 'calm' ? '✓' : '!');
         const evidence = item.evidence_count
             ? esc(item.evidence_count) + ' event' + (item.evidence_count === 1 ? '' : 's')
             : (item.count ? esc(item.count) + ' observation' + (item.count === 1 ? '' : 's') : '');
 
         return '' +
-        '<article class="lg-item" data-band="' + esc(item.band) + '" data-key="' + esc(item.key) + '">' +
+        '<article class="lg-item' + (isKernel ? ' lg-item-kernel' : '') + '" data-band="' +
+            esc(item.band) + '" data-key="' + esc(item.key) + '">' +
+            (isKernel
+                ? '<span class="lg-kernel-flag">Kernel allow/deny decision · not a probe score</span>'
+                : '') +
             '<button type="button" class="lg-head" aria-expanded="false">' +
                 '<span class="lg-mark" aria-hidden="true">' + mark + '</span>' +
                 '<span class="lg-body">' +

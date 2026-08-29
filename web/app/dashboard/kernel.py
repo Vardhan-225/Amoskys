@@ -623,13 +623,120 @@ def witnessed_window(start_ns: int, end_ns: int) -> dict:
     }
 
 
+def enforcement_decisions(hours: int = 24, limit: int = 25) -> dict:
+    """What the Sentinel decided to block — the signal with almost no noise.
+
+    The kernel's allow/deny is a far cleaner signal than any probe score for a
+    genuinely untrusted binary — a staged infostealer capped at 0.53 "suspicious"
+    across nine probes while the Sentinel decided against it outright. But the
+    deny POLICY is coarse (untrusted-signature AND a risky path prefix), and
+    ad-hoc is how every local `cc`/`cargo`/`go` build is signed — measured on
+    this same machine, 2 of 3 would_deny events were the owner's own rustc and
+    rustup. So this function reports the decisions; `_enforcement_items` in
+    ledger.py, NOT here, decides which signature classes are alarming enough to
+    lead the queue (unsigned / invalid / blocklisted) versus merely worth a look
+    (ad-hoc, the local-build population).
+
+    That decision is made on every single exec and, until now, shown nowhere.
+    This surfaces it. In MONITOR mode a ``would_deny`` is "I would have stopped
+    this and did not" — which is exactly the shape of a dropper and worth the
+    owner's attention, but it is not containment, so the wording never claims
+    the thing was blocked when it was only flagged.
+    """
+    empty = {
+        "available": False,
+        "mode": None,
+        "decisions": [],
+        "count": 0,
+        "allowed": 0,
+    }
+    db = _open()
+    if db is None:
+        return empty
+    try:
+        cutoff = time.time_ns() - hours * 3600 * NS
+        allowed = db.execute(
+            "SELECT COUNT(*) FROM esf_exec_events "
+            "WHERE timestamp_ns >= ? AND decision = 'allow'",
+            (cutoff,),
+        ).fetchone()[0]
+        decided_total = db.execute(
+            "SELECT COUNT(*) FROM esf_exec_events "
+            "WHERE timestamp_ns >= ? AND decision IS NOT NULL AND decision <> 'allow'",
+            (cutoff,),
+        ).fetchone()[0]
+        rows = [
+            dict(r)
+            for r in db.execute(
+                """
+                SELECT cdhash, exe, decision, decision_reason,
+                       COUNT(*) AS hits, MAX(timestamp_ns) AS last_ns,
+                       MAX(is_signed) AS is_signed, MAX(is_valid) AS is_valid,
+                       MAX(is_adhoc) AS is_adhoc, MAX(is_platform) AS is_platform,
+                       MAX(euid) AS euid, MAX(pid) AS pid
+                  FROM esf_exec_events
+                 WHERE timestamp_ns >= ?
+                   AND decision IS NOT NULL AND decision <> 'allow'
+                 GROUP BY cdhash
+                 ORDER BY last_ns DESC
+                 LIMIT ?
+                """,
+                (cutoff, limit),
+            )
+        ]
+        beat = db.execute(
+            "SELECT enforce_mode FROM esf_stream_health "
+            "ORDER BY timestamp_ns DESC LIMIT 1"
+        ).fetchone()
+    except sqlite3.Error:
+        logger.warning("enforcement read failed", exc_info=True)
+        return empty
+    finally:
+        db.close()
+
+    enforcing = bool(beat["enforce_mode"]) if beat else False
+    now_ns = time.time_ns()
+    decisions = []
+    for r in rows:
+        # "denied" only when enforcement is actually on; otherwise it is a
+        # would-block, and the row says so rather than implying containment.
+        actually_blocked = enforcing and r["decision"] == "denied"
+        decisions.append(
+            {
+                "cdhash": r["cdhash"],
+                "name": (r["exe"] or "an unnamed binary").rsplit("/", 1)[-1],
+                "exe": r["exe"],
+                "trust": _trust(r),
+                "reason": r["decision_reason"] or "",
+                "hits": r["hits"],
+                "as_root": bool(r["euid"] == 0),
+                "blocked": actually_blocked,
+                "age_minutes": int((now_ns - (r["last_ns"] or now_ns)) / 6e10),
+            }
+        )
+    decisions.sort(key=lambda d: (TRUST_ORDER.get(d["trust"], 9), -d["hits"]))
+    return {
+        "available": True,
+        "mode": "enforce" if enforcing else "monitor",
+        "decisions": decisions,
+        # count is the number SHOWN (deduped by cdhash, capped at `limit`);
+        # decided_total is every non-allow event, uncapped. The "why" text uses
+        # decided_total so it can never understate how many the kernel flagged.
+        "count": len(decisions),
+        "decided_total": decided_total,
+        "allowed": allowed,
+    }
+
+
 def summary_for_ledger(hours: int = 24) -> dict:
     """One compact payload for the ledger page."""
     health = stream_health(hours)
     novel = novel_binaries(hours)
+    enforcement = enforcement_decisions(hours)
     return {
         "health": health,
         "novel": novel,
+        "enforcement": enforcement,
         "headline": health["headline"],
         "watching": health["watching"],
     }

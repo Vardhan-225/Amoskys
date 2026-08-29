@@ -173,6 +173,128 @@ def _kernel_item(
     return item
 
 
+def _enforcement_items(user_verdicts: dict) -> list[dict]:
+    """The kernel's own block decisions, as the top of the queue.
+
+    This is the fix for inverted triage. A staged infostealer dropper produced
+    nine probe detections that all capped at 0.53 "suspicious" and disappeared
+    into the queue, while the kernel's allow/deny decision named the same binary
+    with a false-positive rate of one in a quarter-million. So when the Sentinel
+    has decided against a binary, that decision leads — above the fusion verdict,
+    above everything the analyzer merely scored.
+    """
+    try:
+        from . import kernel
+    except Exception:  # pragma: no cover - defensive import
+        return []
+    try:
+        report = kernel.enforcement_decisions()
+    except Exception:  # pragma: no cover
+        logger.debug("enforcement lookup failed", exc_info=True)
+        return []
+    if not report.get("available") or not report.get("decisions"):
+        return []
+
+    out = []
+    for d in report["decisions"]:
+        cdhash = d.get("cdhash") or ""
+        key = f"kdecision:{cdhash[:32]}"
+        decided = user_verdicts.get(key)
+        blocked = d.get("blocked")
+        trust = d.get("trust") or "unknown"
+        reason = d.get("reason") or "untrusted binary"
+        name = d.get("name") or "an unnamed binary"
+        root = " running as root" if d.get("as_root") else ""
+        blocklisted = "blocklist" in reason.lower()
+
+        # The signature class the kernel objected to is the whole question.
+        # ad-hoc is how every local `cc`/`cargo`/`go` build is signed — measured
+        # on this machine, 2 of 3 would_deny events were the owner's own rustc
+        # and rustup. Banding ad-hoc red painted their compiler "act now", which
+        # is the product's cry-wolf sin in reverse. Only a signature that is
+        # ITSELF the alarm — unsigned, signature-invalid, or a blocklisted
+        # cdhash — leads the queue red. ad-hoc is amber, and never leads.
+        alarming = (trust in ("unsigned", "signature-invalid")) or blocklisted
+        leads = alarming and not blocked
+
+        if blocked:
+            band = "amber"
+        elif alarming:
+            band = "red"
+        else:
+            band = "amber"
+        if decided and decided["verdict"] == verdict_store.MINE:
+            band = "calm"
+
+        allowed = report.get("allowed", 0)
+        decided_total = report.get("decided_total", report.get("count", 0))
+
+        if blocked:
+            title = f"The kernel blocked: {name}"
+            why = (
+                f"The Sentinel blocked {name}{root} — {reason}. Enforcement is on, "
+                "so it was stopped before it ran."
+            )
+            label = "Blocked"
+        elif alarming:
+            title = f"The kernel would have blocked: {name}"
+            why = (
+                f"The Sentinel decided against {name}{root} — {reason}. Its "
+                f"signature reads as {trust}, which is the signature itself being "
+                "the problem, not merely where it ran from. This is a kernel "
+                "allow/deny made at exec time, not a probe score. Enforcement is "
+                f"OFF, so it ran anyway. In the same day the Sentinel allowed "
+                f"{allowed:,} executions and decided against {decided_total}. If "
+                "you do not recognise it, open it first."
+            )
+            label = "Would have blocked"
+        else:
+            title = f"The kernel flagged a local-style binary: {name}"
+            why = (
+                f"The Sentinel flagged {name}{root} — {reason}. Its signature is "
+                f"{trust}, which is how local builds and many Homebrew bottles are "
+                "signed, so this is most likely something you built or installed. "
+                "It is surfaced rather than hidden because the kernel objected to "
+                "it, but it is not treated as an alarm — confirm it is yours and "
+                "it stops appearing."
+            )
+            label = "Confirm it's yours"
+
+        out.append(
+            {
+                "key": key,
+                "title": title,
+                "why": why,
+                "band": band,
+                "leads": leads,
+                "verdict_label": label,
+                "factors": [
+                    f"signature: {trust}",
+                    reason,
+                    ("contained" if blocked else "ran — enforcement off"),
+                    "kernel decision",
+                ],
+                "mitre": [],
+                "count": d.get("hits", 1),
+                "evidence_count": d.get("hits", 1),
+                "event_ids": [],
+                "row_ids": [],
+                "has_evidence": False,
+                "device_ids": [],
+                "categories": ["esf_enforcement"],
+                "cdhash": cdhash,
+                "first": None,
+                "last": None,
+                "recognised": bool(
+                    decided and decided["verdict"] == verdict_store.MINE
+                ),
+                "user_verdict": decided,
+                "source": "kernel_enforcement",
+            }
+        )
+    return out
+
+
 def _kernel_items(user_verdicts: dict) -> list[dict]:
     """First-run software, asked about in proportion to what is actually unknown.
 
@@ -338,10 +460,21 @@ def build(
         _item_from_incident(i, user_verdicts) for i in (model.get("incidents") or [])
     ]
     items.extend(_kernel_items(user_verdicts))
+    enforcement = _enforcement_items(user_verdicts)
+    items.extend(enforcement)
 
     needs_you = [i for i in items if not i["recognised"]]
     recognised = [i for i in items if i["recognised"]]
-    needs_you.sort(key=lambda i: (_BAND_RANK.get(i["band"], 3), -i["count"]))
+    # Enforcement decisions lead. A kernel allow/deny made at exec time outranks
+    # anything the analyzer merely scored, so they sort before the band rank
+    # rather than within it.
+    needs_you.sort(
+        key=lambda i: (
+            0 if i.get("leads") else 1,
+            _BAND_RANK.get(i["band"], 3),
+            -i["count"],
+        )
+    )
     recognised.sort(key=lambda i: -i["count"])
 
     suppressed_events = canonical.get("counts", {}).get("suppressed", 0)

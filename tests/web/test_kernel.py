@@ -265,3 +265,233 @@ def test_a_verdict_for_an_unknown_binary_reports_the_miss(store):
     result = kernel.record_binary_verdict("zzz", "benign")
     assert result["written"] is False
     assert "No such binary" in result["detail"]
+
+
+# ── Enforcement decisions — the signal the UI never showed ────────────────────
+def _exec_decision(
+    store, *, decision, trust="adhoc", reason="adhoc from /Downloads", n=1, allowed=100
+):
+    """Seed an exec store with `allowed` allows and `n` decisions of one binary."""
+    import time
+
+    now = time.time_ns()
+    for i in range(allowed):
+        store.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, is_platform, is_signed) "
+            "VALUES (?,?,?,?,1,1)",
+            (now - i, "/usr/bin/curl", f"plat{i}", "allow"),
+        )
+    flags = {
+        "adhoc": (1, 1, 1, 0),
+        "unsigned": (0, None, 0, 0),
+        "signed": (1, 1, 0, 0),
+    }[trust]
+    for i in range(n):
+        store.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, decision_reason, "
+            "is_signed, is_valid, is_adhoc, is_platform, euid, pid) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                now - i,
+                "/Users/a/Downloads/dropper",
+                "cdBAD",
+                decision,
+                reason,
+                flags[0],
+                flags[1],
+                flags[2],
+                flags[3],
+                501,
+                900,
+            ),
+        )
+    store.commit()
+
+
+def test_a_would_deny_surfaces_with_its_ratio(store):
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (__import__("time").time_ns(),),
+    )
+    _exec_decision(db, decision="would_deny", allowed=234)
+    db.close()
+    report = kernel.enforcement_decisions()
+    assert report["available"] is True
+    assert report["mode"] == "monitor"
+    assert report["allowed"] == 234
+    assert report["count"] == 1
+    d = report["decisions"][0]
+    assert d["blocked"] is False  # monitor mode: it ran, not contained
+    assert d["trust"] == "adhoc"
+    assert "Downloads" in d["reason"]
+
+
+def test_monitor_mode_never_claims_the_binary_was_blocked(store):
+    """An UNSIGNED would_deny is the alarming class: red, leads, says it ran."""
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (__import__("time").time_ns(),),
+    )
+    _exec_decision(db, decision="would_deny", trust="unsigned")
+    db.close()
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert item["band"] == "red"
+    assert item["leads"] is True
+    assert "would have blocked" in item["title"].lower()
+    assert "ran anyway" in item["why"].lower()
+    assert "was stopped" not in item["why"].lower()
+
+
+def test_adhoc_would_deny_is_a_local_build_not_an_alarm(store):
+    """The cry-wolf fix, confirmed by adversarial review: 2 of 3 would_deny
+    events on the author's live Mac were the owner's own rustc and rustup (both
+    ad-hoc). Ad-hoc must be amber and must NOT lead the queue, or a developer's
+    compiler becomes a red 'act now' — the original sin in reverse."""
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (__import__("time").time_ns(),),
+    )
+    _exec_decision(
+        db,
+        decision="would_deny",
+        trust="adhoc",
+        reason="adhoc-signed binary from /Users/",
+    )
+    db.close()
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert item["band"] == "amber", "ad-hoc must not be red"
+    assert item["leads"] is False, "a local build must not lead the queue"
+    assert "local" in (item["title"] + item["why"]).lower()
+    assert "act now" not in item["why"].lower()
+
+
+def test_an_unsigned_dropper_leads_over_an_adhoc_build(store):
+    """Given both, only the unsigned one leads red."""
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    now = __import__("time").time_ns()
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (now,),
+    )
+    for trust, cd in (("adhoc", "cdBUILD"), ("unsigned", "cdDROP")):
+        flags = {"adhoc": (1, 1, 1, 0), "unsigned": (0, None, 0, 0)}[trust]
+        db.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, decision_reason, "
+            "is_signed, is_valid, is_adhoc, is_platform, euid, pid) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                now,
+                f"/Users/a/x/{cd}",
+                cd,
+                "would_deny",
+                f"{trust} from /Users/",
+                flags[0],
+                flags[1],
+                flags[2],
+                flags[3],
+                501,
+                900,
+            ),
+        )
+    db.commit()
+    db.close()
+    from app.dashboard import ledger
+
+    items = ledger._enforcement_items({})
+    leads = [i for i in items if i["leads"]]
+    assert len(leads) == 1 and leads[0]["cdhash"] == "cdDROP"
+
+
+def test_the_shown_count_never_understates_the_flagged_total(store):
+    """count is deduped and capped; decided_total is not. The 'why' text uses
+    the uncapped total so it cannot overstate the kernel's selectivity."""
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    now = __import__("time").time_ns()
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (now,),
+    )
+    for i in range(40):
+        db.execute(
+            "INSERT INTO esf_exec_events (timestamp_ns, exe, cdhash, decision, decision_reason, "
+            "is_signed, is_valid, is_adhoc, is_platform, euid, pid) VALUES (?,?,?,?,?,0,?,0,0,501,900)",
+            (
+                now - i,
+                f"/Users/a/d{i}",
+                f"cd{i}",
+                "would_deny",
+                "unsigned from /Users/",
+                None,
+            ),
+        )
+    db.commit()
+    db.close()
+    report = kernel.enforcement_decisions(limit=25)
+    assert report["count"] == 25  # capped view
+    assert report["decided_total"] == 40  # uncapped truth
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert (
+        "40" in item["why"] and "25" not in item["why"].split("decided against")[-1][:6]
+    )
+
+
+def test_enforce_mode_reports_actual_containment(store):
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,1)",
+        (__import__("time").time_ns(),),
+    )
+    _exec_decision(db, decision="denied")
+    db.close()
+    report = kernel.enforcement_decisions()
+    assert report["mode"] == "enforce"
+    assert report["decisions"][0]["blocked"] is True
+    from app.dashboard import ledger
+
+    item = ledger._enforcement_items({})[0]
+    assert "stopped before it ran" in item["why"].lower()
+
+
+def test_no_decisions_means_no_enforcement_items(store):
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    _exec_decision(db, decision="allow", n=0, allowed=50)  # only allows
+    db.close()
+    assert kernel.enforcement_decisions()["count"] == 0
+    from app.dashboard import ledger
+
+    assert ledger._enforcement_items({}) == []
+
+
+def test_the_owners_thats_me_lifts_the_enforcement_item(store):
+    """A developer's own adhoc binary must not lead the queue forever once they
+    have said it is theirs — the whole flywheel depends on this."""
+    path = store(execs=0)
+    db = __import__("sqlite3").connect(path)
+    db.execute(
+        "INSERT INTO esf_stream_health (timestamp_ns, dropped, enforce_mode) VALUES (?,0,0)",
+        (__import__("time").time_ns(),),
+    )
+    _exec_decision(db, decision="would_deny")
+    db.close()
+    from app.dashboard import ledger, verdict_store
+
+    item = ledger._enforcement_items({})[0]
+    mine = ledger._enforcement_items(
+        {item["key"]: {"verdict": verdict_store.MINE, "decided_at": 1.0}}
+    )[0]
+    assert mine["band"] == "calm"
+    assert mine["recognised"] is True
