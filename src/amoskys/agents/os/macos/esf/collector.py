@@ -200,6 +200,11 @@ class ESFStreamCollector:
             "username": None,
             "decision": rec.get("decision") or "allow",
             "decision_reason": rec.get("reason") or None,
+            # Raw xattr string, not a boolean. Field 3 names the source agent
+            # (Safari, WhatsApp, sharingd), which is what turns "confirm it is
+            # yours" into "downloaded via Safari and it ran". Absent means
+            # locally built — a definite answer, not unknown.
+            "quarantine": rec.get("quarantine") or None,
             "process_guid": None,
             "parent_guid": None,
             "ingested_at_ns": now_ns,

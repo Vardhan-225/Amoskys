@@ -17,7 +17,7 @@ import pytest
 from amoskys.agents.os.macos.esf.collector import ESFStreamCollector
 from amoskys.storage._ts_esf_forensics import ESFForensicsMixin
 
-MIGRATION = "src/amoskys/storage/migrations/sql/015_esf_exec_forensics.sql"
+from tests.unit.esf._migrations import apply_esf_schema
 
 
 def _exec(t, pid, ppid, exe, cdhash, *, signed=True, valid=True, adhoc=False,
@@ -35,9 +35,7 @@ def _exec(t, pid, ppid, exe, cdhash, *, signed=True, valid=True, adhoc=False,
 def store():
     path = os.path.join(tempfile.mkdtemp(), "esf.db")
     conn = sqlite3.connect(path)
-    with open(MIGRATION) as fh:
-        conn.executescript(fh.read())
-    conn.commit()
+    apply_esf_schema(conn)
 
     class _Store(ESFForensicsMixin):
         # Mirrors TelemetryStore's ACTUAL interface: _execute / _executemany /

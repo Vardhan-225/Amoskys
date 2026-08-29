@@ -192,7 +192,7 @@ func emit(_ line: String) {
 func emitExec(path: String, argv: [String], pid: Int32, ppid: Int32,
               uid: UInt32, cdhash: String, csFlags: UInt32, isPlatform: Bool,
               signingID: String, teamID: String, decision: String,
-              reason: String, tsNs: UInt64) {
+              reason: String, tsNs: UInt64, quarantine: String? = nil) {
     var argvJSON = "["
     for (i, a) in argv.enumerated() {
         if i > 0 { argvJSON += "," }
@@ -207,7 +207,8 @@ func emitExec(path: String, argv: [String], pid: Int32, ppid: Int32,
     "exe":"\(jsonEscape(path))","argv":\(argvJSON),"cdhash":"\(cdhash)",\
     "cs_flags":\(csFlags),"signed":\(signed),"valid":\(valid),"adhoc":\(adhoc),\
     "platform":\(isPlatform),"signing_id":"\(jsonEscape(signingID))",\
-    "team_id":"\(jsonEscape(teamID))","decision":"\(decision)","reason":"\(jsonEscape(reason))"}
+    "team_id":"\(jsonEscape(teamID))","decision":"\(decision)","reason":"\(jsonEscape(reason))"\
+    \(quarantine.map { ",\"quarantine\":\"\(jsonEscape($0))\"" } ?? "")}
     """.replacingOccurrences(of: "\n", with: "")
     emit(line)
 }
@@ -345,6 +346,56 @@ func applyMuting(_ client: OpaquePointer) -> Int {
 // operation it inspects and a slow handler stalls the machine; observation
 // costs nothing and is what these are for. Blocking is a later decision that
 // must be paid for with measured evidence.
+
+// ── Provenance: was this binary downloaded, and by what ──────────────────────
+//
+// A code signature cannot tell "ad-hoc because I compiled it" from "ad-hoc
+// because I downloaded it" — every local cc/cargo/go build is ad-hoc signed,
+// and so is a dropper. That ambiguity is why a review of the enforcement
+// surface found 2 of 3 would_deny decisions were the operator's own rustc and
+// rustup: banding on signature alone would have painted a developer's compiler
+// as an attack.
+//
+// The quarantine xattr resolves it, and carries more than a boolean:
+//
+//     0083;6a7e118c;Safari;<uuid>
+//
+// Field 3 is the SOURCE AGENT — Safari, WhatsApp, sharingd (AirDrop). So the
+// verdict becomes "downloaded via Safari and it ran" rather than "confirm it
+// is yours". A locally built binary has no such attribute at all.
+//
+// READ AT EXEC, NOT CORRELATED FROM NOTIFY_SETEXTATTR. Watching the attribute
+// being SET would miss every file quarantined before this Sentinel started and
+// would need a correlation window holding state. getxattr on the path the
+// kernel just handed us is complete and stateless.
+//
+// TWO PLACEMENT RULES, and both are load-bearing:
+//
+//   NEVER ON THE AUTH PATH. handle() runs a 20ms budget with a fail-open
+//   watchdog; a synchronous filesystem read there would eat the kernel
+//   deadline and could stall execs machine-wide. This is called only from the
+//   NOTIFY emission path, which is already off the decision path.
+//
+//   ONLY FOR UNTRUSTED BINARIES. Platform and properly-signed binaries are the
+//   overwhelming majority of execs, their provenance changes nothing about the
+//   verdict, and a syscall per exec at ~10k/hour is cost for no signal.
+let QUARANTINE_XATTR = "com.apple.quarantine"
+
+func quarantineOf(_ path: String) -> String? {
+    guard !path.isEmpty else { return nil }
+    var buf = [CChar](repeating: 0, count: 512)
+    let n = path.withCString { p -> ssize_t in
+        QUARANTINE_XATTR.withCString { attr -> ssize_t in
+            // XATTR_NOFOLLOW: read the attribute of the file the kernel
+            // executed, never of a symlink target an attacker could swap.
+            getxattr(p, attr, &buf, buf.count - 1, 0, XATTR_NOFOLLOW)
+        }
+    }
+    guard n > 0 else { return nil }   // ENOATTR -> not downloaded
+    buf[Int(n)] = 0
+    return String(cString: buf)
+}
+
 func handleNotify(_ msg: UnsafePointer<es_message_t>) {
     let m = msg.pointee
     let proc = m.process
@@ -372,13 +423,20 @@ func handleNotify(_ msg: UnsafePointer<es_message_t>) {
         // AUTH message — which, being cached, may never have arrived.
         let (deny, why) = shouldDeny(path: tpath, csFlags: tflags,
                                      isPlatform: tplat, cdhash: tcd)
+        // Gated: only untrusted binaries pay the syscall. See quarantineOf.
+        let tsigned = (tflags & CS_SIGNED) != 0
+        let tvalid = (tflags & CS_VALID) != 0
+        let tadhoc = (tflags & CS_ADHOC) != 0
+        let tuntrusted = !tplat && (!tsigned || tadhoc || !tvalid)
+        let quarantine = tuntrusted ? quarantineOf(tpath) : nil
         emitExec(path: tpath, argv: targv,
                  pid: Int32(bitPattern: tatok.val.5), ppid: target.pointee.ppid,
                  uid: tatok.val.1, cdhash: tcd, csFlags: tflags,
                  isPlatform: tplat,
                  signingID: signingIDOf(target), teamID: teamIDOf(target),
                  decision: deny ? (ENFORCE ? "denied" : "would_deny") : "allow",
-                 reason: why, tsNs: machToEpochNanos(m.mach_time))
+                 reason: why, tsNs: machToEpochNanos(m.mach_time),
+                 quarantine: quarantine)
         return
     }
 

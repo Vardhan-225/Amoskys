@@ -18,10 +18,7 @@ import pytest
 
 from amoskys.agents.os.macos.esf.collector import ESFStreamCollector
 
-MIGS = [
-    "src/amoskys/storage/migrations/sql/015_esf_exec_forensics.sql",
-    "src/amoskys/storage/migrations/sql/016_esf_kernel_events.sql",
-]
+from tests.unit.esf._migrations import ESF_MIGRATIONS as MIGS
 
 
 @pytest.fixture
@@ -452,3 +449,77 @@ def test_pid_reuse_does_not_clear_an_unwitnessed_process(store):
         "the earlier occupant of a recycled pid was wrongly cleared by a later "
         "witnessed exec")
     assert "/bin/new" not in exes, "the genuinely witnessed process must not be flagged"
+
+
+# ── quarantine provenance ────────────────────────────────────────────────
+def _exec_q(t, exe, cdhash, quarantine=None, adhoc=True):
+    rec = {
+        "v": 1, "t": t, "pid": 1, "ppid": 0, "uid": 501, "exe": exe,
+        "argv": [exe], "cdhash": cdhash, "cs_flags": 2, "signed": True,
+        "valid": True, "adhoc": adhoc, "platform": False, "signing_id": "",
+        "team_id": "", "decision": "would_deny", "reason": "adhoc from /Users/",
+    }
+    if quarantine:
+        rec["quarantine"] = quarantine
+    return json.dumps(rec)
+
+
+def test_downloaded_binary_records_its_source_agent(store, collector):
+    """The distinction a signature can never make.
+
+    Both binaries below are ad-hoc signed and would_deny. One was compiled
+    locally; one arrived via Safari. Only the xattr separates them, and it
+    names the source — which is what turns "confirm it's yours" into
+    "downloaded via Safari and it ran".
+    """
+    now = time.time_ns()
+    collector.ingest([
+        _exec_q(now, "/Users/a/Downloads/payload", "EVIL",
+                quarantine="0083;6a7e118c;Safari;ABCD-1234"),
+        _exec_q(now + 10**8, "/Users/a/build/mytool", "MINE"),
+    ])
+    rows = dict(store.db.execute(
+        "SELECT cdhash, quarantine FROM esf_exec_events").fetchall())
+    assert rows["EVIL"] == "0083;6a7e118c;Safari;ABCD-1234"
+    assert rows["MINE"] is None, "a local build must have no quarantine"
+
+
+def test_source_agent_is_recoverable_from_the_raw_string(store, collector):
+    """Stored raw, not parsed to a boolean — field 3 is the agent."""
+    now = time.time_ns()
+    for agent in ("Safari", "WhatsApp", "sharingd"):
+        collector.ingest([_exec_q(now, f"/tmp/{agent}bin", agent,
+                                  quarantine=f"0083;6a7e118c;{agent};UUID")])
+    for cdhash, q in store.db.execute(
+            "SELECT cdhash, quarantine FROM esf_exec_events "
+            "WHERE quarantine IS NOT NULL"):
+        assert q.split(";")[2] == cdhash
+
+
+def test_absent_quarantine_is_null_not_empty_string(store, collector):
+    """NULL is a definite answer — ENOATTR means locally built. An empty
+    string would be indistinguishable from a downloaded file whose attribute
+    failed to read."""
+    collector.ingest([_exec_q(time.time_ns(), "/Users/a/local", "L")])
+    v = store.db.execute(
+        "SELECT quarantine FROM esf_exec_events WHERE cdhash='L'").fetchone()[0]
+    assert v is None
+
+
+def test_the_banding_distinction_this_enables(store, collector):
+    """The 2D truth: signature AND provenance.
+
+    An adversarial review found 2 of 3 would_deny events were the operator's
+    own rustc/rustup. Signature alone bands both the compiler and the dropper
+    red; adding provenance separates them.
+    """
+    now = time.time_ns()
+    collector.ingest([
+        _exec_q(now, "/Users/a/.cargo/bin/rustc", "RUSTC"),
+        _exec_q(now + 10**8, "/Users/a/Downloads/x", "DROP",
+                quarantine="0083;6a7e118c;Safari;U"),
+    ])
+    q = dict(store.db.execute(
+        "SELECT cdhash, quarantine FROM esf_exec_events").fetchall())
+    # Same signature class, opposite provenance — which is the whole point.
+    assert q["RUSTC"] is None and q["DROP"] is not None
