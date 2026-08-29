@@ -47,7 +47,7 @@ class ESFCorroborator:
             with self.store._read_pool.connection() as db:
                 row = db.execute(
                     "SELECT decision, is_signed, is_valid, is_adhoc, is_platform, "
-                    "       cdhash, timestamp_ns "
+                    "       cdhash, timestamp_ns, quarantine "
                     "FROM esf_exec_events "
                     "WHERE pid = ? AND ABS(timestamp_ns - ?) <= ? "
                     "ORDER BY ABS(timestamp_ns - ?) LIMIT 1",
@@ -55,7 +55,7 @@ class ESFCorroborator:
                 ).fetchone()
                 if not row:
                     return None
-                decision, signed, valid, adhoc, platform, cdhash, ets = row
+                decision, signed, valid, adhoc, platform, cdhash, ets, quarantine = row
                 novel = False
                 if cdhash:
                     # Novel means the ledger's FIRST sighting is this execution,
@@ -75,6 +75,10 @@ class ESFCorroborator:
                     "esf_untrusted": untrusted,
                     "esf_novel_binary": novel,
                     "esf_cdhash": cdhash,
+                    # Raw xattr; field 3 names the source agent. Provenance is
+                    # the only thing that separates a downloaded dropper from a
+                    # local build, both of which are ad-hoc signed.
+                    "esf_quarantine": quarantine,
                 }
         except Exception:
             # An older schema, or the ESF tier not deployed. Recorded once and

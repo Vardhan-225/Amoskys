@@ -594,14 +594,69 @@ def _corroborating_witnesses(event: Dict[str, Any]) -> List[str]:
     country = str(event.get("geo_src_country") or "").upper()
     if country and country not in _HOME_REGIONS:
         reasons.append("foreign_source")
-    # ESF evidence, present only when the analyzer could attribute this event to
-    # a witnessed exec. Absent is NOT negative — it means unattributed.
-    if str(event.get("esf_decision") or "") in ("would_deny", "denied"):
-        reasons.append("kernel_would_deny")
-    if event.get("esf_untrusted"):
-        reasons.append("unsigned_at_exec")
-    if event.get("esf_novel_binary"):
-        reasons.append("novel_binary")
+
+    # ── CORRECTED AGAINST MEASURED BASE RATES ────────────────────────────
+    #
+    # The first version of this counted kernel_would_deny and unsigned_at_exec
+    # as witnesses on their own. Measured over 657,764 real executions on this
+    # machine, both are wrong:
+    #
+    #   kernel_would_deny      6 events, 1-in-109,627, 16.7 bits — and ALL SIX
+    #                          are locally-built ad-hoc binaries: rustup, the
+    #                          rust toolchain, two red-team test binaries and
+    #                          one of mine. Zero were malware. It is RARE and
+    #                          it is 100% BENIGN here, which makes it a measure
+    #                          of "someone compiled something", not of risk.
+    #                          Rarity and malice are different properties and
+    #                          this conflated them.
+    #
+    #   unsigned_at_exec       4,520 events, 1-in-145. Every one is ad-hoc,
+    #                          which is how every local cc/cargo/go build is
+    #                          signed. Zero were TRULY unsigned — on Apple
+    #                          silicon a binary must carry at least an ad-hoc
+    #                          signature to execute at all, so the "unsigned"
+    #                          case this was named for cannot occur.
+    #
+    # Left as they were, a developer running `cargo build` would have lifted
+    # the cap on any co-occurring probe chain — the exact false-positive path
+    # the gate exists to prevent, reintroduced by the fix for it.
+    #
+    # PROVENANCE IS THE DISCRIMINATOR. A signature cannot separate "ad-hoc
+    # because I compiled it" from "ad-hoc because I downloaded it"; the
+    # quarantine xattr can, and it names the source agent. An untrusted binary
+    # that ARRIVED FROM SOMEWHERE and then ran is the population that matters,
+    # and it has occurred zero times in 657,764 executions.
+    untrusted = bool(event.get("esf_untrusted"))
+    downloaded = bool(event.get("esf_quarantine"))
+    if untrusted and downloaded:
+        reasons.append("downloaded_and_untrusted")
+    # The kernel's refusal counts only ALONGSIDE provenance. On its own it is
+    # the toolchain; on a downloaded binary it is the thing this tier was built
+    # to catch.
+    if downloaded and str(event.get("esf_decision") or "") in ("would_deny", "denied"):
+        reasons.append("kernel_would_deny_on_download")
+    # Novelty ALSO requires provenance, for the same reason. A novel untrusted
+    # binary that was built here is a developer's first `cargo build` — 138
+    # such events in 657,764 execs, rare at 12.2 bits and entirely benign.
+    # Novel AND arrived-from-somewhere is a different claim.
+    if event.get("esf_novel_binary") and untrusted and downloaded:
+        reasons.append("novel_downloaded_binary")
+
+    # THE LIMITATION THIS LEAVES, stated because it is real and load-bearing.
+    #
+    # Every ESF witness above now requires quarantine, which means a
+    # LOCALLY-COMPILED dropper produces none of them. That is not an oversight;
+    # it is what the data supports. On this machine all 6 would_deny, all 4,520
+    # untrusted execs and all 138 novel binaries were locally built and benign,
+    # so any witness that fires without provenance fires on the toolchain.
+    #
+    # The consequence is worth naming: an attacker who compiles on the target
+    # defeats this corroborator entirely. Their chain must be escalated by
+    # BEHAVIOUR — the probe sequence — not by the kernel's view of the binary.
+    # That is a fusion-engine problem, and the red-team exercise showed exactly
+    # that gap: four loose probe hits that were never fused into a kill chain.
+    # Widening these witnesses to cover it would only re-import the false
+    # positives measured above.
     return reasons
 
 
