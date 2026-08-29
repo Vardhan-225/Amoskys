@@ -360,9 +360,48 @@ def main(run_once: bool = False) -> int:
 
     shutdown_event = threading.Event()
 
+    # Cleared when the main loop returns, so the watchdog can tell a clean
+    # exit from a hung one instead of killing a process that was already done.
+    _analyzer_running = threading.Event()
+    _analyzer_running.set()
+
     def handle_signal(signum, frame):
+        """Request shutdown, and GUARANTEE it happens.
+
+        Setting the event alone is cooperative: if the main loop is inside a
+        long drain or a slow query it will not check for a while, and SIGTERM
+        becomes advisory. Measured here — a `pkill` reported success, the
+        supervisor was expected to respawn, and the process was still running
+        the same pid with yesterday's code an entire day later. Every restart
+        after that silently applied nothing, which is how a stale-code incident
+        starts: not with an error, but with a restart that appeared to work.
+
+        The hard exit is a daemon thread rather than signal.alarm, so it cannot
+        be swallowed by whatever the main thread is blocked in. GRACE_S is long
+        enough for an in-flight batch to finish and short enough that a human
+        waiting on a restart does not conclude it worked.
+        """
         logger.info("Analyzer received signal %d, shutting down", signum)
         shutdown_event.set()
+
+        GRACE_S = 20.0
+
+        def _force_exit():
+            deadline = time.time() + GRACE_S
+            while time.time() < deadline:
+                if not _analyzer_running.is_set():
+                    return          # exited cleanly, nothing to force
+                time.sleep(0.5)
+            logger.error(
+                "Analyzer did not exit %.0fs after shutdown was requested — "
+                "forcing. A cooperative shutdown that never completes turns "
+                "every subsequent restart into a silent no-op.",
+                GRACE_S,
+            )
+            os._exit(1)
+
+        threading.Thread(target=_force_exit, name="shutdown-watchdog",
+                         daemon=True).start()
 
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
@@ -1650,6 +1689,8 @@ def main(run_once: bool = False) -> int:
             logger.info("Telemetry shipper stopped")
         except Exception:
             pass
+    _analyzer_running.clear()
+
     return 0
 
 
