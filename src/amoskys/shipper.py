@@ -334,6 +334,7 @@ SHIP_TABLES = {
             "final_classification",
             "description",
             "indicators",
+            "score_factors",
             "collection_agent",
             "enrichment_status",
             "threat_intel_match",

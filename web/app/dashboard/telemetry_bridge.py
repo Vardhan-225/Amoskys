@@ -1069,7 +1069,8 @@ def _create_minimal_schema(db: sqlite3.Connection):
                 collection_agent TEXT, description TEXT, process_name TEXT, remote_ip TEXT,
                 pid TEXT, username TEXT, domain TEXT, path TEXT, sha256 TEXT,
                 probe_name TEXT, detection_source TEXT, enrichment_status TEXT,
-                geo_src_country TEXT, asn_src_org TEXT, event_timestamp_ns INTEGER, event_id TEXT
+                geo_src_country TEXT, asn_src_org TEXT, event_timestamp_ns INTEGER, event_id TEXT,
+                score_factors TEXT
             )""",
         "process_events": """
             CREATE TABLE IF NOT EXISTS process_events (

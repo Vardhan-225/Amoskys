@@ -397,6 +397,7 @@ def init_db():
             ("composite_score", "REAL"),
             ("risk_score_raw", "REAL"),
             ("last_scored", "TEXT"),
+            ("score_factors", "TEXT"),
         ],
         "process_events": [
             ("name", "TEXT"),
@@ -755,6 +756,21 @@ def receive_telemetry():
     device_id = g.authenticated_device or data.get("device_id", "")
 
     if table not in ALLOWED_TABLES:
+        # Say WHICH kind of unknown. A table the server was built to accept but
+        # could not load is a deployment fault on this side; an unrecognised
+        # name is a fault on the sender's. The same 400 for both sent an
+        # operator looking at the shipper for a problem that was on the server.
+        if table.startswith("esf_") and _ESF_UNAVAILABLE_REASON:
+            return jsonify({
+                "error": f"Unknown table: {table}",
+                "cause": "esf_tier_unavailable",
+                "detail": (
+                    "This server failed to load the ESF fleet definitions, so "
+                    "the table is not registered for ingest. This is a server "
+                    "deployment fault, not a bad request. Cause: "
+                    f"{_ESF_UNAVAILABLE_REASON}"
+                ),
+            }), 503
         return jsonify({"error": f"Unknown table: {table}"}), 400
 
     if not events:
@@ -887,8 +903,26 @@ try:
         ESF_FLEET_COLUMNS as _ESF_FLEET_COLUMNS,
         ESF_FLEET_DDL as _ESF_FLEET_DDL,
     )
-except Exception:  # pragma: no cover - the fleet API must start regardless
+except Exception as _esf_import_error:  # pragma: no cover
+    # The fleet API must start regardless — a device tier that cannot be
+    # imported must not take down ingest for every other table.
+    #
+    # But it must not fail QUIETLY. Without these, the ESF tables drop out of
+    # ALLOWED_TABLES and the DDL is never applied, so every shipping cycle gets
+    #     400 {"error": "Unknown table: esf_exec_events"}
+    # which describes the symptom and hides the cause: the operator reads it as
+    # "the server does not support this table" when the truth is "this server
+    # failed to load the module that defines it." Those have completely
+    # different fixes, and the message points away from the real one.
     _ESF_FLEET_COLUMNS, _ESF_FLEET_DDL = {}, ""
+    _ESF_UNAVAILABLE_REASON = f"{type(_esf_import_error).__name__}: {_esf_import_error}"
+    logger.error(
+        "ESF fleet tier UNAVAILABLE — kernel-witnessed execution will be "
+        "rejected as 'Unknown table' on every shipping cycle. Cause: %s",
+        _ESF_UNAVAILABLE_REASON,
+    )
+else:
+    _ESF_UNAVAILABLE_REASON = None
 
 _UPSERT_TABLES = {"esf_binary_ledger": "cdhash"}
 
@@ -912,6 +946,7 @@ ALLOWED_TABLES = {
         "final_classification",
         "description",
         "indicators",
+        "score_factors",
         "collection_agent",
         "enrichment_status",
         "threat_intel_match",
