@@ -23,6 +23,7 @@ No request escapes. Not one.
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import socket
@@ -71,7 +72,7 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
         collection_interval: float = 10.0,
         log_paths: list | None = None,
     ):
-        device_id = socket.gethostname()
+        device_id = resolve_device_id()
 
         # Create local queue — no agent should ever run without one
         Path(self.QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)

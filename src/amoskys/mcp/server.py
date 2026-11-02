@@ -141,4 +141,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Re-enter through the package module rather than calling main() directly.
+    # Run as `python -m amoskys.mcp.server`, this file is loaded as __main__,
+    # so the tool modules' `from ..server import mcp` imports it a *second*
+    # time under its real name and registers all 64 tools on that copy's
+    # FastMCP instance — while __main__'s instance, the one main() serves,
+    # keeps only the resources declared above. Delegating here makes both
+    # halves land on the same instance.
+    from amoskys.mcp.server import main as _packaged_main
+
+    _packaged_main()

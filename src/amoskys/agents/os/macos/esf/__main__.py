@@ -9,6 +9,7 @@ Sentinel restarting must not lose the collector's position.
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import os
@@ -59,7 +60,10 @@ def main() -> int:
     from amoskys.storage.telemetry_store import TelemetryStore
 
     store = TelemetryStore()
-    device_id = os.getenv("AMOSKYS_DEVICE_ID") or socket.gethostname()
+    # Same resolver as every other writer. This one was already correct — it
+    # was the ONLY writer checking the env var, which is why ESF rows carried
+    # the canonical id while every other table carried a hostname.
+    device_id = resolve_device_id()
     collector = ESFStreamCollector(store, device_id=device_id)
 
     logger.info("ESF collector starting: stream=%s device=%s", stream, device_id)

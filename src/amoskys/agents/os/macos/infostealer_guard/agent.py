@@ -25,6 +25,7 @@ Usage:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import json
 import logging
@@ -80,7 +81,7 @@ class MacOSInfostealerGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
     MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
 
     def __init__(self, collection_interval: float = 15.0) -> None:
-        device_id = socket.gethostname()
+        device_id = resolve_device_id()
 
         # Local queue for offline resilience
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)

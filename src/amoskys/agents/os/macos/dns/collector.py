@@ -14,6 +14,7 @@ Returns shared_data dict with:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import re
@@ -600,9 +601,20 @@ def _parse_log_timestamp(ts_str: str) -> Optional[float]:
 
 
 def _get_hostname() -> str:
-    import socket
+    """The canonical device id — NOT the hostname, despite the name.
 
-    return socket.gethostname()
+    Kept under this name because callers across this package use it. Each of
+    the ten macOS collectors carried its own copy returning
+    socket.gethostname(), so device identity was computed independently in
+    eleven places and they disagreed: this Mac was simultaneously
+    "Akashs-MacBook-Air.local", "Mac", "Mac.attlocal.net" and the fleet
+    server's registered "b45045f5e1a0c15e". Nothing observed locally could be
+    correlated with anything the fleet held.
+
+    See amoskys.device_identity for why a hostname is not an identity.
+    """
+
+    return resolve_device_id()
 
 
 def _is_ip(value: str) -> bool:

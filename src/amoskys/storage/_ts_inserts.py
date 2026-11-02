@@ -300,7 +300,7 @@ class InsertMixin:
                     event_category, event_action, event_outcome,
                     risk_score, confidence, mitre_techniques,
                     geometric_score, temporal_score, behavioral_score,
-                    final_classification, description, indicators,
+                    final_classification, description, indicators, score_factors,
                     requires_investigation, collection_agent, agent_version,
                     enrichment_status, threat_intel_match,
                     geo_src_country, geo_src_city,
@@ -322,7 +322,7 @@ class InsertMixin:
                     file_owner, file_mtime, file_permissions,
                     tier
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -351,6 +351,14 @@ class InsertMixin:
                     event_data.get("final_classification", "legitimate"),
                     event_data.get("description"),
                     json.dumps(event_data.get("indicators", {})),
+                    # NULL, not "[]", when the scorer never ran on this path:
+                    # "not recorded" must stay distinguishable from "nothing
+                    # contributed", because the second reads as an explanation.
+                    (
+                        json.dumps(event_data["score_factors"])
+                        if event_data.get("score_factors") is not None
+                        else None
+                    ),
                     event_data.get("requires_investigation", False),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),

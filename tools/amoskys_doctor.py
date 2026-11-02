@@ -110,7 +110,9 @@ def probe_local_store() -> Signal:
     if malformed:
         return Signal(CRIT, "STORE_CORRUPT", "Telemetry store corrupt",
                       f"telemetry.db ({sz_gb:.1f}GB) is malformed — analyzer cannot write, "
-                      "shipping stalls.", "Delete store + restart; queues replay it.",
+                      "shipping stalls.",
+                      "Quarantine the file (never delete it) and salvage with "
+                      "'sqlite3 <file> .recover'. The queues hold hours, not the archive.",
                       healable=True)
     if sz_gb >= STORE_BLOAT_CRIT_GB:
         return Signal(CRIT, "STORE_BLOAT", "Telemetry store bloated",
@@ -228,17 +230,57 @@ def _iso_epoch(s: str) -> float:
 
 
 # ── Heal handlers (control: signal -> action) ──────────────────────────────────
-def heal_store(_: Signal) -> str:
-    subprocess.run(["launchctl", "bootout", "system", WATCHDOG_PLIST])
-    time.sleep(4)
-    subprocess.run(["pkill", "-9", "-f", "amoskys.watchdog"])
-    for ext in ("", "-wal", "-shm"):
+def heal_store(sig: Signal) -> str:
+    """Reclaim space without destroying evidence.
+
+    This previously ran os.remove() on telemetry.db/-wal/-shm. That is a root
+    LaunchDaemon, on a 300s timer, unattended, deleting the primary evidence
+    store of a security product — and STORE_BLOAT fires at 15GB, a size a
+    healthy busy endpoint reaches on its own. The justification given was
+    "queues will replay it"; they cannot. The per-agent queues hold hours, and
+    a store only reaches this size when local retention is broken — which is
+    also the condition under which shipping is behind, so the fleet server
+    does not have it either. The one machine holding the evidence deletes it.
+
+    Bloat is a retention failure, not a corruption event. The correct automated
+    response is to reclaim what is safely reclaimable and escalate loudly.
+    Corruption is quarantined, never deleted, so the file remains available for
+    forensics and for salvage with .recover.
+    """
+    notes = []
+    for ext in ("-wal", "-shm", ""):
+        if not os.path.exists(TELEMETRY_DB + ext):
+            notes.append(f"{os.path.basename(TELEMETRY_DB)}{ext} absent")
+
+    if sig.code == "STORE_CORRUPT":
+        stamp = time.strftime("%Y%m%dT%H%M%S")
+        quarantine = f"{TELEMETRY_DB}.corrupt-{stamp}"
         try:
-            os.remove(TELEMETRY_DB + ext)
-        except FileNotFoundError:
-            pass
-    subprocess.run(["launchctl", "bootstrap", "system", WATCHDOG_PLIST])
-    return "Stopped agent, removed corrupt/bloated store, restarted (queues will replay)."
+            os.rename(TELEMETRY_DB, quarantine)
+        except OSError as e:
+            return f"ESCALATE: store corrupt and could not be quarantined ({e}). No data was deleted."
+        return (f"Quarantined corrupt store to {os.path.basename(quarantine)}; a fresh store will be "
+                f"created on next write. NOT deleted — salvage with 'sqlite3 <file> .recover' before "
+                f"removing it, and free the space manually once salvaged.")
+
+    # STORE_BLOAT: checkpoint the WAL, which is safe, lossless, and often the
+    # bulk of the excess. Everything beyond that is a code fix, not a heal.
+    reclaimed = 0
+    try:
+        import sqlite3 as _sq
+        before = os.path.getsize(TELEMETRY_DB + "-wal") if os.path.exists(TELEMETRY_DB + "-wal") else 0
+        _c = _sq.connect(TELEMETRY_DB, timeout=30.0)
+        _c.execute("PRAGMA busy_timeout=30000")
+        _c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        _c.close()
+        after = os.path.getsize(TELEMETRY_DB + "-wal") if os.path.exists(TELEMETRY_DB + "-wal") else 0
+        reclaimed = max(0, before - after)
+    except Exception as e:
+        notes.append(f"checkpoint failed: {e}")
+
+    return (f"Checkpointed WAL (reclaimed {reclaimed / 1e6:.0f}MB). Store NOT deleted. "
+            f"Bloat means local retention is not pruning — fix cleanup_old_data() rather than "
+            f"discarding evidence. " + ("; ".join(notes) if notes else ""))
 
 
 def heal_threat_intel(_: Signal) -> str:

@@ -28,6 +28,7 @@ Usage:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import os
@@ -192,7 +193,7 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
         """
         # Auto-create infra when called via cli.run_agent() (zero-args path)
         _auto_infra = device_id is None
-        device_id = device_id or socket.gethostname()
+        device_id = device_id or resolve_device_id()
 
         if _auto_infra and queue_adapter is None:
             Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)

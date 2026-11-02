@@ -645,10 +645,42 @@ def evidence_for(
     try:
         placeholders = ",".join("?" * len(ids))
         scope, scope_p = insight_service._scope_sql(allowed_device_ids, " AND ")
+        # SELECT ONLY WHAT THIS STORE ACTUALLY HAS.
+        #
+        # This function ran against a fixed column list, and the tiers do not
+        # share a schema: the device store and the fleet cache have diverged,
+        # and server/fleet.db has neither requires_investigation nor
+        # score_factors. Naming an absent column raises sqlite3.Error, which
+        # the handler below turns into [] — so ONE missing optional field cost
+        # the caller EVERY row behind the claim, and the drawer that exists to
+        # make claims openable answered "no evidence" while the rows sat there.
+        #
+        # That is the precise failure this function was written to prevent,
+        # committed by the function itself. Degrading to "this field is not
+        # available here" is correct; degrading to "there is no evidence" is a
+        # lie about the record, and the more reassuring of the two.
+        present = {
+            r[0]
+            for r in db.execute("SELECT name FROM pragma_table_info('security_events')")
+        }
+        required = ["event_id", "device_id", "timestamp_dt", "event_category"]
+        optional = [
+            "description", "risk_score", "confidence", "final_classification",
+            "requires_investigation", "threat_intel_match", "mitre_techniques",
+            "score_factors",
+        ]
+        missing_required = [c for c in required if c not in present]
+        if missing_required:
+            # Without identity and time a row cannot be shown as evidence at all.
+            logger.warning(
+                "evidence store lacks required columns %s — cannot render rows",
+                missing_required,
+            )
+            return []
+        selected = required + [c for c in optional if c in present]
+        has_factors = "score_factors" in present
         rows = db.execute(
-            "SELECT event_id, device_id, timestamp_dt, event_category, description, "
-            "risk_score, confidence, final_classification, requires_investigation, "
-            "threat_intel_match, mitre_techniques "
+            "SELECT " + ", ".join(selected) + " "
             f"FROM security_events WHERE event_id IN ({placeholders})"
             + scope
             + " ORDER BY timestamp_dt DESC",
@@ -681,6 +713,46 @@ def evidence_for(
                 # not the same claim, and a row that does not say which it is
                 # invites the reader to assume the stronger one.
                 "provenance": _provenance(row),
+                # WHY the verdict reads the way it does.
+                #
+                # This function exists because naming evidence and then
+                # withholding it is what made the product feel untrustworthy.
+                # A row that says MALICIOUS with a risk number and no stated
+                # reason is the same withholding one level up: the reader is
+                # asked to accept a conclusion and trust that the arithmetic
+                # behind it was sound.
+                #
+                # Three states, deliberately: a list means the scorer spoke,
+                # [] means it ran and had nothing to add, and None means this
+                # row predates the column or came from a path that does not
+                # score. None must not render as "no reasons" — that is an
+                # absence of record being read as an absence of cause.
+                "why": _score_factors(row) if has_factors else None,
+            }
+        )
+    return out
+
+
+def _score_factors(row: dict) -> list[dict] | None:
+    """The scorer's own account of the verdict, or None if it never wrote one."""
+    raw = row.get("score_factors")
+    if raw is None:
+        return None
+    parsed = insight_service._j(raw, None)
+    if not isinstance(parsed, list):
+        return None
+    out = []
+    for f in parsed:
+        if not isinstance(f, dict):
+            continue
+        detail = f.get("detail")
+        out.append(
+            {
+                "name": f.get("name"),
+                "contribution": f.get("contribution"),
+                # Redacted like every other free-text field reaching the view:
+                # factor details quote paths and hostnames from the event.
+                "detail": insight_service._redact(detail) if detail else detail,
             }
         )
     return out

@@ -3,8 +3,7 @@
 # Updated: September 12, 2025
 
 # Configuration
-PYTHON := python3
-PIP := pip
+BOOTSTRAP_PYTHON ?= python3
 PROTO_DIR := proto
 SRC_DIR := src
 WEB_DIR := web
@@ -14,20 +13,27 @@ DATA_DIR := data
 DOCS_DIR := docs
 
 # Virtual environment
-VENV_DIR := .venv
+VENV_DIR ?= amoskys-venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
-VENV_PIP := $(VENV_DIR)/bin/pip
+# Use python -m pip so a non-executable pip shim cannot break reproducibility.
+VENV_PIP := $(VENV_PYTHON) -m pip
 
 # Proto compilation Python (allow override for CI)
-# Local: uses .venv/bin/python
+# Local: uses $(VENV_DIR)/bin/python
 # CI: override with PROTO_PYTHON=python
 PROTO_PYTHON ?= $(VENV_PYTHON)
 
 # Python interpreter for running tests, linting, and applications
-# Local: uses .venv/bin/python (default)
+# Local: uses $(VENV_DIR)/bin/python (default)
 # CI: override with PYTHON=python
 # Docker: override with PYTHON=python3
 PYTHON ?= $(VENV_PYTHON)
+PIP ?= $(VENV_PIP)
+
+# Local proof-of-sight inputs. Must be absolute so web/collector/analyzer cannot
+# silently fall back to a different CWD-relative threat-intel store.
+AMOSKYS_THREAT_INTEL_DB ?= $(abspath $(DATA_DIR)/threat_intel.db)
+export AMOSKYS_THREAT_INTEL_DB
 
 # Entry points
 EVENTBUS_ENTRY := ./amoskys-eventbus
@@ -39,7 +45,7 @@ ASSESSMENT_SCRIPT := scripts/automation/assess_repository.py
 DEV_SETUP_SCRIPT := scripts/automation/setup_dev_env.py
 
 # Targets
-.PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-web run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config
+.PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-web run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config doctor
 .PHONY: env-setup env-clean env-rebuild env-activate env-info assess assess-quick assess-save requirements-consolidate health-check shell
 .PHONY: env check-env validate run-dashboard stop-dashboard status logs-dashboard
 
@@ -52,6 +58,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "💡 Quick Start:"
 	@echo "   make env          # Set up environment (RECOMMENDED)"
+	@echo "   make doctor       # Verify runtime Python + threat-intel wiring"
 	@echo "   make check-env    # Verify environment is activated"
 	@echo "   make run-dashboard# Start the AMOSKYS Dashboard"
 	@echo ""
@@ -77,22 +84,22 @@ help: ## Show this help message
 
 env-setup: ## Professional environment setup with automation
 	@echo "🔧 Setting up AMOSKYS professional environment..."
-	$(PYTHON) $(ENV_SETUP_SCRIPT) --mode development
+	$(BOOTSTRAP_PYTHON) $(ENV_SETUP_SCRIPT) --mode development
 	@echo "✅ Professional environment setup completed"
 	@echo ""
 	@echo "🎯 To activate the virtual environment, run:"
-	@echo "   source .venv/bin/activate"
+	@echo "   source $(VENV_DIR)/bin/activate"
 	@echo ""
 	@echo "Or use: make env-activate (generates activation script)"
 
 env-production: ## Production environment setup
 	@echo "🏭 Setting up AMOSKYS production environment..."
-	$(PYTHON) $(ENV_SETUP_SCRIPT) --mode production
+	$(BOOTSTRAP_PYTHON) $(ENV_SETUP_SCRIPT) --mode production
 	@echo "✅ Production environment setup completed"
 
 env-clean: ## Clean environment and rebuild
 	@echo "🧹 Cleaning environment..."
-	$(PYTHON) $(ENV_SETUP_SCRIPT) --force --mode development
+	$(BOOTSTRAP_PYTHON) $(ENV_SETUP_SCRIPT) --force --mode development
 	@echo "✅ Environment cleaned and rebuilt"
 
 env-rebuild: env-clean ## Alias for env-clean
@@ -106,11 +113,11 @@ env-activate: ## Generate activation helper script
 	@echo "# AMOSKYS Environment Activation Helper" >> activate_env.sh
 	@echo "# Generated: $$(date)" >> activate_env.sh
 	@echo "" >> activate_env.sh
-	@echo "source .venv/bin/activate" >> activate_env.sh
+	@echo "source $(VENV_DIR)/bin/activate" >> activate_env.sh
 	@echo "export PYTHONPATH=\"\$$PWD/src:\$$PYTHONPATH\"" >> activate_env.sh
 	@echo "echo \"🧠⚡ AMOSKYS environment activated\"" >> activate_env.sh
 	@echo "echo \"Python: \$$(python --version)\"" >> activate_env.sh
-	@echo "echo \"Virtual env: .venv\"" >> activate_env.sh
+	@echo "echo \"Virtual env: $(VENV_DIR)\"" >> activate_env.sh
 	@echo "echo \"\"" >> activate_env.sh
 	@echo "echo \"Quick commands:\"" >> activate_env.sh
 	@echo "echo \"  make run-eventbus  - Start EventBus\"" >> activate_env.sh
@@ -153,7 +160,7 @@ shell: ## Activate environment and start interactive shell
 	fi
 	@echo "🧠⚡ Starting AMOSKYS interactive shell..."
 	@echo "   Type 'exit' or Ctrl+D to quit"
-	@bash --init-file <(echo "source .venv/bin/activate; export PYTHONPATH=\$$PWD/src:\$$PYTHONPATH; echo '✅ AMOSKYS environment active'; echo ''; echo 'Quick commands:'; echo '  make run-eventbus  - Start EventBus'; echo '  make run-agent     - Start FlowAgent'; echo '  make run-web       - Start Web Platform'; echo '  make test          - Run tests'; echo ''; PS1='(amoskys) \u@\h:\w\$$ '")
+	@bash --init-file <(echo "source $(VENV_DIR)/bin/activate; export PYTHONPATH=\$$PWD/src:\$$PYTHONPATH; echo '✅ AMOSKYS environment active'; echo ''; echo 'Quick commands:'; echo '  make run-eventbus  - Start EventBus'; echo '  make run-agent     - Start FlowAgent'; echo '  make run-web       - Start Web Platform'; echo '  make test          - Run tests'; echo ''; PS1='(amoskys) \u@\h:\w\$$ '")
 
 # ==============================================
 # REPOSITORY ASSESSMENT & HEALTH
@@ -183,6 +190,12 @@ health-check: ## Quick health check
 	@$(PYTHON) -c "import yaml; print(f'YAML: Available')"
 	@echo "✅ Core dependencies healthy"
 
+doctor: ## Local preflight: runtime Python, imports, and proof-of-sight wiring
+	@$(BOOTSTRAP_PYTHON) scripts/doctor_preflight.py \
+		--venv "$(VENV_DIR)" \
+		--python "$(PYTHON)" \
+		--threat-db "$(AMOSKYS_THREAT_INTEL_DB)"
+
 requirements-consolidate: ## Consolidate requirements files
 	@echo "📦 Consolidating requirements..."
 	@if [ -f "requirements.txt" ]; then \
@@ -205,7 +218,7 @@ setup-legacy: venv install-deps proto dirs certs ## Legacy setup method
 venv: ## Create Python virtual environment
 	@if [ ! -d "$(VENV_DIR)" ]; then \
 		echo "Creating virtual environment..."; \
-		$(PYTHON) -m venv $(VENV_DIR); \
+		$(BOOTSTRAP_PYTHON) -m venv $(VENV_DIR); \
 	fi
 	@echo "✅ Virtual environment ready"
 
@@ -452,7 +465,7 @@ ci-quality-check: ## Run EXACT CI quality checks locally (strict, must pass befo
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "Step 1/3: Black formatting check"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@$(PYTHON) -m black --check src/ tests/ web/ --exclude="(proto|migrations|\.venv)" || \
+	@$(PYTHON) -m black --check src/ tests/ web/ --exclude="(proto|migrations|\.venv|amoskys-venv)" || \
 		(echo "❌ FAILED: Run 'make fix-format' to fix" && exit 1)
 	@echo "✅ Black: PASSED"
 	@echo ""
@@ -476,7 +489,7 @@ ci-quality-check: ## Run EXACT CI quality checks locally (strict, must pass befo
 
 fix-format: ## Auto-fix black formatting issues
 	@echo "🔧 Fixing black formatting..."
-	$(PYTHON) -m black src/ tests/ web/ --exclude="(proto|migrations|\.venv)"
+	$(PYTHON) -m black src/ tests/ web/ --exclude="(proto|migrations|\.venv|amoskys-venv)"
 	@echo "✅ Formatting fixed!"
 
 fix-imports: ## Auto-fix isort import ordering
@@ -525,12 +538,12 @@ dev-clean: ## Clean development artifacts
 # ==============================================
 
 env: venv install-deps dirs ## Quick environment setup (alias for setup)
-	@echo "✅ Environment ready! Activate with: source .venv/bin/activate"
+	@echo "✅ Environment ready! Activate with: source $(VENV_DIR)/bin/activate"
 
 check-env: ## Check if virtual environment is activated
 	@if [ -z "$$VIRTUAL_ENV" ]; then \
 		echo "❌ Virtual environment not activated!"; \
-		echo "   Activate with: source .venv/bin/activate"; \
+		echo "   Activate with: source $(VENV_DIR)/bin/activate"; \
 		echo "   Or run with: make shell"; \
 		exit 1; \
 	else \
@@ -550,7 +563,7 @@ validate: venv ## Validate environment and dependencies
 run-dashboard: ## Start AMOSKYS Dashboard (recommended method)
 	@if [ -z "$$VIRTUAL_ENV" ]; then \
 		echo "❌ Virtual environment not activated!"; \
-		echo "   Activate with: source .venv/bin/activate"; \
+		echo "   Activate with: source $(VENV_DIR)/bin/activate"; \
 		echo "   Then run: make run-dashboard"; \
 		exit 1; \
 	fi
@@ -577,4 +590,3 @@ status: ## Show dashboard status
 
 logs-dashboard: ## Tail dashboard logs
 	@tail -f logs/flask.log 2>/dev/null || echo "No logs found"
-

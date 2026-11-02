@@ -26,6 +26,7 @@ Ground rules:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import enum
 import logging
@@ -216,10 +217,16 @@ class Collector(ABC):
 
 
 def _get_default_device_id() -> str:
-    """Get default device ID (hostname)."""
-    import socket
+    """The canonical device id — never the raw hostname.
+
+    See amoskys.device_identity: a hostname changes with the network, with
+    macOS sharing settings, and with a DHCP lease. This machine was carrying
+    four names at once before that was centralised.
+    """
+    import socket  # noqa: F401  (kept for callers importing it from here)
+
 
     try:
-        return socket.gethostname()
+        return resolve_device_id()
     except Exception:
         return "unknown"

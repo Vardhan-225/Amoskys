@@ -49,9 +49,25 @@ class ESFCorroborator:
                     "SELECT decision, is_signed, is_valid, is_adhoc, is_platform, "
                     "       cdhash, timestamp_ns, quarantine "
                     "FROM esf_exec_events "
-                    "WHERE pid = ? AND ABS(timestamp_ns - ?) <= ? "
-                    "ORDER BY ABS(timestamp_ns - ?) LIMIT 1",
-                    (pid, ts_ns, _MATCH_WINDOW_NS, ts_ns),
+                    # Causal direction only: the exec must precede the event.
+                    # A process cannot act before it execs, so an exec AFTER the
+                    # event is a different process that inherited a recycled pid.
+                    #
+                    # Measured on 7d of real data this changes nothing -- 1112 of
+                    # 1112 matches were already exec-before-event, and 0 were
+                    # acausal. It is kept because 52.6% of matched events have
+                    # MORE THAN ONE candidate exec on the same pid in-window, so
+                    # the ordering is doing real work; the day pid reuse puts a
+                    # candidate on the future side, ABS() would silently attach a
+                    # kernel witness from an unrelated process -- and a witness
+                    # lifts the cap to 0.70, so a wrong one manufactures a
+                    # malicious verdict rather than merely missing one.
+                    #
+                    # Among past candidates DESC picks the most recent exec,
+                    # which is the image actually running (exec replaces it).
+                    "WHERE pid = ? AND timestamp_ns <= ? AND ? - timestamp_ns <= ? "
+                    "ORDER BY timestamp_ns DESC LIMIT 1",
+                    (pid, ts_ns, ts_ns, _MATCH_WINDOW_NS),
                 ).fetchone()
                 if not row:
                     return None
@@ -71,6 +87,10 @@ class ESFCorroborator:
                     not platform and (not signed or adhoc or not valid)
                 )
                 return {
+                    # Private, popped by enrich() before the event is updated:
+                    # the cache needs to know WHICH execution answered, not just
+                    # that one did. Never reaches the scorer.
+                    "_exec_ts_ns": ets,
                     "esf_decision": decision,
                     "esf_untrusted": untrusted,
                     "esf_novel_binary": novel,
@@ -99,28 +119,71 @@ class ESFCorroborator:
         fields are simply omitted, so a downstream reader cannot mistake
         "we did not see it" for "the kernel approved it".
         """
-        pid = event.get("pid")
-        if not isinstance(pid, int) or pid <= 0:
+        # COERCE, DO NOT TYPE-CHECK. The analyzer's protobuf conversion does
+        # `proto_event.attributes[k] = str(v)`, so every attribute reaching the
+        # scorer is a STRING — pid arrives as '81786', not 81786.
+        #
+        # The first version required isinstance(pid, int) and returned early on
+        # everything. Measured: 30 of 30 execute_to_exfil events carry a pid,
+        # all of them strings, and the corroborator attached witnesses to zero
+        # of them. The gate would have stayed capped at 0.40 no matter what the
+        # kernel saw — a second null result indistinguishable from "the gate
+        # does not work", which is precisely the wrong conclusion to draw.
+        #
+        # Both forms are accepted because the same dict is built from a DB
+        # column (int) in one path and from proto attributes (str) in another,
+        # and a corroborator that works on only one of them is worse than none:
+        # it succeeds often enough to look correct.
+        raw_pid = event.get("pid")
+        try:
+            pid = int(raw_pid)
+        except (TypeError, ValueError):
             return event
-        ts = event.get("timestamp_ns")
-        if not isinstance(ts, int):
+        if pid <= 0:
+            return event
+        try:
+            ts = int(event.get("timestamp_ns"))
+        except (TypeError, ValueError):
             ts = time.time_ns()
 
         now = time.time()
         cached = self._cache.get(pid)
         if cached and (now - cached[1]) < _CACHE_TTL_S:
-            self._hits += 1
-            if cached[0]:
-                event.update(cached[0])
-            return event
+            payload, _cached_at, exec_ts = cached
+            # A cached witness is only valid for events that fall inside the
+            # SAME execution's window. pid is not an identity: macOS recycles
+            # them, and one live dropper investigation saw pid 85170 reused 13
+            # times. Serving a cached witness on pid alone would attach exec A's
+            # kernel record to exec B's event — and a witness LIFTS the cap to
+            # malicious, so a wrong one manufactures a verdict rather than
+            # merely missing one. That is the more expensive direction to err.
+            if abs(ts - exec_ts) <= _MATCH_WINDOW_NS:
+                self._hits += 1
+                event.update(payload)
+                return event
+            # Same pid, different execution — fall through and look it up again.
 
         self._misses += 1
         found = self._lookup(pid, ts)
-        if len(self._cache) >= _CACHE_MAX:
-            self._cache.clear()
-        self._cache[pid] = (found, now)
         if found:
+            exec_ts = found.pop("_exec_ts_ns")
+            if len(self._cache) >= _CACHE_MAX:
+                self._cache.clear()
+            self._cache[pid] = (found, now, exec_ts)
             event.update(found)
+        # NEGATIVES ARE NEVER CACHED.
+        #
+        # A miss is not a stable fact — it usually means the exec row has not
+        # been flushed by the ESF collector yet. Caching it froze that race for
+        # the full 300s TTL: a live dropper's first event (process_spawned)
+        # missed by milliseconds, cached None, and its execute_to_exfil 1.6s
+        # later — with the would_deny + Safari-quarantine exec row now sitting
+        # in the table, 1.6s inside a 30s window — read the stale None and
+        # scored 0.40 instead of 0.70. The corroborator never looked again.
+        #
+        # A miss costs one indexed query on the next event for that pid. A
+        # wrongly-cached miss costs the detection outright, and looks exactly
+        # like a working gate declining to fire.
         return event
 
     def stats(self) -> Dict[str, Any]:

@@ -75,6 +75,14 @@ _OPERATIONAL_PREFIXES = (
     "THRESHOLD_INCIDENTS",
 )
 
+# Autonomous command policy. These are intentionally conservative: IGRIS may
+# observe every cycle, but it must not churn endpoint actions every cycle.
+ACTION_BUDGETS = {
+    "COLLECT_NOW": {"max": 1, "window_s": 1800},  # per device / 30 min
+    "RESTART_AGENT": {"max": 1, "window_s": 3600},  # per agent+device / hour
+    "BLOCK_IP": {"max": 1, "window_s": 900, "ttl_s": 900},  # short containment
+}
+
 
 def _incident_category(signal_type: str) -> str:
     return (
@@ -608,6 +616,172 @@ class IGRISCloudBrain:
 
     # ── 5. Decision & Action ───────────────────────────────────
 
+    def _command_dedup_key(
+        self,
+        device_id: str,
+        command_type: str,
+        payload: dict[str, Any],
+        condition: str,
+    ) -> str:
+        if command_type == "RESTART_AGENT":
+            return (
+                f"{command_type}:{device_id}:"
+                f"{payload.get('agent_name', 'unknown')}:{condition}"
+            )
+        if command_type == "BLOCK_IP":
+            return (
+                f"{command_type}:{device_id}:{payload.get('ip', 'unknown')}:{condition}"
+            )
+        return f"{command_type}:{device_id}:{condition}"
+
+    def _rollback_plan(self, command_type: str, payload: dict[str, Any]) -> dict:
+        if command_type == "BLOCK_IP":
+            return {
+                "command_type": "UNBLOCK_IP",
+                "payload": {"ip": payload.get("ip", "")},
+                "reason": "Rollback temporary IGRIS containment",
+            }
+        return {}
+
+    def _block_ip_policy_failure(
+        self,
+        signal: BrainSignal | None,
+        evidence: dict[str, Any] | None,
+    ) -> str:
+        if signal is None:
+            return "BLOCK_IP requires a corroborating signal"
+        if signal.signal_type != "LATERAL_MOVEMENT":
+            return "BLOCK_IP requires lateral-movement correlation"
+        if signal.confidence < GATE_CONTAIN:
+            return "BLOCK_IP requires containment confidence"
+        if len(set(signal.device_ids or [])) < LATERAL_THRESHOLD:
+            return "BLOCK_IP requires corroboration across multiple devices"
+        if not evidence or float(evidence.get("max_risk", 0) or 0) < 0.8:
+            return "BLOCK_IP requires high-confidence evidence"
+        return ""
+
+    def _queue_governed_command(
+        self,
+        device_id: str,
+        command_type: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        priority: int = 5,
+        ttl: int | None = None,
+        reason: str,
+        condition: str,
+        signal: BrainSignal | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict:
+        """Queue an autonomous command only if policy permits it.
+
+        Suppressions are recorded as non-pending rows in device_commands so the
+        operator sees governance decisions without the endpoint receiving work.
+        """
+        from .command_queue import (
+            _ensure_commands_table,
+            _queue_command,
+            _record_command_decision,
+        )
+
+        payload = payload or {}
+        budget = ACTION_BUDGETS.get(command_type, {"max": 1, "window_s": 3600})
+        max_count = int(budget["max"])
+        window_s = int(budget["window_s"])
+        command_ttl = int(ttl or budget.get("ttl_s") or cfg.command_ttl)
+        dedup_key = self._command_dedup_key(device_id, command_type, payload, condition)
+        rollback = self._rollback_plan(command_type, payload)
+
+        _ensure_commands_table()
+
+        if command_type == "BLOCK_IP":
+            policy_failure = self._block_ip_policy_failure(signal, evidence)
+            if policy_failure:
+                return _record_command_decision(
+                    device_id,
+                    command_type,
+                    payload,
+                    priority=priority,
+                    requested_by="igris_brain",
+                    reason=policy_failure,
+                    policy_decision="suppressed_by_policy",
+                    dedup_key=dedup_key,
+                    rollback=rollback,
+                    source="igris_brain",
+                    ttl=window_s,
+                )
+
+        now = time.time()
+        allowed_count = int(
+            scalar(
+                """
+                SELECT COUNT(*) FROM device_commands
+                WHERE device_id = ? AND command_type = ? AND dedup_key = ?
+                  AND policy_decision LIKE 'allowed%'
+                  AND created_at >= ?
+                """,
+                (device_id, command_type, dedup_key, now - window_s),
+            )
+            or 0
+        )
+        if allowed_count >= max_count:
+            return _record_command_decision(
+                device_id,
+                command_type,
+                payload,
+                priority=priority,
+                requested_by="igris_brain",
+                reason=(
+                    f"Suppressed by budget: {allowed_count}/{max_count} "
+                    f"{command_type} in {window_s}s for {condition}"
+                ),
+                policy_decision="suppressed_by_budget",
+                dedup_key=dedup_key,
+                rollback=rollback,
+                source="igris_brain",
+                ttl=window_s,
+            )
+
+        in_flight = query(
+            """
+            SELECT id, status, policy_decision FROM device_commands
+            WHERE device_id = ? AND command_type = ? AND dedup_key = ?
+              AND status IN ('pending', 'claimed')
+              AND created_at >= ?
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (device_id, command_type, dedup_key, now - window_s),
+        )
+        if in_flight:
+            return _record_command_decision(
+                device_id,
+                command_type,
+                payload,
+                priority=priority,
+                requested_by="igris_brain",
+                reason=f"Duplicate active command for {condition}",
+                policy_decision="suppressed_by_dedup",
+                dedup_key=dedup_key,
+                rollback=rollback,
+                source="igris_brain",
+                ttl=window_s,
+            )
+
+        policy_decision = f"allowed:{allowed_count + 1}/{max_count}:{window_s}s"
+        return _queue_command(
+            device_id,
+            command_type,
+            payload,
+            priority=priority,
+            ttl=command_ttl,
+            requested_by="igris_brain",
+            reason=reason,
+            policy_decision=policy_decision,
+            dedup_key=dedup_key,
+            rollback=rollback,
+            source="igris_brain",
+        )
+
     def _decide_and_act(self, signals: list[BrainSignal]) -> list[dict]:
         """Confidence-gated autonomous response."""
         actions: list[dict] = []
@@ -651,34 +825,40 @@ class IGRISCloudBrain:
             ):
                 for ev in signal.evidence:
                     ip = ev.get("ip")
-                    if ip and ev.get("max_risk", 0) >= 0.8:
+                    if ip:
                         # Block the C2/lateral IP on all affected devices
                         for dev_id in signal.device_ids:
                             try:
-                                from .tools.agent import (
-                                    _ensure_commands_table,
-                                    _queue_command,
-                                )
-
-                                _queue_command(
+                                queued = self._queue_governed_command(
                                     dev_id,
                                     "BLOCK_IP",
                                     {
                                         "ip": ip,
                                         "reason": f"IGRIS Brain: {signal.message}",
-                                        "duration_s": 3600,
+                                        "duration_s": ACTION_BUDGETS["BLOCK_IP"][
+                                            "ttl_s"
+                                        ],
                                     },
                                     priority=1,
-                                    ttl=3600,
+                                    ttl=ACTION_BUDGETS["BLOCK_IP"]["ttl_s"],
+                                    reason=f"IGRIS Brain: {signal.message}",
+                                    condition=f"lateral_movement:{ip}",
+                                    signal=signal,
+                                    evidence=ev,
                                 )
                                 action = {
                                     "action": "BLOCK_IP",
                                     "ip": ip,
                                     "device_id": dev_id,
+                                    "status": queued.get("status"),
+                                    "policy_decision": queued.get("policy_decision"),
+                                    "command_id": queued.get("command_id"),
                                     "timestamp": time.time(),
                                 }
                                 actions.append(action)
-                                signal.actions_taken.append(f"blocked_{ip}_on_{dev_id}")
+                                signal.actions_taken.append(
+                                    f"{queued.get('status')}_block_{ip}_on_{dev_id}"
+                                )
                             except Exception:
                                 logger.exception(
                                     "Failed to block IP %s on %s", ip, dev_id
@@ -701,24 +881,41 @@ class IGRISCloudBrain:
         freshness = metrics.get("events.freshness_s", 0)
         if freshness > 600:  # >10 min without data
             devices = query("SELECT device_id FROM devices WHERE status = 'online'")
+            queued = 0
+            suppressed = 0
             for d in devices:
                 try:
-                    from .tools.agent import _queue_command
-
-                    _queue_command(d["device_id"], "COLLECT_NOW", priority=2)
+                    result = self._queue_governed_command(
+                        d["device_id"],
+                        "COLLECT_NOW",
+                        priority=2,
+                        reason=f"Pipeline stale ({freshness:.0f}s)",
+                        condition="pipeline_stale",
+                    )
+                    if result.get("status") == "pending":
+                        queued += 1
+                    else:
+                        suppressed += 1
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Brain self-heal: failed to govern collection for %s",
+                        d.get("device_id"),
+                    )
             healed.append(
                 {
                     "action": "trigger_collection",
                     "reason": f"Pipeline stale ({freshness:.0f}s)",
                     "devices": len(devices),
+                    "queued": queued,
+                    "suppressed": suppressed,
                     "timestamp": now,
                 }
             )
             logger.warning(
-                "Brain self-heal: triggered collection on %d devices (freshness=%ds)",
-                len(devices),
+                "Brain self-heal: collection policy queued=%d suppressed=%d "
+                "(freshness=%ds)",
+                queued,
+                suppressed,
                 freshness,
             )
 
@@ -748,26 +945,51 @@ class IGRISCloudBrain:
 
             for agent_name in missing:
                 try:
-                    from .tools.agent import _queue_command
-
-                    _queue_command(
-                        did, "RESTART_AGENT", {"agent_name": agent_name}, priority=3
+                    result = self._queue_governed_command(
+                        did,
+                        "RESTART_AGENT",
+                        {"agent_name": agent_name},
+                        priority=3,
+                        reason=f"Agent {agent_name} silent for >2h",
+                        condition="silent_gt_2h",
                     )
                     healed.append(
                         {
                             "action": "restart_agent",
                             "device": dev.get("hostname", did[:8]),
                             "agent": agent_name,
+                            "status": result.get("status"),
+                            "policy_decision": result.get("policy_decision"),
+                            "command_id": result.get("command_id"),
                             "timestamp": now,
                         }
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Brain self-heal: failed to govern restart for %s/%s",
+                        did,
+                        agent_name,
+                    )
 
             if missing:
+                queued = sum(
+                    1
+                    for item in healed
+                    if item.get("action") == "restart_agent"
+                    and item.get("device") == dev.get("hostname", did[:8])
+                    and item.get("status") == "pending"
+                )
+                suppressed = sum(
+                    1
+                    for item in healed
+                    if item.get("action") == "restart_agent"
+                    and item.get("device") == dev.get("hostname", did[:8])
+                    and item.get("status") != "pending"
+                )
                 logger.info(
-                    "Brain self-heal: restarting %d silent agents on %s",
-                    len(missing),
+                    "Brain self-heal: restart policy queued=%d suppressed=%d " "for %s",
+                    queued,
+                    suppressed,
                     dev.get("hostname", did[:8]),
                 )
 

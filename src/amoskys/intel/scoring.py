@@ -1359,11 +1359,17 @@ class ScoringEngine:
         # until the causal-chain rewrite (roadmap increment 2) can assert a real,
         # ordered, same-actor chain.
         capped_uncorroborated = False
+        # Computed for EVERY event, not only floored categories. Reads fields
+        # already on the dict (intel match, geo, ESF witness) — no query.
+        all_witnesses = _corroborating_witnesses(event)
         floor = _CATEGORY_RISK_FLOORS.get(cat_key, 0.0)
         if floor > 0.0:
-            country = str(event.get("geo_src_country") or "").upper()
-            foreign = bool(country) and country not in _HOME_REGIONS
-            witnesses = _corroborating_witnesses(event)
+            # Geo/intel corroboration lives inside _corroborating_witnesses
+            # (it emits "foreign_source" and "threat_intel_match"). An earlier
+            # version also computed `foreign` here and discarded it, which read
+            # as if the gate escalated on geo directly. It does not — there is
+            # exactly one place that decides what counts as a witness.
+            witnesses = all_witnesses
             corroborated = bool(witnesses)
             capped_uncorroborated = not corroborated
             if witnesses:
@@ -1436,6 +1442,49 @@ class ScoringEngine:
                 classification, 0
             ):
                 classification = original
+
+        # ── NO MALICIOUS VERDICT WITHOUT AN INDEPENDENT WITNESS ──────────────
+        #
+        # The corroboration requirement used to apply only to categories with a
+        # risk floor. Everything else could reach "malicious" on composite score
+        # alone — or, worse, by the never-downgrade rule above preserving the
+        # probe's own CRITICAL stamp, since capped_uncorroborated is False for
+        # an ungated category.
+        #
+        # Measured on this machine over four days: 158 malicious verdicts. A
+        # replay against this test leaves 2 — both the kernel-witnessed
+        # execute_to_exfil from a genuinely downloaded dropper. The other 156
+        # were /bin/sleep (20x), /usr/bin/log (18x), Chrome talking to Google
+        # (38x), and Chrome Helper. The top severity band, on the most
+        # innocuous binary on a Unix system, roughly forty times a day.
+        #
+        # A witness is something the scoring probe CANNOT influence: a threat
+        # intel hit, a foreign source, or a kernel observation of provenance.
+        # That is the whole point — a probe that raises its own score and then
+        # certifies it has proved nothing, and the arithmetic cannot tell the
+        # difference. Requiring an outside observer can.
+        #
+        # This SUPPRESSES verdicts, so it is deliberately conservative: it caps
+        # at "suspicious" rather than dismissing. The event still surfaces, it
+        # still carries its score, and it stops asserting a conclusion nothing
+        # independent supports.
+        if classification == "malicious" and not all_witnesses:
+            classification = "suspicious"
+            composite = min(composite, _SUSPICIOUS_THRESHOLD)
+            capped_uncorroborated = True
+            behav_factors.append(
+                {
+                    "name": "Uncorroborated Verdict Capped",
+                    "contribution": 0.0,
+                    "detail": (
+                        "Held at suspicious: no witness independent of the "
+                        "scoring probe. A malicious verdict requires a threat "
+                        "intel match, a foreign source, or a kernel observation "
+                        "— none was present, so the score rests entirely on "
+                        "signals this probe produced about itself."
+                    ),
+                }
+            )
 
         # ── Risk reconciliation — make the calibrated verdict authoritative ──
         # The probe stamps a raw risk_score (often hardcoded ~1.0). Bind the

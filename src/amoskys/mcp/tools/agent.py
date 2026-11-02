@@ -2,92 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import time
-import uuid
 from typing import Optional
 
-from ..config import cfg
 from ..db import execute, hours_ago_ns, query, query_one, scalar
 from ..server import mcp
+from ..command_queue import (
+    _ensure_commands_table,
+    _queue_command,
+    _record_command_decision,
+)
 
 # ── Command Queue ──────────────────────────────────────────────────
-
-
-def _ensure_commands_table():
-    """Create the device_commands table if it doesn't exist."""
-    from ..db import write_conn
-
-    with write_conn() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS device_commands (
-                id TEXT PRIMARY KEY,
-                device_id TEXT NOT NULL,
-                command_type TEXT NOT NULL,
-                payload TEXT NOT NULL DEFAULT '{}',
-                status TEXT NOT NULL DEFAULT 'pending',
-                priority INTEGER NOT NULL DEFAULT 5,
-                created_at REAL NOT NULL,
-                expires_at REAL NOT NULL,
-                claimed_at REAL,
-                completed_at REAL,
-                result TEXT,
-                source TEXT NOT NULL DEFAULT 'mcp'
-            )
-        """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_commands_device_status
-            ON device_commands(device_id, status)
-        """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_commands_expires
-            ON device_commands(expires_at)
-        """
-        )
-
-
-def _queue_command(
-    device_id: str,
-    command_type: str,
-    payload: dict | None = None,
-    priority: int = 5,
-    ttl: int | None = None,
-) -> dict:
-    """Queue a command for a device to pick up on next poll."""
-    _ensure_commands_table()
-    cmd_id = uuid.uuid4().hex[:16]
-    now = time.time()
-    expires = now + (ttl or cfg.command_ttl)
-
-    execute(
-        """
-        INSERT INTO device_commands (id, device_id, command_type, payload,
-                                     priority, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            cmd_id,
-            device_id,
-            command_type,
-            json.dumps(payload or {}),
-            priority,
-            now,
-            expires,
-        ),
-    )
-
-    return {
-        "command_id": cmd_id,
-        "device_id": device_id,
-        "command_type": command_type,
-        "status": "pending",
-        "expires_at": expires,
-    }
 
 
 # ── Tools ──────────────────────────────────────────────────────────
@@ -208,7 +134,9 @@ def agent_list_commands(
     commands = query(
         f"""
         SELECT id, device_id, command_type, payload, status, priority,
-               created_at, expires_at, claimed_at, completed_at, result, source
+               created_at, expires_at, claimed_at, completed_at, result,
+               requested_by, reason, policy_decision, dedup_key,
+               rollback_plan, source
         FROM device_commands
         {where}
         ORDER BY created_at DESC LIMIT ?

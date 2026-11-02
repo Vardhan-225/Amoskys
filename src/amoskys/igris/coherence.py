@@ -78,7 +78,15 @@ def assess(metrics: dict[str, Any], active_signal_count: int = 0) -> dict:
     eventbus = metrics.get("transport.eventbus_alive")
     wal_depth = metrics.get("transport.wal_queue_depth")
 
-    if eventbus is False:
+    required = metrics.get("transport.eventbus_required", True)
+
+    if eventbus is False and not required:
+        # Absent by design, not broken. The workers in this topology write
+        # directly to the store; the bus is a legacy transport nothing uses.
+        # Reporting it as a fault trained the operator to ignore transport
+        # alarms, which is exactly what you do not want the day one is real.
+        subsystem_status["transport"] = "not_deployed"
+    elif eventbus is False:
         subsystem_status["transport"] = "degraded"
         degrade(DEGRADED, "EventBus offline — using fleet transport")
     elif eventbus is None:
@@ -134,6 +142,26 @@ def assess(metrics: dict[str, Any], active_signal_count: int = 0) -> dict:
     elif drifting and drifting > 0:
         subsystem_status["amrdr"] = "drifting"
         degrade(DEGRADED, f"{drifting} agent(s) drifting from reliability baseline")
+    elif metrics.get("amrdr.informative") is False:
+        # SATURATED, NOT HEALTHY.
+        #
+        # Every branch above hunts for weights that are too LOW. A model that
+        # has never been contradicted sits near 1.0 and passes all of them,
+        # landing in the `else: nominal` below — so coherence reported the
+        # healthiest possible state for a trust model that cannot tell any two
+        # sensors apart. High confidence and earned confidence are not the same
+        # reading, and only this branch can distinguish them.
+        subsystem_status["amrdr"] = "uninformative"
+        degrade(
+            DEGRADED,
+            "Agent trust model has never recorded a counterexample "
+            f"({metrics.get('amrdr.counterexamples')} of "
+            f"{metrics.get('amrdr.observations') or 'all'} observations "
+            "disagreed) — its weights cannot distinguish one sensor from another",
+        )
+    elif metrics.get("amrdr.min_weight") is None:
+        # Unmeasurable is its own state. It must not fall through to nominal.
+        subsystem_status["amrdr"] = "unmeasurable"
     else:
         subsystem_status["amrdr"] = "nominal"
 

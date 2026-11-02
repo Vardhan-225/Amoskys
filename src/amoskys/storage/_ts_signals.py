@@ -15,6 +15,62 @@ logger = logging.getLogger("TelemetryStore")
 class SignalMixin:
     """Incident management and signal layer (Directive 3) methods."""
 
+    # Incident reads must work on two tiers: local mode stores analyst-created
+    # incidents in 'incidents' (ISO-text timestamps); fleet mode syncs
+    # brain-correlated incidents into 'fleet_incidents' (REAL unix timestamps,
+    # uppercase severity, device_ids/event_ids JSON arrays). Reads prefer
+    # whichever source actually has rows; writes stay on 'incidents'.
+
+    def _has_table(self, name: str) -> bool:
+        try:
+            return (
+                self.db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    (name,),
+                ).fetchone()
+                is not None
+            )
+        except sqlite3.Error:
+            return False
+
+    def _fleet_incidents_active(self) -> bool:
+        """True when fleet_incidents exists and carries rows — the fleet-tier
+        source of truth. An empty local 'incidents' table on that tier is a
+        sync artifact, not the real queue."""
+        if not self._has_table("fleet_incidents"):
+            return False
+        try:
+            return (
+                self.db.execute("SELECT 1 FROM fleet_incidents LIMIT 1").fetchone()
+                is not None
+            )
+        except sqlite3.Error:
+            return False
+
+    @staticmethod
+    def _normalize_fleet_incident(row: sqlite3.Row) -> Dict[str, Any]:
+        """Present a fleet_incidents row in the same shape as an 'incidents'
+        row so every consumer (APIs, investigation page) reads one format."""
+        inc = dict(row)
+        for ts_field in ("created_at", "updated_at", "resolved_at", "last_seen"):
+            val = inc.get(ts_field)
+            if isinstance(val, (int, float)) and val > 0:
+                inc[ts_field] = datetime.fromtimestamp(
+                    val, tz=timezone.utc
+                ).isoformat()
+        inc["severity"] = str(inc.get("severity") or "medium").lower()
+        try:
+            device_ids = json.loads(inc.get("device_ids") or "[]")
+        except (json.JSONDecodeError, TypeError):
+            device_ids = []
+        inc["device_ids"] = device_ids
+        if not inc.get("device_id"):
+            inc["device_id"] = device_ids[0] if device_ids else ""
+        if not inc.get("source_event_ids"):
+            inc["source_event_ids"] = inc.get("event_ids") or "[]"
+        inc["source"] = "fleet_incidents"
+        return inc
+
     def create_incident(self, data: Dict[str, Any]) -> Optional[int]:
         """Create a security incident."""
         now = datetime.now(timezone.utc).isoformat()
@@ -96,16 +152,21 @@ class SignalMixin:
         """Get incidents with optional status filter and pagination."""
         with self._lock:
             try:
+                table = (
+                    "fleet_incidents" if self._fleet_incidents_active() else "incidents"
+                )
                 if status:
                     cursor = self.db.execute(
-                        "SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                        f"SELECT * FROM {table} WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
                         (status, limit, offset),
                     )
                 else:
                     cursor = self.db.execute(
-                        "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                        f"SELECT * FROM {table} ORDER BY created_at DESC LIMIT ? OFFSET ?",
                         (limit, offset),
                     )
+                if table == "fleet_incidents":
+                    return [self._normalize_fleet_incident(r) for r in cursor.fetchall()]
                 return [dict(r) for r in cursor.fetchall()]
             except sqlite3.Error as e:
                 logger.error("Failed to get incidents: %s", e)
@@ -115,13 +176,16 @@ class SignalMixin:
         """Get total count of incidents, optionally filtered by status."""
         with self._lock:
             try:
+                table = (
+                    "fleet_incidents" if self._fleet_incidents_active() else "incidents"
+                )
                 if status:
                     row = self.db.execute(
-                        "SELECT COUNT(*) FROM incidents WHERE status = ?",
+                        f"SELECT COUNT(*) FROM {table} WHERE status = ?",
                         (status,),
                     ).fetchone()
                 else:
-                    row = self.db.execute("SELECT COUNT(*) FROM incidents").fetchone()
+                    row = self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
                 return int(row[0]) if row else 0
             except sqlite3.Error as e:
                 logger.error("Failed to get incidents count: %s", e)
@@ -131,8 +195,11 @@ class SignalMixin:
         """Get counts per status for incident summary cards."""
         with self._lock:
             try:
+                table = (
+                    "fleet_incidents" if self._fleet_incidents_active() else "incidents"
+                )
                 cursor = self.db.execute(
-                    "SELECT status, COUNT(*) FROM incidents GROUP BY status"
+                    f"SELECT status, COUNT(*) FROM {table} GROUP BY status"
                 )
                 return {row[0]: row[1] for row in cursor.fetchall()}
             except sqlite3.Error as e:
@@ -143,9 +210,12 @@ class SignalMixin:
         """Get counts per severity for incident charts (all incidents)."""
         with self._lock:
             try:
+                table = (
+                    "fleet_incidents" if self._fleet_incidents_active() else "incidents"
+                )
                 counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
                 cursor = self.db.execute(
-                    "SELECT severity, COUNT(*) FROM incidents GROUP BY severity"
+                    f"SELECT severity, COUNT(*) FROM {table} GROUP BY severity"
                 )
                 for row in cursor.fetchall():
                     severity = str(row[0] or "").lower()
@@ -157,17 +227,30 @@ class SignalMixin:
                 return {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
     def get_incident(self, incident_id: int) -> Optional[Dict[str, Any]]:
-        """Get a single incident by ID."""
+        """Get a single incident by ID, checking the active source first and
+        the other tier's table second so deep links survive tier changes."""
         with self._lock:
-            try:
-                cursor = self.db.execute(
-                    "SELECT * FROM incidents WHERE id = ?", (incident_id,)
-                )
-                row = cursor.fetchone()
-                return dict(row) if row else None
-            except sqlite3.Error as e:
-                logger.error("Failed to get incident: %s", e)
-                return None
+            fleet_first = self._fleet_incidents_active()
+            tables = (
+                ("fleet_incidents", "incidents")
+                if fleet_first
+                else ("incidents", "fleet_incidents")
+            )
+            for table in tables:
+                if not self._has_table(table):
+                    continue
+                try:
+                    row = self.db.execute(
+                        f"SELECT * FROM {table} WHERE id = ?", (incident_id,)
+                    ).fetchone()
+                except sqlite3.Error as e:
+                    logger.error("Failed to get incident from %s: %s", table, e)
+                    continue
+                if row:
+                    if table == "fleet_incidents":
+                        return self._normalize_fleet_incident(row)
+                    return dict(row)
+            return None
 
     # ── Signals Layer (Directive 3) ──────────────────────────────────────────
 

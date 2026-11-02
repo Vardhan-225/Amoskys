@@ -33,6 +33,7 @@ MITRE ATT&CK Coverage:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import platform
@@ -185,7 +186,7 @@ class KernelAuditAgent(MicroProbeAgentMixin, HardenedAgentBase):
         """
         # Auto-create infra when called via cli.run_agent() (zero-args path)
         _auto_infra = device_id is None
-        device_id = device_id or socket.gethostname()
+        device_id = device_id or resolve_device_id()
 
         if _auto_infra and eventbus_publisher is None:
             eventbus_publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)

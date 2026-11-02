@@ -7,6 +7,7 @@ CDN masquerade, geo-anomalies, and long-lived connection patterns.
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import platform
@@ -58,7 +59,7 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
     )
 
     def __init__(self, collection_interval: float = 10.0) -> None:
-        device_id = socket.gethostname()
+        device_id = resolve_device_id()
 
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(

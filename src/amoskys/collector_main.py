@@ -28,6 +28,7 @@ import logging
 import os
 import platform
 import signal
+from amoskys.device_identity import resolve_device_id
 import socket
 import sys
 import threading
@@ -491,7 +492,8 @@ def main() -> int:
 
     logger.info("AMOSKYS Collector Daemon starting (pid=%d)", os.getpid())
 
-    device_id = socket.gethostname()
+    # Canonical identity, never the raw hostname — see device_identity.
+    device_id = resolve_device_id()
     shutdown_event = threading.Event()
 
     def handle_signal(signum, frame):

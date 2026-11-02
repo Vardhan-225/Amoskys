@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import time
-import uuid
 from typing import Optional
 
 from ..config import cfg
@@ -20,37 +17,27 @@ def _queue_response(
     ttl: int = 600,
 ) -> dict:
     """Queue a high-priority response command."""
-    from .agent import _ensure_commands_table
+    from ..command_queue import _queue_command
 
-    _ensure_commands_table()
-    cmd_id = uuid.uuid4().hex[:16]
-    now = time.time()
-
-    execute(
-        """
-        INSERT INTO device_commands (id, device_id, command_type, payload,
-                                     priority, created_at, expires_at, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'igris_response')
-    """,
-        (
-            cmd_id,
-            device_id,
-            command_type,
-            json.dumps(payload),
-            priority,
-            now,
-            now + ttl,
+    result = _queue_command(
+        device_id,
+        command_type,
+        payload,
+        priority=priority,
+        ttl=ttl,
+        requested_by="igris_response",
+        reason=str(payload.get("reason", "")),
+        policy_decision="allowed:manual_response",
+        dedup_key="",
+        rollback=(
+            payload.get("rollback") if isinstance(payload.get("rollback"), dict) else {}
         ),
+        source="igris_response",
     )
-
-    return {
-        "command_id": cmd_id,
-        "device_id": device_id,
-        "command_type": command_type,
-        "status": "queued",
-        "priority": priority,
-        "ttl": ttl,
-    }
+    result["status"] = "queued"
+    result["priority"] = priority
+    result["ttl"] = ttl
+    return result
 
 
 @mcp.tool()

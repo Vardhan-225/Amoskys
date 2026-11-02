@@ -13,6 +13,7 @@ It only READS and INDEXES the data, adding cross-domain join keys.
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import socket
@@ -41,7 +42,7 @@ class CorrelationCollector:
         device_id: str = "",
         rolling_window_seconds: float = 300.0,
     ) -> None:
-        self.device_id = device_id or socket.gethostname()
+        self.device_id = device_id or resolve_device_id()
         self.rolling = RollingWindowAggregator(window_seconds=rolling_window_seconds)
 
         # Lazy-init collectors on first collect() — avoids import cost at module load

@@ -9,6 +9,7 @@ Addresses peer review criticisms:
 """
 
 from __future__ import annotations
+from amoskys.device_identity import resolve_device_id
 
 import logging
 import os
@@ -1349,7 +1350,7 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
     DEFAULT_INTERVAL = 2.0
 
     def __init__(self, **kwargs):
-        device_id = kwargs.pop("device_id", socket.gethostname())
+        device_id = kwargs.pop("device_id", resolve_device_id())
 
         # Wire queue_adapter so events flow to WAL → analysis pipeline
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -1460,7 +1461,7 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
 
         rt_events_raw = self._collector.collect()
         device_id = (
-            self._device_id if hasattr(self, "_device_id") else socket.gethostname()
+            self._device_id if hasattr(self, "_device_id") else resolve_device_id()
         )
 
         # Self-exclusion: filter out AMOSKYS's own log entries

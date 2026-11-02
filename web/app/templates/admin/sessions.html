@@ -31,7 +31,6 @@
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">Session Management</h3>
-            <button class="neural-button neural-button-danger" id="revoke-all-sessions-btn">⚠️ Revoke All Sessions</button>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">
             Session management is available through the <a href="/admin/users" style="color: var(--neural-primary);">User Management</a> page.
@@ -99,23 +98,10 @@ class SessionManager {
         }
     }
 
-    async revokeAllSessions() {
-        if (!confirm('WARNING: This will log out ALL users immediately. Are you sure?')) {
-            return;
-        }
-        if (!confirm('This action cannot be undone. Confirm again to proceed.')) {
-            return;
-        }
-
-        alert('Bulk session revocation is not yet implemented. Use individual user management instead.');
-    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     window.sessionManager = new SessionManager();
-
-    // Revoke all sessions button
-    document.getElementById('revoke-all-sessions-btn').addEventListener('click', () => sessionManager.revokeAllSessions());
 });
 </script>
 {% endblock %}

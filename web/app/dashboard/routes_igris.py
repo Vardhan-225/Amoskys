@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import sqlite3
 import os
 import queue
 import threading
@@ -417,21 +418,163 @@ def _build_igris_chat():
 
     # Fleet mode: use fleet_cache.db (synced from ops server)
     # Local mode: use telemetry.db (agent running on this machine)
+    #
+    # THE TEST IS USABILITY, NOT EXISTENCE.
+    #
+    # This selected the cache on `_CACHE_DB_PATH.exists()`. A zero-byte file
+    # exists. data/fleet_cache.db was exactly that — 0 bytes, no tables at all —
+    # so in fleet mode IGRIS was handed an empty database and answered every
+    # question from it, truthfully and catastrophically:
+    #
+    #     "All 17 agents are stopped."
+    #     "Zero events, zero incidents, zero signals."
+    #     "No MITRE techniques observed because there are no probes firing."
+    #     "Anything could be happening and I wouldn't see it."
+    #
+    # At that moment the real store was taking ~24,000 events an hour from 23
+    # running agents. The recommended remedy was to restart the fleet. Acting on
+    # it would have taken down a healthy system in response to an outage that
+    # existed only in the choice of file.
+    #
+    # An empty database is not a quiet one. It answers every question with
+    # "nothing", and "nothing" is indistinguishable from a clean machine.
     if _os.environ.get("AMOSKYS_OPS_SERVER"):
         from web.app.dashboard.telemetry_bridge import _CACHE_DB_PATH
 
-        db_path = (
-            str(_CACHE_DB_PATH) if _CACHE_DB_PATH.exists() else "data/telemetry.db"
-        )
+        db_path = "data/telemetry.db"
+        if _cache_is_usable(_CACHE_DB_PATH):
+            db_path = str(_CACHE_DB_PATH)
+        else:
+            # LOUD. A silent fallback is how the wrong-store class survives:
+            # the surface keeps answering, just about somewhere else.
+            logger.error(
+                "Fleet cache at %s is unusable (missing, empty, or has no "
+                "security_events table) — IGRIS is falling back to the local "
+                "store. Fleet-wide answers will describe THIS device only.",
+                _CACHE_DB_PATH,
+            )
     else:
         db_path = "data/telemetry.db"
 
+    # AMRDR IS A SEPARATE DATABASE. This passed db_path — telemetry.db, or the
+    # fleet cache — which has no agent_reliability table at all. IGRIS queried
+    # it, got nothing, and reported "AMRDR is empty. Reliability scores
+    # returned nothing. Zero." while the real store held 3 agents and 26,670
+    # observations.
+    #
+    # It was not lying. Its introspection was pointed at the wrong file, and it
+    # reported the resulting emptiness with total confidence — the layer whose
+    # entire claim is knowing its own state, describing a database it does not
+    # use. The comment above ("fleet_cache has all tables") was true of the
+    # event tables and quietly false of this one.
+    src = describe_source(db_path)
+    logger.info(
+        "IGRIS data source: %s | usable=%s devices=%s events_24h=%s "
+        "newest=%ss ago%s",
+        src["store"], src["usable"], src["devices"], src["events_24h"],
+        src["newest_event_age_seconds"],
+        f" | CAVEAT: {src['caveat']}" if src["caveat"] else "",
+    )
+
     return IgrisChat(
         telemetry_db=db_path,
-        fusion_db=db_path,  # fleet_cache has all tables
-        reliability_db=db_path,
+        fusion_db=db_path,  # fleet_cache has all the EVENT tables
+        reliability_db=_reliability_db_path(),
         action_executor=action_executor,
     )
+
+
+def describe_source(db_path: str) -> dict:
+    """What world is IGRIS actually describing?
+
+    Every answer it gives — event counts, agent health, threat posture — is
+    scoped to one store with one retention horizon and one set of devices. None
+    of that was ever stated, so on 2026-09-13 "zero events, zero incidents,
+    zero signals" was indistinguishable from a clean machine when it actually
+    meant "this file is empty".
+
+    A count without its source is not a measurement. This makes the source
+    part of the answer.
+    """
+    out = {
+        "store": db_path,
+        "usable": False,
+        "devices": None,
+        "events_24h": None,
+        "newest_event_age_seconds": None,
+        "caveat": None,
+    }
+    try:
+        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+            out["caveat"] = (
+                f"{db_path} is missing or empty — any zero from it describes "
+                "the file, not the machine."
+            )
+            return out
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        try:
+            if not db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='security_events'"
+            ).fetchone():
+                out["caveat"] = f"{db_path} has no security_events table."
+                return out
+            now_ns = time.time_ns()
+            out["usable"] = True
+            out["devices"] = db.execute(
+                "SELECT COUNT(DISTINCT device_id) FROM security_events"
+            ).fetchone()[0]
+            out["events_24h"] = db.execute(
+                "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
+                (now_ns - 86_400_000_000_000,),
+            ).fetchone()[0]
+            newest = db.execute(
+                "SELECT MAX(timestamp_ns) FROM security_events"
+            ).fetchone()[0]
+            if newest:
+                out["newest_event_age_seconds"] = int((now_ns - newest) / 1e9)
+            # A store that is readable but stale is its own failure, and it
+            # looks exactly like a quiet machine.
+            if out["events_24h"] == 0:
+                out["caveat"] = (
+                    "This store holds no events from the last 24h. That is a "
+                    "statement about the store; do not read it as a quiet "
+                    "machine without checking the sensors directly."
+                )
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        out["caveat"] = f"{db_path} could not be read: {exc}"
+    return out
+
+
+def _cache_is_usable(path) -> bool:
+    """Does this cache actually hold telemetry, or merely exist?
+
+    Existence is not readability and readability is not content. A zero-byte
+    file opens fine under sqlite3 and reports no tables, so every count taken
+    from it is a truthful zero about nothing.
+    """
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return False
+        db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
+        try:
+            return bool(
+                db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' "
+                    "AND name='security_events'"
+                ).fetchone()
+            )
+        finally:
+            db.close()
+    except Exception:
+        return False
+
+
+def _reliability_db_path() -> str:
+    """Where AMRDR actually lives — never the telemetry or fleet-cache store."""
+    return os.getenv("AMOSKYS_RELIABILITY_DB", "data/intel/reliability.db")
 
 
 def _get_igris_chat(create: bool = True):
@@ -998,12 +1141,33 @@ def guardian_execute():
             try:
                 from amoskys.intel.reliability_store import ReliabilityStore
 
-                rs = ReliabilityStore()
-                states = rs.get_all_states()
+                rs = ReliabilityStore(db_path=_reliability_db_path())
+                # load_all_states, not get_all_states — the latter does not
+                # exist, so this raised AttributeError into the handler's
+                # `except Exception` below and surfaced as an error rather than
+                # as data. Two independent faults stacked here: the wrong
+                # database AND the wrong method name, each sufficient on its own
+                # to make the trust model look absent.
+                states = rs.load_all_states()
                 if not states:
-                    return jsonify(
-                        {"output": "No reliability data yet.", "cmd_type": "info"}
-                    )
+                    # "No data yet" is a claim about the trust model. Say which
+                    # of the two it is: a store that cannot be read at all, and
+                    # a store that is genuinely empty, need opposite responses,
+                    # and the reassuring phrasing covered a wrong path for
+                    # months.
+                    path = _reliability_db_path()
+                    if not os.path.exists(path):
+                        msg = (
+                            f"AMRDR store not found at {path}. This is a "
+                            "configuration fault, not an empty trust model — "
+                            "no conclusion about agent reliability can be drawn."
+                        )
+                    else:
+                        msg = (
+                            f"AMRDR store at {path} is readable and contains no "
+                            "agent states. The trust model is genuinely empty."
+                        )
+                    return jsonify({"output": msg, "cmd_type": "info"})
                 lines = ["Agent Reliability Scores", ""]
                 for aid, st in sorted(states.items()):
                     score = (

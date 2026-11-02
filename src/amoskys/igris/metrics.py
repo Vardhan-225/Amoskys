@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from amoskys.intel import reliability_integrity
+
 logger = logging.getLogger("igris.metrics")
 
 # Resolve project root from this file's location (src/amoskys/igris/metrics.py)
@@ -168,6 +170,37 @@ class MetricCollector:
         except OSError:
             m["transport.eventbus_alive"] = False
 
+        # IS THE BUS EVEN PART OF THIS DEPLOYMENT?
+        #
+        # A port probe answers "is something listening", which is only a fault
+        # if something was supposed to be. The live topology starts its workers
+        # as `python -m amoskys.<worker>` and they write straight to the store;
+        # nothing routes through the bus. So this probe was permanently False,
+        # and coherence raised a CRITICAL stability warning on it continuously
+        # while ~24,000 events an hour flowed past it.
+        #
+        # On 2026-09-13 that standing signal was read as the cause of an outage
+        # that was not happening, and the recommended remedy was to restart a
+        # healthy fleet. A permanently-red signal is worse than no signal: it is
+        # indistinguishable from a real one at the moment a real one arrives.
+        #
+        # Default off because that is the measured reality of this deployment.
+        # Set AMOSKYS_EVENTBUS_REQUIRED=1 on a topology that genuinely runs the
+        # bus (the launcher.py path), and the alarm becomes meaningful again.
+        m["transport.eventbus_required"] = (
+            os.getenv("AMOSKYS_EVENTBUS_REQUIRED", "0") == "1"
+        )
+        # The raw probe stays truthful and visible; THIS is what an alarm should
+        # watch. "Not listening" and "not listening when it was supposed to be"
+        # are different facts, and only the second is a fault. The hard rule
+        # fired on the first, so a component absent by design raised a CRITICAL
+        # on every cycle — 1,438 signals emitted since start, against 613
+        # cleared, with this one never clearable because nothing was wrong.
+        m["transport.eventbus_down_unexpectedly"] = (
+            m["transport.eventbus_alive"] is False
+            and m["transport.eventbus_required"]
+        )
+
         # WAL queue depth
         m["transport.wal_queue_depth"] = self._sql_scalar(
             self._wal_db, "SELECT COUNT(*) FROM wal"
@@ -299,15 +332,41 @@ class MetricCollector:
                     drifting += 1
 
             m["amrdr.agents"] = agent_data
-            m["amrdr.min_weight"] = round(min_weight, 3) if states else 1.0
+            # None when there are no agents, NOT 1.0. The default said "perfectly
+            # reliable" for a trust model with nothing in it — absence rendering
+            # as the healthiest possible reading, which is the one direction a
+            # health metric must never fail in.
+            m["amrdr.min_weight"] = round(min_weight, 3) if states else None
             m["amrdr.quarantined_count"] = quarantined
             m["amrdr.drifting_count"] = drifting
+
+            # HAS THE TRUST MODEL EVER SEEN A COUNTEREXAMPLE?
+            #
+            # Every check above looks for weights that are too LOW. A saturated
+            # model sits near 1.0 and passes all of them. Measured on this
+            # machine: 26,643 observations, ground_truth_match = 1 on every one,
+            # beta frozen at 1.0, weights 0.999874/0.999884/0.999438 — a spread
+            # of 4.46e-04. Uniform to four decimal places, so weighting by them
+            # is arithmetically identical to not weighting at all, and coherence
+            # reported "nominal" because nothing was below 0.5.
+            integrity = reliability_integrity.measure()
+            m["amrdr.informative"] = (
+                None if integrity["state"] == "unmeasurable"
+                else integrity["state"] == "informative"
+            )
+            m["amrdr.counterexamples"] = integrity["counterexamples"]
+            m["amrdr.weight_spread"] = integrity["weight_spread"]
+            m["amrdr.integrity_detail"] = integrity["detail"]
         except Exception as e:
             logger.debug("AMRDR collection failed: %s", e)
             m["amrdr.agents"] = {}
             m["amrdr.min_weight"] = None
             m["amrdr.quarantined_count"] = None
             m["amrdr.drifting_count"] = None
+            m["amrdr.informative"] = None
+            m["amrdr.counterexamples"] = None
+            m["amrdr.weight_spread"] = None
+            m["amrdr.integrity_detail"] = None
 
     # ── SOMA Brain Health ─────────────────────────────────────────
 

@@ -43,9 +43,15 @@ HARD_RULES: dict[str, tuple] = {
         SignalType.STABILITY_WARNING,
         "fleet",
     ),
-    "transport.eventbus_alive": (
+    # Watches the DERIVED fact, not the raw probe. The bus being absent is only
+    # a fault when this deployment runs one; the live topology writes straight
+    # to the store and never uses it. Watching the raw probe made this rule
+    # permanently critical and permanently unclearable, which is worse than no
+    # rule: an operator who learns to scroll past a standing CRITICAL will
+    # scroll past the real one too.
+    "transport.eventbus_down_unexpectedly": (
         None,
-        lambda v, _: "critical" if v is False else None,
+        lambda v, _: "critical" if v else None,
         SignalType.STABILITY_WARNING,
         "transport",
     ),

@@ -108,31 +108,53 @@ check_stale_code() {
   # A self-check cannot detect its own staleness. The supervisor is therefore
   # checked FIRST and by a different mechanism: its own start time against the
   # script file on disk. That is the one comparison it can make about itself.
-  local newest worker pid started sup_started script_mtime
+  local sup_started script_mtime
+  # THE BOOTSTRAP PROBLEM, stated because it bit immediately.
+  #
+  # A self-check cannot detect its own staleness. The supervisor is therefore
+  # checked FIRST and by a different mechanism: its own start time against the
+  # script file on disk. That is the one comparison it can make about itself.
   sup_started=$(ps -o lstart= -p $$ 2>/dev/null | xargs -I{} date -j -f "%a %b %d %T %Y" {} +%s 2>/dev/null || echo 0)
   script_mtime=$(stat -f %m "$0" 2>/dev/null || echo 0)
   if [ "${sup_started:-0}" -gt 0 ] && [ "$script_mtime" -gt "$sup_started" ]; then
     echo "$(date -u +%FT%TZ) STALE SUPERVISOR: this process started before the current $0. Its own checks are running an older build — restart it with: launchctl kickstart -k gui/\$(id -u)/com.amoskys.live" >> logs/supervisor.log
   fi
 
-  newest=$(find src -name '*.py' -newer "$STALE_STAMP" -print -quit 2>/dev/null)
-  [ -z "$newest" ] && return 0
-
-  for worker in amoskys.collector_main amoskys.analyzer_main amoskys.shipper amoskys.agents.os.macos.esf; do
-    pid=$(pgrep -f "$worker" | head -1) || continue
-    [ -z "$pid" ] && continue
-    # Process start (epoch) vs the stamp we last refreshed after a restart.
-    started=$(ps -o lstart= -p "$pid" 2>/dev/null | xargs -I{} date -j -f "%a %b %d %T %Y" {} +%s 2>/dev/null)
-    [ -z "$started" ] && continue
-    if [ "$started" -lt "$(stat -f %m "$STALE_STAMP" 2>/dev/null || echo 0)" ]; then
-      echo "$(date -u +%FT%TZ) STALE CODE: $worker (pid $pid) started before the current source. It is running an older build and will behave like it — silently." >> logs/supervisor.log
-      if [ "${AMOSKYS_RESTART_ON_CHANGE:-0}" = "1" ]; then
-        echo "$(date -u +%FT%TZ)   AMOSKYS_RESTART_ON_CHANGE=1 -> restarting $worker" >> logs/supervisor.log
-        pkill -f "$worker" 2>/dev/null
-      fi
+  # THE WORKERS are checked by scripts/record_worker_code_health.py, which
+  # RECORDS the answer to worker_code_health as well as logging it.
+  #
+  # The previous implementation lived here as a shell loop against a stamp file
+  # that it touched at the end of every pass. That made staleness EDGE-triggered:
+  # a worker was reported only in the window between a source edit and the next
+  # pass, then the stamp moved forward, `find -newer` matched nothing, and a
+  # process still running old code went quiet. It answered "did the source change
+  # recently", while appearing to answer "is this worker current".
+  #
+  # It also only ever wrote to this log. On 2026-08-30 that log had named the ESF
+  # collector 20 times over ~23 hours while it silently dropped the quarantine
+  # column from every exec row. The detection was right every time. Nobody reads
+  # a log file. Recording it to the database is what puts it on a surface.
+  local stale_out
+  # FAIL LOUD. An unset or missing interpreter would make this produce no output
+  # at all, which reads exactly like "every worker is current" — the same silent
+  # all-clear this whole function exists to stop.
+  if [ ! -x "$PY" ]; then
+    echo "$(date -u +%FT%TZ) STALE CHECK BROKEN: interpreter $PY is missing or not executable. Worker code-age is UNMEASURED, not clean." >> logs/supervisor.log
+    return 0
+  fi
+  stale_out=$("$PY" scripts/record_worker_code_health.py 2>/dev/null)
+  if [ -n "$stale_out" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && echo "$(date -u +%FT%TZ) $line" >> logs/supervisor.log
+    done <<< "$stale_out"
+    if [ "${AMOSKYS_RESTART_ON_CHANGE:-0}" = "1" ]; then
+      echo "$stale_out" | grep '^STALE CODE:' | sed 's/^STALE CODE: \([^ ]*\) .*/\1/' | while IFS= read -r w; do
+        [ -n "$w" ] || continue
+        echo "$(date -u +%FT%TZ)   AMOSKYS_RESTART_ON_CHANGE=1 -> restarting $w" >> logs/supervisor.log
+        pkill -f "$w" 2>/dev/null
+      done
     fi
-  done
-  touch "$STALE_STAMP"
+  fi
 }
 STALE_STAMP="$PWD/data/.code_stamp"
 [ -f "$STALE_STAMP" ] || touch "$STALE_STAMP"
@@ -166,11 +188,15 @@ worker_alive() {
 }
 
 start_worker() {
+  # Extra arguments after the logfile are passed through to the module, which
+  # IGRIS needs (--daemon). Without them it would start, print status and exit,
+  # and this loop would restart it every 25s forever.
   local module="$1" logfile="$2" pf="$PIDDIR/${1//[^a-zA-Z0-9]/_}.pid"
+  shift 2
   worker_alive "$module" && return 0
-  nohup "$PY" -m "$module" >> "$logfile" 2>&1 &
+  nohup "$PY" -m "$module" "$@" >> "$logfile" 2>&1 &
   echo $! > "$pf"
-  echo "$(date -u +%FT%TZ) started $module pid=$!" >> logs/supervisor.log
+  echo "$(date -u +%FT%TZ) started $module $* pid=$!" >> logs/supervisor.log
 }
 
 while true; do
@@ -200,5 +226,15 @@ while true; do
   # independent: restarting the collector must never interrupt kernel
   # authorization.
   start_worker amoskys.agents.os.macos.esf logs/esf_collector.live.log
+  sleep 5
+  # IGRIS — the supervisor layer that watches the watchers. It was hosted only
+  # inside amoskys.daemon, which nothing started, so when its observation cycle
+  # died on a full disk (Errno 28, 2026-09-12) nothing brought it back. It sat
+  # at status=error for 15 hours with three governance signals frozen
+  # mid-flight, and because its persisted state was stale, every surface
+  # reading that state reported a fleet of 38 agents with 0 healthy — while 23
+  # were running normally. The loop itself catches exceptions and recovers; it
+  # just needed something to keep the process alive. That is this line.
+  start_worker amoskys.igris.cli logs/igris.live.log --daemon --interval 60
   sleep 25
 done

@@ -142,6 +142,41 @@ def _trust(row: dict) -> str:
     return "signed"
 
 
+def _worker_code_health(db) -> list[dict] | None:
+    """Which workers are running code older than what is on disk.
+
+    Returns None when the store cannot answer (table absent on an older
+    schema), which is NOT the same as "every worker is current" — that
+    conflation is the whole reason this exists. A stale worker behaves like the
+    old build and raises nothing; the ESF collector spent ~23 hours dropping the
+    quarantine column from every exec row while every component was correct on
+    disk, and the only symptom was a NULL column nobody was looking at.
+    """
+    try:
+        present = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='worker_code_health'"
+        ).fetchone()
+        if not present:
+            return None
+        rows = db.execute(
+            "SELECT worker, pid, is_stale, stale_seconds FROM worker_code_health "
+            "WHERE observed_at_ns = (SELECT MAX(observed_at_ns) FROM worker_code_health)"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        logger.warning("worker code health read failed", exc_info=True)
+        return None
+    return [
+        {
+            "worker": r["worker"],
+            "pid": r["pid"],
+            "stale": bool(r["is_stale"]),
+            "behind_seconds": r["stale_seconds"],
+            "running": r["pid"] is not None,
+        }
+        for r in rows
+    ]
+
+
 def stream_health(window_hours: int = 24) -> dict:
     """Is the kernel actually watching, and did the record survive intact?"""
     absent = {
@@ -159,6 +194,8 @@ def stream_health(window_hours: int = 24) -> dict:
         "kernel_dropped": 0,
         "enforce_mode": None,
         "last_beat_age_seconds": None,
+        "workers": None,
+        "workers_measurable": False,
     }
     db = _open()
     if db is None:
@@ -217,6 +254,9 @@ def stream_health(window_hours: int = 24) -> dict:
             except sqlite3.OperationalError:
                 logger.warning("kernel drop read failed", exc_info=True)
                 kernel_dropped = None
+        # Read here, not after the finally below — the same placement bug that
+        # once reported zero kernel drops forever.
+        workers = _worker_code_health(db)
     except sqlite3.Error:
         return absent
     finally:
@@ -323,10 +363,38 @@ def stream_health(window_hours: int = 24) -> dict:
             "fix — not a bigger queue."
         )
 
+    # A STALE WORKER OUTRANKS A CLEAN STREAM.
+    #
+    # Every branch above judges the stream. None of them can see that the
+    # process CONSUMING the stream is running last week's code — and that
+    # failure is invisible by construction: the events arrive, the inserts
+    # succeed, and a column nobody queried is quietly NULL. Reporting "this
+    # timeline is complete" in that state is worse than reporting nothing,
+    # because it is the sentence that stops the investigation.
+    stale = [w for w in (workers or []) if w["stale"]]
+    if stale:
+        status = "degraded"
+        worst = max(stale, key=lambda w: w["behind_seconds"] or 0)
+        hrs = (worst["behind_seconds"] or 0) / 3600.0
+        headline = (
+            f"{len(stale)} component{'s' if len(stale) > 1 else ''} "
+            f"running older code than what is on disk"
+        )
+        detail = (
+            f"{worst['worker']} (pid {worst['pid']}) is {hrs:.1f}h behind the "
+            "source. A process that loaded an older build keeps running "
+            "normally and reports nothing — what it writes is shaped by the "
+            "old code, so anything recorded during this window may be "
+            "incomplete in ways the record itself cannot show. Restart the "
+            "listed components, then treat that window as suspect."
+        )
+
     return {
         "present": True,
         "watching": watching,
         "status": status,
+        "workers": workers,
+        "workers_measurable": workers is not None,
         "headline": headline,
         "detail": detail,
         "events_24h": events,
