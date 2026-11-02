@@ -1,5 +1,8 @@
 # AMOSKYS
 
+> **This project ended on November 2, 2026.** It is no longer maintained and all hosted infrastructure has been shut down.
+> Read [ENDING.md](ENDING.md) for why, and [docs/DISMANTLE.md](docs/DISMANTLE.md) for what was removed and how to rebuild it.
+
 **Your Mac made 37,000 network connections yesterday. Do you know who it talked to?**
 
 AMOSKYS is a macOS endpoint detection platform that shows you exactly where your data goes — in real time, on a globe — and detects when something is wrong.
